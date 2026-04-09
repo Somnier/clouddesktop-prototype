@@ -239,7 +239,7 @@ function buildState(s){
       desktopEdit: { active:false, returnScreen:null },
       _desktopReturnScreen: null,
       faultReplace: { serverReachable:true, selectedClassroomId:null, suggestedTerminalId:null, suggestedSeat:null, suggestedName:null, suggestedMac:null, manualSeat:null, confirmed:false },
-      faultReset: { serverReachable:false, terminalRegistered:false, confirmed:false },
+      faultReset: { serverReachable: !!(s.demo.focusClassroomId!=='yp-a301'), terminalRegistered:false, confirmed:false },
       assetSync: { status:'idle', progress:0 },
       examState: { applied:false, appliedAt:null, appliedDesktopId:null, appliedIds:[], restoreAvailable:false, entriesHidden:false, restored:false },
       flags: {},
@@ -1063,6 +1063,24 @@ function act(action, payload={}){
     }
     return {ok:true};
   }
+  case 'deploy-toggle-bind':{
+    /* Toggle: if bound → unbind, if unbound → bind next available terminal */
+    const grid = demo.deployDraft.grid;
+    const bindings = demo.deployDraft.bindings;
+    const block = grid.blocks.find(b=>b.idx===payload.idx);
+    if(!block || block.state!=='active') return {ok:false,reason:'块不可用'};
+    if(bindings[block.idx]){
+      /* Unbind */
+      delete bindings[block.idx];
+    } else {
+      /* Bind next available terminal */
+      const allCtrl = termsInCr(cr.id).filter(t=>t.id!==mt.id&&t.online);
+      const boundIds = new Set(Object.values(bindings).map(b=>b.terminalId));
+      const next = allCtrl.find(t=>!boundIds.has(t.id));
+      if(next) bindings[block.idx]={terminalId:next.id, mac:next.mac};
+    }
+    return {ok:true};
+  }
   case 'deploy-set-deploy-mode':{
     demo.deployDraft.deployMode = payload.mode||'incremental';
     return {ok:true};
@@ -1073,6 +1091,11 @@ function act(action, payload={}){
   }
   case 'set-flag':{
     Object.assign(demo.flags, payload);
+    return {ok:true};
+  }
+  case 'clear-completed-task':{
+    /* Remove completed tasks for the current classroom */
+    state.tasks = state.tasks.filter(t=>!(t.classroomId===cr.id && t.phase==='completed'));
     return {ok:true};
   }
   case 'open-local-desktop-flow':{

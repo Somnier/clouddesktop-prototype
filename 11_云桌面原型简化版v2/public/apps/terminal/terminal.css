@@ -18,7 +18,7 @@
   padding: 0 24px; height: 48px; background: var(--t-panel); border-bottom: 1px solid var(--t-border); flex-shrink: 0; }
 .term-topbar .brand { font-weight: 600; font-size: .95rem; }
 .term-topbar .status { font-size: .8rem; color: var(--t-text2); display: flex; align-items: center; gap: 8px; }
-.term-topbar .status .sep { color: var(--t-text3); font-size: .7rem; user-select: none; }
+.term-topbar .status .sep { color: var(--t-text3); font-size: .85rem; user-select: none; margin: 0 2px; }
 .term-topbar .status .status-label { font-size: .75rem; }
 .term-topbar .status .status-label.sol { color: var(--t-ok); }
 .term-topbar .status .status-label.sol-err { color: var(--t-err); }
@@ -27,8 +27,8 @@
 .dot-warn { background: var(--t-warn); }
 .dot-err { background: var(--t-err); }
 
-.term-body { flex: 1; overflow-y: auto; padding: 28px 32px; }
-.term-body:has(> .page) { overflow: hidden; display: flex; flex-direction: column; }
+.term-body { flex: 1; overflow-y: auto; padding: 28px 32px; min-height: 0; }
+.term-body:has(> .page) { overflow: hidden; display: flex; flex-direction: column; padding: 0; }
 .term-body > .page { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; padding: 0 32px; }
 .page-scroll { flex: 1; overflow-y: auto; min-height: 0; }
 .term-body--center { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
@@ -64,11 +64,7 @@
 .term-app .btn-ghost { color: var(--t-accent); }
 .term-app .btn-ghost:hover:not(:disabled) { background: var(--t-accent-bg); }
 
-/* ── exit button (prominent) ── */
-.exit-btn { background: var(--t-err) !important; color: #fff !important; border: none !important;
-  padding: 4px 14px !important; font-size: .85rem !important; font-weight: 600;
-  border-radius: 4px; letter-spacing: .5px; }
-.exit-btn:hover { background: #ff6961 !important; }
+/* ── exit button — now uses standard .btn .btn-danger, no special override needed ── */
 
 /* ── unsync desktop card (red warning) ── */
 .dt-card.dt-unsync { border-color: var(--t-err) !important; background: var(--t-err-bg) !important; }

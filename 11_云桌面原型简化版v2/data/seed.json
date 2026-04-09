@@ -892,8 +892,8 @@
     }
   ],
   "demo": {
-    "focusCampusId": "west",
-    "focusClassroomId": "bs-d105",
+    "focusCampusId": "east",
+    "focusClassroomId": "yp-a301",
     "motherIndex": 0,
     "controlledIndex": 1
   }

@@ -195,13 +195,14 @@ function shellHtml(){
       <div class="brand">云桌面管理系统</div>
       <div class="status">
         <span class="dot ${m?.online?'dot-ok':'dot-err'}"></span><span class="status-label ${m?.online?'sol':'sol-err'}">${m?.online?'在线':'离线'}</span>
-        <span class="mono">${m?.ip?esc(m.ip):'未配置IP'}</span>
-        <span class="sep">·</span>
-        <span>${esc(m?.name||'未命名')}</span>
-        <span class="sep">·</span>
-        <span>座位 ${esc(m?.seat||'--')}</span>
-        <span class="sep">·</span>
-        <button class="btn exit-btn" data-act="exit-to-desktop">⏻ 退出</button>
+        <span class="sep">|</span>
+        <span>IP: <span class="mono">${m?.ip?esc(m.ip):'未配置'}</span></span>
+        <span class="sep">|</span>
+        <span>机器名: ${esc(m?.name||'未命名')}</span>
+        <span class="sep">|</span>
+        <span>座位: ${esc(m?.seat||'--')}</span>
+        <span class="sep">|</span>
+        <button class="btn btn-danger" style="padding:6px 18px;font-size:.85rem" data-act="exit-to-desktop">⏻ 退出</button>
       </div>
     </div>
     <div class="term-body">${screenContent(demo().motherScreen)}</div>
@@ -349,7 +350,8 @@ function localDesktopScreen(){
   const diskUsed = desktopUsed + systemUsed;
   const diskFree = Math.max(0, diskTotal - diskUsed);
   const diskPct = Math.round(diskUsed/diskTotal*100);
-  return `<div class="page">
+  return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
+  <div style="width:100%;max-width:720px">
   <div class="section-title"><button class="btn btn-ghost" data-act="${returnAct}">←</button> 桌面管理</div>
 
   <div class="disk-summary mb-16">
@@ -400,13 +402,15 @@ function localDesktopScreen(){
         <div>
           <div class="dt-name">${esc(d.name)}</div>
           <div class="dt-meta" style="margin-top:4px">${esc(d.baseImageName||d.os)} · 桌面占用 ${dtSize} GB${dataDisks.length?'（系统盘 '+sysVhdSize+' GB + 数据盘 '+dataDisks.map(dd=>esc(dd.drive||'D:')+' '+esc(dd.size||'20GB')).join(', ')+'）':'（不含数据盘）'}</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:6px">
+            ${isPhysical?pill('物理部署','warn'):''}
+            ${pill('还原','info')}
+            ${uploaded?pill('已同步','ok'):`<span class="pill err" style="font-weight:600">未同步</span>`}
+            ${isHidden?pill('已隐藏','muted'):''}
+            ${isDefault?pill('默认启动','info'):''}
+          </div>
         </div>
         <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;flex-shrink:0;margin-left:12px">
-          ${isPhysical?pill('物理部署','warn'):''}
-          ${pill('还原','info')}
-          ${uploaded?pill('已同步','ok'):`<span class="pill err" style="font-weight:600">未同步</span>`}
-          ${isHidden?pill('已隐藏','muted'):''}
-          ${isDefault?pill('默认启动','info'):''}
           ${!isDefault?`<button class="btn btn-ghost" style="padding:4px 10px;font-size:.78rem" data-dt-default="${d.id}">设为默认</button>`:''}
           <button class="btn btn-ghost" style="padding:4px 10px;font-size:.78rem" data-dt-visibility="${d.id}">${isHidden?'取消隐藏':'隐藏'}</button>
         </div>
@@ -422,6 +426,7 @@ function localDesktopScreen(){
       </div>
     </div>`;
   }).join('') + '</div>' : empty('暂无本机桌面','请导入桌面镜像或桌面包')}
+  </div>
   </div>`;
 }
 
@@ -463,9 +468,10 @@ function workbenchScreen(){
   </div>
   <div style="display:flex;gap:6px;margin-bottom:14px;align-items:center">
     <button class="btn ${activeTab==='layout'?'btn-primary':'btn-secondary'}" ${isRunning?'disabled':''} data-act="wb-tab-layout">设置布局</button>
-    <button class="btn ${activeTab==='maint'?'btn-primary':'btn-secondary'}" ${isBlank&&m.controlState!=='mother'?'disabled':''} ${isRunning?'disabled':''} data-act="wb-tab-maint">教室维护</button>
+    <button class="btn ${activeTab==='maint'?'btn-primary':'btn-secondary'}" ${(isBlank&&m.controlState!=='mother')||isRunning?'disabled':''} data-act="wb-tab-maint">教室维护</button>
+    ${isBlank&&m.controlState!=='mother'?'<span style="font-size:.72rem;color:var(--t-text3)">请先确认接管教室后使用教室维护</span>':''}
     <span style="flex:1"></span>
-    <button class="btn btn-danger" data-act="end-management">结束管理</button>
+    ${activeTab==='layout'?`<button class="btn btn-danger" ${isRunning?'disabled':''} data-act="end-management">结束管理</button>`:''}
   </div>
   ${activeTab==='maint' ? wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning) : wbLayoutContent(terms, rt, c, m, d)}
 </div>`;
@@ -499,38 +505,41 @@ function wbLayoutContent(terms, rt, c, m, d){
   const onlineTerms = terms.filter(t=>t.id!==m.id&&t.online);
   const discoveredCount = onlineTerms.length;
   const scanning = !isTakenOver || (demo().flags?.layoutRescan);
+  /* Check if we have new undiscovered terminals that exceed grid capacity */
+  const hasNewTermsBeyondGrid = discoveredCount > activeCount && scanning;
 
-  return `<div style="display:grid;grid-template-columns:300px 1fr;gap:16px;flex:1;min-height:0;overflow:auto">
+  return `<div style="display:grid;grid-template-columns:300px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden">
     <div class="page-scroll" style="display:flex;flex-direction:column;gap:12px">
       <div class="card">
-        <div class="card-header">${!isTakenOver?'教室接管':'教室信息'}</div>
+        <div class="card-header">${!isTakenOver?'❶ 教室接管':'❶ 教室信息'}</div>
         ${scanning?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;background:var(--t-accent-bg);border:1px solid rgba(88,166,255,.3);border-radius:4px">
           <span class="conn-spinner"></span>
           <span style="font-size:.82rem;color:var(--t-accent)">正在扫描网络终端… 已发现 ${discoveredCount} 台</span>
         </div>`:''}
         <div class="prep-field"><label>教室名称</label><input type="text" id="tk-name" value="${esc(demo().takeover?.classroomName||c.name||'')}" placeholder="输入教室名称"></div>
         <div class="prep-field"><label>发现终端</label><span style="font-weight:600;color:var(--t-accent)">${discoveredCount} 台在线</span></div>
-        ${!isTakenOver?`<button class="btn btn-primary" style="margin-top:8px;width:100%" data-act="confirm-takeover">确认接管教室</button>`
+        ${!isTakenOver?''
           :`<div style="font-size:.75rem;color:var(--t-ok);margin-top:4px">已接管 · ${rt.online}/${rt.total} 在线</div>`}
       </div>
       <div class="card">
-        <div class="card-header">网格布局</div>
+        <div class="card-header">❷ 网格布局</div>
         <div class="prep-field"><label>每列座位</label><input type="number" data-grid="rows" value="${grid.rows}" min="1" max="20"></div>
         <div class="prep-field"><label>列数</label><input type="number" data-grid="cols" value="${grid.cols}" min="1" max="15"></div>
-        <div style="font-size:.75rem;color:var(--t-text2);margin-top:4px">共 ${grid.blocks.length} 位 · ${pill('可用 '+activeCount,'ok')}</div>
+        <div style="font-size:.75rem;color:var(--t-text2);margin-top:4px">共 ${grid.blocks.length} 位 · ${pill('可用 '+activeCount,'ok')}
+          ${hasNewTermsBeyondGrid?`<span style="color:var(--t-err);font-weight:600;margin-left:4px">终端数 (${discoveredCount}) 超出网格容量 (${activeCount})，请调整布局</span>`:''}</div>
       </div>
       <div class="card">
-        <div class="card-header">IP 分配</div>
+        <div class="card-header">❸ IP 分配</div>
         <div class="prep-field"><label>IP 前缀</label><input type="text" data-rule="ipBase" value="${esc(r.ipBase||'')}" placeholder="如 10.21.31"></div>
         <div class="prep-field"><label>起始编号</label><input type="number" data-rule="ipStart" value="${r.ipStart||20}" min="1" max="254"></div>
       </div>
       <div class="card">
-        <div class="card-header">机器名 / 座位号</div>
+        <div class="card-header">❹ 机器名 / 座位号</div>
         <div class="prep-field"><label>机器名前缀</label><input type="text" data-rule="namePrefix" value="${esc(r.namePrefix||'')}" placeholder="如 D301"></div>
         <div class="prep-field"><label>起始字母</label><input type="text" data-rule="startLetter" value="${esc(r.startLetter||'A')}" maxlength="1" style="width:50px;text-transform:uppercase"></div>
       </div>
       <div class="card">
-        <div class="card-header">布局起点</div>
+        <div class="card-header">❺ 布局起点</div>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
           ${[['tl','↘ 左上'],['tr','↙ 右上'],['bl','↗ 左下'],['br','↖ 右下']].map(([v,l])=>
             `<button class="btn ${dir===v?'btn-primary':'btn-secondary'}" style="flex:1;min-width:60px;justify-content:center" data-rule-dir="${v}">${l}</button>`
@@ -538,9 +547,22 @@ function wbLayoutContent(terms, rt, c, m, d){
         </div>
       </div>
     </div>
-    <div class="page-scroll">
-      ${renderSeatGrid(grid, r, dir, previewMap, terms, 'layout')}
-      <div style="font-size:.72rem;color:var(--t-text3);margin-top:8px">点击方块切换状态：可用 → 禁用 → 删除 → 可用</div>
+    <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+      <div style="padding:10px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;font-size:.82rem;flex-shrink:0">
+        ${!isTakenOver?`<div style="color:var(--t-accent);font-weight:600;margin-bottom:4px">操作指南</div>
+          <div style="color:var(--t-text2)">1. 左侧设置教室名称和网格布局 → 2. 配置IP和机器名规则 → 3. 右侧预览确认后接管教室</div>
+          <div style="color:var(--t-text3);font-size:.75rem;margin-top:4px">接管后将进入终端绑定阶段，终端按照回车顺序分配座位</div>`
+          :`<div style="color:var(--t-ok);font-weight:600">教室已接管 · 点击方块切换状态（可用 → 禁用 → 删除 → 可用）</div>`}
+      </div>
+      <div class="page-scroll" style="flex:1;min-height:0">
+        ${renderSeatGrid(grid, r, dir, previewMap, terms, 'layout')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0">
+        ${!isTakenOver?`<button class="btn btn-primary" ${activeCount>0&&discoveredCount>0?'':'disabled'} data-act="confirm-takeover">确认接管教室</button>
+          <span style="font-size:.75rem;color:var(--t-text3);align-self:center">${activeCount<=0?'请先设置网格布局':''}${discoveredCount<=0?'等待终端上线…':''}</span>`
+          :`<button class="btn btn-ghost" data-act="deploy-bind-next">模拟绑定下一台</button>
+            <button class="btn btn-ghost" data-act="deploy-bind-all">一键全绑定</button>`}
+      </div>
     </div>
   </div>`;
 }
@@ -561,15 +583,15 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
   /* Maint IP draft */
   const md = demo().maintDraft||{};
 
-  return `<div style="display:grid;grid-template-columns:280px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden;align-items:start">
+  return `<div style="display:grid;grid-template-columns:280px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden;align-items:stretch">
     <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px">
       <div class="card">
         <div class="card-header">功能</div>
         <div style="display:flex;flex-direction:column;gap:6px">
-          <button class="btn ${opsMode==='deploy'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="ops-mode-deploy">部署传输</button>
-          <button class="btn ${opsMode==='maint-ip'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="ops-mode-maint-ip">修改 IP / 服务器</button>
-          <button class="btn ${opsMode==='desktop'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="open-local-desktop-flow">管理桌面</button>
-          <button class="btn ${opsMode==='export'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="open-export">导出终端清单</button>
+          <button class="btn ${opsMode==='deploy'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="ops-mode-deploy">❶ 部署传输</button>
+          <button class="btn ${opsMode==='maint-ip'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="ops-mode-maint-ip">❷ 修改 IP / 服务器</button>
+          <button class="btn ${opsMode==='desktop'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="open-local-desktop-flow">❸ 管理桌面</button>
+          <button class="btn ${opsMode==='export'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="open-export">❹ 导出终端清单</button>
         </div>
       </div>
       ${opsMode==='deploy'||tk?`<div class="card">
@@ -611,11 +633,23 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         ${defRow('已部署', rt.deployed+' / '+rt.total)}
         ${defRow('阶段', stageLabel(c.stage))}
       </div>
+      <button class="btn btn-danger" style="width:100%;justify-content:center;margin-top:auto" ${isRunning?'disabled':''} data-act="end-management">结束管理</button>
     </div>
-    <div class="page-scroll">
-      ${isRunning ? renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels) :
-        opsMode==='maint-ip' ? renderSeatGridMaint(terms, m, c, d, md) :
-        renderSeatGridOps(grid, r, dir, bindings, terms)}
+    <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+      ${isRunning?`<div style="padding:10px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.82rem">
+        <div style="font-weight:600;color:${done?'var(--t-ok)':'var(--t-accent)'}">${done?'✓ 任务完成':'⏳ 任务执行中 — 功能切换已锁定'}</div>
+        <div style="margin-top:4px">成功 ${tk.counts.completed||0} · 失败 ${tk.counts.failed||0} · 排队 ${tk.counts.queued||0} / 共 ${tk.counts.total||0}</div>
+        ${done?'<button class="btn btn-ghost" style="margin-top:6px" data-act="ops-clear-task">关闭任务</button>':''}
+      </div>`:`<div style="padding:8px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.78rem;color:var(--t-text2)">
+        ${opsMode==='deploy'?'点击网格方块可切换绑定/解绑 · 右侧显示当前绑定状态':
+          opsMode==='maint-ip'?'点击方块选择/取消选择终端 · 修改左侧规则后自动刷新预览':
+          '请从左侧选择功能'}
+      </div>`}
+      <div class="page-scroll" style="flex:1;min-height:0">
+        ${isRunning ? renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels) :
+          opsMode==='maint-ip' ? renderSeatGridMaint(terms, m, c, d, md) :
+          renderSeatGridOps(grid, r, dir, bindings, terms)}
+      </div>
     </div>
   </div>`;
 }
@@ -666,7 +700,7 @@ function renderSeatGridOps(grid, r, dir, bindings, terms){
       }
       const binding=bindings[b.idx];
       const isBound = !!binding;
-      html+=`<div class="gb ${isBound?'gb-bound':'gb-active'}" data-bind-skip="${b.idx}" style="cursor:pointer">
+      html+=`<div class="gb ${isBound?'gb-bound':'gb-active'}" data-deploy-toggle-bind="${b.idx}" style="cursor:pointer">
         <div class="gb-seat">${esc(seat)}</div>
         ${isBound?`<div class="gb-tag" style="color:var(--t-ok)">已绑定</div>`
           :`<div class="gb-tag">等待</div>`}
@@ -1230,11 +1264,13 @@ function faultReplaceScreen(){
   const crTerms = selectedCr ? termsInCr(st, selectedCr.id).filter(t=>t.id!==m.id) : [];
 
   if(fr.confirmed){
-    return `<div class="page">
+    return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
+    <div style="width:100%;max-width:720px">
     <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 替换故障终端</div>
     <div class="card" style="border-color:var(--t-ok);background:rgba(34,197,94,0.08);max-width:720px;margin-top:24px">
       <div class="card-header" style="color:var(--t-ok)">替换已完成</div>
       <div style="font-size:.85rem">本机已继承 ${esc(fr.suggestedSeat||'--')} 位置的全部配置与桌面资产。</div>
+    </div>
     </div>
     </div>`;
   }
@@ -1250,7 +1286,8 @@ function faultReplaceScreen(){
     </div>`;
   }
 
-  return `<div class="page">
+  return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
+  <div style="width:100%;max-width:860px">
   <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 替换故障终端</div>
   <div class="section-sub">选择教室和要替换的终端座位，本机将继承该终端的配置与桌面。</div>
 
@@ -1271,15 +1308,18 @@ function faultReplaceScreen(){
     <div class="card">
       <div class="card-header">❷ 选择终端座位 ${selectedCr?'— '+esc(selectedCr.name):''}</div>
       ${!selectedCr?'<div style="font-size:.85rem;color:var(--t-text3);padding:16px 0;text-align:center">← 请先选择教室</div>'
-        :crTerms.length?`<div style="display:grid;grid-template-columns:repeat(${Math.min(selectedCr.cols||8, 10)},minmax(0,1fr));gap:6px;max-width:100%">
+        :crTerms.length?`<div style="display:grid;grid-template-rows:repeat(${selectedCr.rows||7},auto);grid-template-columns:repeat(${Math.min(selectedCr.cols||8, 10)},minmax(0,1fr));grid-auto-flow:column;gap:6px;max-width:100%">
           ${crTerms.map(t=>`
-            <div class="gb gb-active" style="cursor:pointer;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:40px;max-width:80px" data-fault-select="${t.id}">
+            <div class="gb ${t.online?'gb-active':'gb-disabled'}" style="cursor:${t.online?'pointer':'default'};display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:40px;max-width:80px" ${t.online?`data-fault-select="${t.id}"`:'title="离线"'}>
               <div class="gb-seat">${esc(t.seat||'--')}</div>
+              <div class="gb-ip">${esc(t.ip||'--')}</div>
+              ${!t.online?'<div class="gb-tag" style="color:var(--t-err)">离线</div>':''}
             </div>
           `).join('')}
         </div>`:'<div style="font-size:.85rem;color:var(--t-text3);padding:16px 0;text-align:center">该教室无其他终端</div>'}
     </div>
   </div>`}
+  </div>
 </div>`;
 }
 
@@ -1450,11 +1490,15 @@ function bindAll(){
         saveGridRulesIfPresent();
         /* Only allow switching to maint if takeover is confirmed */
         const isMother = mt()?.controlState==='mother';
-        if(!isMother){
-          showTermAlert('请先确认接管教室后再使用教室维护功能');
+        if(!isMother) return; /* button is disabled, but double-check */
+        /* Check for new unassigned terminals when returning from layout */
+        const onlineCount = termsInCr(s(), cr().id).filter(t=>t.id!==mt().id&&t.online).length;
+        const activeCount = (demo().deployDraft?.grid?.blocks||[]).filter(b=>b.state==='active').length;
+        if(demo().flags?.layoutRescan && onlineCount > activeCount){
+          showTermAlert('发现 '+onlineCount+' 台终端但网格仅有 '+activeCount+' 个可用位。请先调整网格布局。');
           return;
         }
-        act('set-flag',{wbTab:'maint'});
+        act('set-flag',{wbTab:'maint', layoutRescan:false});
       } else if(a==='ops-mode-deploy'){
         act('set-flag',{opsMode:'deploy'});
       } else if(a==='ops-mode-maint-ip'){
@@ -1464,6 +1508,7 @@ function bindAll(){
         act('set-flag',{opsMode:'idle'});
       } else if(a==='ops-clear-task'){
         /* Clear completed task and reset opsMode */
+        act('clear-completed-task');
         act('set-flag',{opsMode:'idle'});
       } else { act(a); }
     });
@@ -1573,6 +1618,14 @@ function bindAll(){
     el.addEventListener('click',()=>{
       const idx = Number(el.dataset.bindSkip);
       act('deploy-bind-skip',{idx}); /* toggle active ↔ disabled */
+    });
+  });
+
+  /* ── workbench ops: toggle bind/unbind on grid blocks ── */
+  root.querySelectorAll('[data-deploy-toggle-bind]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const idx = Number(el.dataset.deployToggleBind);
+      act('deploy-toggle-bind',{idx});
     });
   });
 
