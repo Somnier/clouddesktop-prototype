@@ -1,0 +1,16 @@
+{
+  "name": "cloud-desktop-prototype",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "上海大学新一代教学云桌面 — 原型评审版",
+  "scripts": {
+    "start": "node start.mjs",
+    "serve": "node server.mjs",
+    "start:electron": "electron electron/main.mjs"
+  },
+  "dependencies": {
+    "electron": "^37.2.1",
+    "express": "^4.21.2"
+  }
+}
