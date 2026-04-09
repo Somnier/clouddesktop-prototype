@@ -1,0 +1,22 @@
+# 依赖
+node_modules/
+
+# 运行时状态（自动生成，从 seed 重建）
+**/data/state.json
+
+# 编辑器
+.vscode/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# 备份文件
+*.bak
+
+# 构建产物
+*.log
