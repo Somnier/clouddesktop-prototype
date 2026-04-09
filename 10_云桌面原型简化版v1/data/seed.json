@@ -1,0 +1,881 @@
+{
+  "school": {
+    "name": "上海大学",
+    "shortName": "上大"
+  },
+  "campuses": [
+    {
+      "id": "yangpu",
+      "name": "杨浦校区",
+      "serverId": "srv-yp"
+    },
+    {
+      "id": "baoshan",
+      "name": "宝山校区",
+      "serverId": "srv-bs"
+    }
+  ],
+  "servers": [
+    {
+      "id": "srv-yp",
+      "campusId": "yangpu",
+      "name": "杨浦校区云桌面管理服务器",
+      "address": "10.21.0.18",
+      "internalIp": "10.21.0.18",
+      "externalIp": "202.120.95.18",
+      "domain": "yp-server.shu.edu.cn",
+      "ssl": true,
+      "license": 500,
+      "cpu": 32,
+      "memory": 45,
+      "storage": 58
+    },
+    {
+      "id": "srv-bs",
+      "campusId": "baoshan",
+      "name": "宝山校区云桌面管理服务器",
+      "address": "10.22.0.18",
+      "internalIp": "10.22.0.18",
+      "externalIp": "202.120.96.22",
+      "domain": "bs-server.shu.edu.cn",
+      "ssl": true,
+      "license": 300,
+      "cpu": 28,
+      "memory": 38,
+      "storage": 42
+    }
+  ],
+  "classrooms": [
+    {
+      "id": "yp-a301",
+      "campusId": "yangpu",
+      "name": "A301 公共教学机房",
+      "building": "工学楼A座",
+      "floor": "3F",
+      "remark": "A301 公共教学机房，尚未部署",
+      "rows": 7,
+      "cols": 7,
+      "terminalCount": 49,
+      "motherIndex": 0,
+      "networkBase": "10.21.31",
+      "gateway": "10.21.31.1",
+      "dns": [
+        "10.21.0.2",
+        "114.114.114.114"
+      ],
+      "stage": "blank",
+      "serverAddress": "",
+      "desktopCatalog": [],
+      "defaultDesktopId": null,
+      "registeredOnServer": false
+    },
+    {
+      "id": "yp-b207",
+      "campusId": "yangpu",
+      "name": "B207 数字媒体实验室",
+      "building": "创意楼B座",
+      "floor": "2F",
+      "remark": "数字媒体专业课用，Adobe CC 已装",
+      "rows": 8,
+      "cols": 8,
+      "terminalCount": 61,
+      "motherIndex": 0,
+      "networkBase": "10.21.42",
+      "gateway": "10.21.42.1",
+      "dns": [
+        "10.21.0.2",
+        "114.114.114.114"
+      ],
+      "stage": "deployed",
+      "serverAddress": "10.21.0.18",
+      "desktopCatalog": [
+        {
+          "id": "dt-b207-media",
+          "name": "数字媒体创作桌面",
+          "version": "v3",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "已装 Adobe CC + Blender，供数字媒体专业课使用",
+          "syncStatus": "synced",
+          "dataDisk": "D: 50GB VHD",
+          "createdAt": "2026-02-10T08:00:00Z",
+          "editedAt": "2026-03-15T14:30:00Z",
+          "snapshotId": "snap-b207-adobecc-v2"
+        },
+        {
+          "id": "dt-b207-base",
+          "name": "Win11 原始镜像",
+          "version": "v2",
+          "os": "Windows 11 23H2",
+          "type": "原始",
+          "visibility": "hidden",
+          "remark": "基础办公环境，仅装 Office 和浏览器",
+          "syncStatus": "synced",
+          "dataDisk": "",
+          "createdAt": "2026-01-20T08:00:00Z",
+          "editedAt": "2026-03-01T10:00:00Z",
+          "snapshotId": "snap-b207-base"
+        },
+        {
+          "id": "dt-b207-exam",
+          "name": "数字媒体期末考试桌面",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "考试",
+          "visibility": "hidden",
+          "remark": "设计类课程用，含 PS/PR，已激活教育授权",
+          "syncStatus": "synced",
+          "dataDisk": "D: 30GB VHD",
+          "createdAt": "2026-03-12T08:00:00Z",
+          "editedAt": "2026-03-12T08:00:00Z",
+          "snapshotId": "snap-b207-exam"
+        },
+        {
+          "id": "dt-yp-b207-teacher",
+          "name": "B207 教师桌面",
+          "version": "v2",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "教师授课专用，已装授课管理软件和 WOL 控制组件",
+          "syncStatus": "synced",
+          "dataDisk": "D: 30GB VHD",
+          "createdAt": "2026-02-20T08:00:00Z",
+          "editedAt": "2026-03-20T10:00:00Z",
+          "snapshotId": "snap-b207-teacher"
+        }
+      ],
+      "defaultDesktopId": "dt-b207-media",
+      "registeredOnServer": true,
+      "restoreMode": "还原系统盘，保留数据盘",
+      "imageStore": [
+        {
+          "id": "img-b207-win11",
+          "name": "Windows 11 23H2",
+          "os": "Windows 11 23H2",
+          "importedAt": "2026-01-05T10:00:00Z"
+        }
+      ],
+      "snapshotTree": [
+        {
+          "id": "snap-b207-base",
+          "name": "纯净安装",
+          "imageId": "img-b207-win11",
+          "parentId": null,
+          "createdAt": "2026-01-20T08:00:00Z"
+        },
+        {
+          "id": "snap-b207-office",
+          "name": "Office+浏览器",
+          "imageId": "img-b207-win11",
+          "parentId": "snap-b207-base",
+          "createdAt": "2026-01-25T08:00:00Z"
+        },
+        {
+          "id": "snap-b207-adobecc",
+          "name": "Adobe CC+Blender",
+          "imageId": "img-b207-win11",
+          "parentId": "snap-b207-office",
+          "createdAt": "2026-02-05T08:00:00Z"
+        },
+        {
+          "id": "snap-b207-adobecc-v2",
+          "name": "Adobe CC+Blender v2",
+          "imageId": "img-b207-win11",
+          "parentId": "snap-b207-adobecc",
+          "createdAt": "2026-03-10T08:00:00Z"
+        },
+        {
+          "id": "snap-b207-exam",
+          "name": "考试锁定环境",
+          "imageId": "img-b207-win11",
+          "parentId": "snap-b207-office",
+          "createdAt": "2026-03-01T08:00:00Z"
+        },
+        {
+          "id": "snap-b207-teacher",
+          "name": "教师管理环境",
+          "imageId": "img-b207-win11",
+          "parentId": "snap-b207-office",
+          "createdAt": "2026-02-15T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "bs-c402",
+      "campusId": "baoshan",
+      "name": "C402 网络安全实训室",
+      "building": "信息楼C座",
+      "floor": "4F",
+      "remark": "网安实训专用，仅限授权教学使用",
+      "rows": 7,
+      "cols": 8,
+      "terminalCount": 57,
+      "motherIndex": 0,
+      "networkBase": "10.22.44",
+      "gateway": "10.22.44.1",
+      "dns": [
+        "10.22.0.2",
+        "114.114.114.114"
+      ],
+      "stage": "deployed",
+      "serverAddress": "10.22.0.18",
+      "desktopCatalog": [
+        {
+          "id": "dt-c402-sec",
+          "name": "网络安全实训桌面",
+          "version": "v4",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "网安实训环境，需确保虚拟网卡驱动正常",
+          "syncStatus": "synced",
+          "dataDisk": "D: 80GB VHD",
+          "createdAt": "2026-01-15T08:00:00Z",
+          "editedAt": "2026-03-18T09:00:00Z",
+          "snapshotId": "snap-c402-security-v3"
+        },
+        {
+          "id": "dt-c402-exam",
+          "name": "网络安全考试桌面",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "考试",
+          "visibility": "hidden",
+          "remark": "网安考试专用，已锁定桌面入口",
+          "syncStatus": "synced",
+          "dataDisk": "",
+          "createdAt": "2026-03-10T08:00:00Z",
+          "editedAt": "2026-03-10T08:00:00Z",
+          "snapshotId": "snap-c402-examenv"
+        },
+        {
+          "id": "dt-c402-linux",
+          "name": "Kali Linux 实训桌面",
+          "version": "v2",
+          "os": "Kali Linux 2026.1",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "高级渗透测试课程用，仅限授权教学使用",
+          "syncStatus": "synced",
+          "dataDisk": "D: 40GB VHD",
+          "createdAt": "2026-02-20T08:00:00Z",
+          "editedAt": "2026-03-16T11:00:00Z",
+          "snapshotId": "snap-c402-kali-tools"
+        },
+        {
+          "id": "dt-bs-c402-teacher",
+          "name": "C402 教师桌面",
+          "version": "v2",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "教师授课专用，已装授课管理软件和 WOL 控制组件",
+          "syncStatus": "synced",
+          "dataDisk": "D: 30GB VHD",
+          "createdAt": "2026-02-20T08:00:00Z",
+          "editedAt": "2026-03-20T10:00:00Z",
+          "snapshotId": "snap-c402-teacher"
+        },
+        {
+          "id": "dt-bs-c402-base",
+          "name": "Win11 原始镜像",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "原始",
+          "visibility": "hidden",
+          "remark": "纯净 OS 环境，教学桌面和考试桌面均基于此派生",
+          "syncStatus": "synced",
+          "dataDisk": "",
+          "createdAt": "2026-01-10T08:00:00Z",
+          "editedAt": "2026-01-10T08:00:00Z",
+          "snapshotId": "snap-c402-base"
+        }
+      ],
+      "defaultDesktopId": "dt-c402-sec",
+      "registeredOnServer": true,
+      "restoreMode": "还原系统盘，保留数据盘",
+      "imageStore": [
+        {
+          "id": "img-c402-win11",
+          "name": "Windows 11 23H2",
+          "os": "Windows 11 23H2",
+          "importedAt": "2026-01-08T10:00:00Z"
+        },
+        {
+          "id": "img-c402-kali",
+          "name": "Kali Linux 2026.1",
+          "os": "Kali Linux 2026.1",
+          "importedAt": "2026-02-01T10:00:00Z"
+        }
+      ],
+      "snapshotTree": [
+        {
+          "id": "snap-c402-base",
+          "name": "Win11 纯净安装",
+          "imageId": "img-c402-win11",
+          "parentId": null,
+          "createdAt": "2026-01-10T08:00:00Z"
+        },
+        {
+          "id": "snap-c402-security",
+          "name": "安全工具集",
+          "imageId": "img-c402-win11",
+          "parentId": "snap-c402-base",
+          "createdAt": "2026-01-20T08:00:00Z"
+        },
+        {
+          "id": "snap-c402-security-v2",
+          "name": "安全工具集 v2",
+          "imageId": "img-c402-win11",
+          "parentId": "snap-c402-security",
+          "createdAt": "2026-02-15T08:00:00Z"
+        },
+        {
+          "id": "snap-c402-security-v3",
+          "name": "安全工具集 v3",
+          "imageId": "img-c402-win11",
+          "parentId": "snap-c402-security-v2",
+          "createdAt": "2026-03-10T08:00:00Z"
+        },
+        {
+          "id": "snap-c402-examenv",
+          "name": "考试锁定环境",
+          "imageId": "img-c402-win11",
+          "parentId": "snap-c402-base",
+          "createdAt": "2026-03-05T08:00:00Z"
+        },
+        {
+          "id": "snap-c402-kali-base",
+          "name": "Kali 基础安装",
+          "imageId": "img-c402-kali",
+          "parentId": null,
+          "createdAt": "2026-02-01T08:00:00Z"
+        },
+        {
+          "id": "snap-c402-kali-tools",
+          "name": "Kali 渗透工具集",
+          "imageId": "img-c402-kali",
+          "parentId": "snap-c402-kali-base",
+          "createdAt": "2026-02-10T08:00:00Z"
+        },
+        {
+          "id": "snap-c402-teacher",
+          "name": "教师管理环境",
+          "imageId": "img-c402-win11",
+          "parentId": "snap-c402-security",
+          "createdAt": "2026-02-20T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "bs-d105",
+      "campusId": "baoshan",
+      "name": "D105 通用机房",
+      "building": "教学楼D座",
+      "floor": "1F",
+      "remark": "通用教学环境，Python + VS Code 已配置",
+      "rows": 5,
+      "cols": 8,
+      "terminalCount": 41,
+      "motherIndex": 1,
+      "networkBase": "10.22.15",
+      "gateway": "10.22.15.1",
+      "dns": [
+        "10.22.0.2",
+        "114.114.114.114"
+      ],
+      "stage": "deployed",
+      "serverAddress": "10.22.0.18",
+      "desktopCatalog": [
+        {
+          "id": "dt-d105-teach",
+          "name": "通用教学桌面",
+          "version": "v5",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "通用教学环境，Python + VS Code 已配置",
+          "syncStatus": "synced",
+          "diskSize": 45,
+          "dataDisk": "D: 30GB VHD",
+          "createdAt": "2025-12-01T08:00:00Z",
+          "editedAt": "2026-03-20T16:00:00Z",
+          "snapshotId": "snap-d105-teach-v2"
+        },
+        {
+          "id": "dt-d105-dev",
+          "name": "软件开发桌面",
+          "version": "v2",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "Java/Web开发课程用，数据库已预配",
+          "syncStatus": "none",
+          "diskSize": 60,
+          "dataDisk": "D: 50GB VHD",
+          "createdAt": "2026-03-01T08:00:00Z",
+          "editedAt": "2026-03-19T10:00:00Z",
+          "snapshotId": "snap-d105-dev"
+        },
+        {
+          "id": "dt-d105-exam",
+          "name": "通用考试桌面",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "考试",
+          "visibility": "hidden",
+          "remark": "通用考试环境，已安装考试客户端",
+          "syncStatus": "synced",
+          "diskSize": 35,
+          "dataDisk": "",
+          "createdAt": "2026-03-18T08:00:00Z",
+          "editedAt": "2026-03-18T08:00:00Z",
+          "snapshotId": "snap-d105-exam"
+        },
+        {
+          "id": "dt-d105-phys-exam",
+          "name": "CET-6 考试专用桌面",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "考试",
+          "visibility": "default",
+          "physicalDeploy": true,
+          "remark": "物理部署，独立分区直接引导，CET6考试客户端已安装",
+          "syncStatus": "synced",
+          "diskSize": 40,
+          "dataDisk": "",
+          "createdAt": "2026-03-20T08:00:00Z",
+          "editedAt": "2026-03-20T08:00:00Z",
+          "snapshotId": "snap-d105-exam"
+        },
+        {
+          "id": "dt-d105-draft",
+          "name": "AI 编程实训桌面",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "physicalDeploy": true,
+          "remark": "物理部署，独立分区直接引导，含 PyTorch + CUDA 训练环境",
+          "syncStatus": "synced",
+          "diskSize": 55,
+          "dataDisk": "D: 50GB VHD",
+          "createdAt": "2026-03-21T09:00:00Z",
+          "editedAt": "2026-03-21T09:30:00Z",
+          "snapshotId": "snap-d105-dev"
+        },
+        {
+          "id": "dt-bs-d105-teacher",
+          "name": "D105 教师桌面",
+          "version": "v2",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "教师授课专用，已装授课管理软件和 WOL 控制组件",
+          "syncStatus": "synced",
+          "diskSize": 50,
+          "dataDisk": "D: 30GB VHD",
+          "createdAt": "2026-02-20T08:00:00Z",
+          "editedAt": "2026-03-20T10:00:00Z",
+          "snapshotId": "snap-d105-teacher"
+        },
+        {
+          "id": "dt-bs-d105-base",
+          "name": "Win11 原始镜像",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "原始",
+          "visibility": "hidden",
+          "remark": "纯净 OS 环境，教学桌面和考试桌面均基于此派生",
+          "syncStatus": "synced",
+          "diskSize": 25,
+          "dataDisk": "",
+          "createdAt": "2026-01-10T08:00:00Z",
+          "editedAt": "2026-01-10T08:00:00Z",
+          "snapshotId": "snap-d105-base"
+        }
+      ],
+      "defaultDesktopId": "dt-d105-teach",
+      "registeredOnServer": true,
+      "faultyTerminalIndex": 23,
+      "restoreMode": "还原系统盘，保留数据盘",
+      "imageStore": [
+        {
+          "id": "img-d105-win11",
+          "name": "Windows 11 23H2",
+          "os": "Windows 11 23H2",
+          "importedAt": "2026-01-05T10:00:00Z"
+        }
+      ],
+      "snapshotTree": [
+        {
+          "id": "snap-d105-base",
+          "name": "纯净安装",
+          "imageId": "img-d105-win11",
+          "parentId": null,
+          "createdAt": "2026-01-10T08:00:00Z"
+        },
+        {
+          "id": "snap-d105-office",
+          "name": "Office+通用软件",
+          "imageId": "img-d105-win11",
+          "parentId": "snap-d105-base",
+          "createdAt": "2026-01-20T08:00:00Z"
+        },
+        {
+          "id": "snap-d105-teach-v1",
+          "name": "Python+VSCode v1",
+          "imageId": "img-d105-win11",
+          "parentId": "snap-d105-office",
+          "createdAt": "2025-12-01T08:00:00Z"
+        },
+        {
+          "id": "snap-d105-teach-v2",
+          "name": "Python+VSCode v2",
+          "imageId": "img-d105-win11",
+          "parentId": "snap-d105-teach-v1",
+          "createdAt": "2026-03-15T08:00:00Z"
+        },
+        {
+          "id": "snap-d105-dev",
+          "name": "Java/Web开发工具",
+          "imageId": "img-d105-win11",
+          "parentId": "snap-d105-office",
+          "createdAt": "2026-03-01T08:00:00Z"
+        },
+        {
+          "id": "snap-d105-exam",
+          "name": "考试锁定环境",
+          "imageId": "img-d105-win11",
+          "parentId": "snap-d105-base",
+          "createdAt": "2026-03-18T08:00:00Z"
+        },
+        {
+          "id": "snap-d105-teacher",
+          "name": "教师授课管理",
+          "imageId": "img-d105-win11",
+          "parentId": "snap-d105-office",
+          "createdAt": "2026-02-20T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "yp-e210",
+      "campusId": "yangpu",
+      "name": "E210 外语语音实验室",
+      "building": "外语楼E座",
+      "floor": "2F",
+      "remark": "外语听说教学平台已部署，需连接语音服务器",
+      "rows": 6,
+      "cols": 7,
+      "terminalCount": 43,
+      "motherIndex": 0,
+      "networkBase": "10.21.52",
+      "gateway": "10.21.52.1",
+      "dns": [
+        "10.21.0.2",
+        "114.114.114.114"
+      ],
+      "stage": "deployed",
+      "serverAddress": "10.21.0.18",
+      "desktopCatalog": [
+        {
+          "id": "dt-e210-lang",
+          "name": "外语听说训练桌面",
+          "version": "v3",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "外语教学平台已部署，需连接语音服务器",
+          "syncStatus": "synced",
+          "dataDisk": "D: 20GB VHD",
+          "createdAt": "2026-02-01T08:00:00Z",
+          "editedAt": "2026-03-15T10:00:00Z",
+          "snapshotId": "snap-e210-listen-v2"
+        },
+        {
+          "id": "dt-e210-write",
+          "name": "写作与翻译桌面",
+          "version": "v2",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "英语写作课程用，浏览器已装翻译插件",
+          "syncStatus": "synced",
+          "dataDisk": "D: 15GB VHD",
+          "createdAt": "2026-03-05T08:00:00Z",
+          "editedAt": "2026-03-18T09:00:00Z",
+          "snapshotId": "snap-e210-write"
+        },
+        {
+          "id": "dt-e210-exam",
+          "name": "四六级模拟考试桌面",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "考试",
+          "visibility": "hidden",
+          "remark": "CET-4/6 模拟考试专用",
+          "syncStatus": "synced",
+          "dataDisk": "",
+          "createdAt": "2026-03-10T08:00:00Z",
+          "editedAt": "2026-03-10T08:00:00Z",
+          "snapshotId": "snap-e210-exam"
+        },
+        {
+          "id": "dt-yp-e210-teacher",
+          "name": "E210 教师桌面",
+          "version": "v2",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "教师授课专用，已装授课管理软件和 WOL 控制组件",
+          "syncStatus": "synced",
+          "dataDisk": "D: 30GB VHD",
+          "createdAt": "2026-02-20T08:00:00Z",
+          "editedAt": "2026-03-20T10:00:00Z",
+          "snapshotId": "snap-e210-teacher"
+        },
+        {
+          "id": "dt-yp-e210-base",
+          "name": "Win11 原始镜像",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "原始",
+          "visibility": "hidden",
+          "remark": "纯净 OS 环境，教学桌面和考试桌面均基于此派生",
+          "syncStatus": "synced",
+          "dataDisk": "",
+          "createdAt": "2026-01-10T08:00:00Z",
+          "editedAt": "2026-01-10T08:00:00Z",
+          "snapshotId": "snap-e210-base"
+        }
+      ],
+      "defaultDesktopId": "dt-e210-lang",
+      "registeredOnServer": true,
+      "faultyTerminalIndex": 18,
+      "restoreMode": "还原系统盘，保留数据盘",
+      "imageStore": [
+        {
+          "id": "img-e210-win11",
+          "name": "Windows 11 23H2",
+          "os": "Windows 11 23H2",
+          "importedAt": "2026-01-05T10:00:00Z"
+        }
+      ],
+      "snapshotTree": [
+        {
+          "id": "snap-e210-base",
+          "name": "纯净安装",
+          "imageId": "img-e210-win11",
+          "parentId": null,
+          "createdAt": "2026-01-10T08:00:00Z"
+        },
+        {
+          "id": "snap-e210-lang",
+          "name": "语言学习软件",
+          "imageId": "img-e210-win11",
+          "parentId": "snap-e210-base",
+          "createdAt": "2026-01-25T08:00:00Z"
+        },
+        {
+          "id": "snap-e210-listen-v1",
+          "name": "听说训练 v1",
+          "imageId": "img-e210-win11",
+          "parentId": "snap-e210-lang",
+          "createdAt": "2026-02-01T08:00:00Z"
+        },
+        {
+          "id": "snap-e210-listen-v2",
+          "name": "听说训练 v2",
+          "imageId": "img-e210-win11",
+          "parentId": "snap-e210-listen-v1",
+          "createdAt": "2026-03-10T08:00:00Z"
+        },
+        {
+          "id": "snap-e210-write",
+          "name": "写作翻译工具",
+          "imageId": "img-e210-win11",
+          "parentId": "snap-e210-lang",
+          "createdAt": "2026-02-15T08:00:00Z"
+        },
+        {
+          "id": "snap-e210-exam",
+          "name": "四六级考试环境",
+          "imageId": "img-e210-win11",
+          "parentId": "snap-e210-base",
+          "createdAt": "2026-03-01T08:00:00Z"
+        },
+        {
+          "id": "snap-e210-teacher",
+          "name": "教师管理环境",
+          "imageId": "img-e210-win11",
+          "parentId": "snap-e210-lang",
+          "createdAt": "2026-02-20T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "bs-f308",
+      "campusId": "baoshan",
+      "name": "F308 多媒体互动教室",
+      "building": "综合楼F座",
+      "floor": "3F",
+      "remark": "多媒体录播环境，采集卡驱动已装",
+      "rows": 5,
+      "cols": 6,
+      "terminalCount": 31,
+      "motherIndex": 0,
+      "networkBase": "10.22.63",
+      "gateway": "10.22.63.1",
+      "dns": [
+        "10.22.0.2",
+        "114.114.114.114"
+      ],
+      "stage": "deployed",
+      "serverAddress": "10.22.0.18",
+      "desktopCatalog": [
+        {
+          "id": "dt-f308-media",
+          "name": "多媒体课件制作桌面",
+          "version": "v2",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "多媒体录播环境，采集卡驱动已装",
+          "syncStatus": "synced",
+          "dataDisk": "D: 40GB VHD",
+          "createdAt": "2026-02-10T08:00:00Z",
+          "editedAt": "2026-03-18T14:00:00Z",
+          "snapshotId": "snap-f308-courseware-v2"
+        },
+        {
+          "id": "dt-f308-interactive",
+          "name": "互动教学桌面",
+          "version": "v3",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "在线互动教学环境，音视频设备已调试",
+          "syncStatus": "synced",
+          "dataDisk": "D: 20GB VHD",
+          "createdAt": "2026-01-01T08:00:00Z",
+          "editedAt": "2026-03-16T11:00:00Z",
+          "snapshotId": "snap-f308-interactive"
+        },
+        {
+          "id": "dt-f308-exam",
+          "name": "在线考试桌面",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "考试",
+          "visibility": "hidden",
+          "remark": "超星在线考试专用，已配置考试服务器地址",
+          "syncStatus": "synced",
+          "dataDisk": "",
+          "createdAt": "2026-03-08T08:00:00Z",
+          "editedAt": "2026-03-08T08:00:00Z",
+          "snapshotId": "snap-f308-exam"
+        },
+        {
+          "id": "dt-bs-f308-teacher",
+          "name": "F308 教师桌面",
+          "version": "v2",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "教师授课专用，已装授课管理软件和 WOL 控制组件",
+          "syncStatus": "synced",
+          "dataDisk": "D: 30GB VHD",
+          "createdAt": "2026-02-20T08:00:00Z",
+          "editedAt": "2026-03-20T10:00:00Z",
+          "snapshotId": "snap-f308-teacher"
+        },
+        {
+          "id": "dt-bs-f308-base",
+          "name": "Win11 原始镜像",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "原始",
+          "visibility": "hidden",
+          "remark": "纯净 OS 环境，教学桌面和考试桌面均基于此派生",
+          "syncStatus": "synced",
+          "dataDisk": "",
+          "createdAt": "2026-01-10T08:00:00Z",
+          "editedAt": "2026-01-10T08:00:00Z",
+          "snapshotId": "snap-f308-base"
+        }
+      ],
+      "defaultDesktopId": "dt-f308-media",
+      "registeredOnServer": true,
+      "faultyTerminalIndex": 15,
+      "restoreMode": "还原系统盘，保留数据盘",
+      "imageStore": [
+        {
+          "id": "img-f308-win11",
+          "name": "Windows 11 23H2",
+          "os": "Windows 11 23H2",
+          "importedAt": "2026-01-05T10:00:00Z"
+        }
+      ],
+      "snapshotTree": [
+        {
+          "id": "snap-f308-base",
+          "name": "纯净安装",
+          "imageId": "img-f308-win11",
+          "parentId": null,
+          "createdAt": "2026-01-10T08:00:00Z"
+        },
+        {
+          "id": "snap-f308-multi",
+          "name": "多媒体基础",
+          "imageId": "img-f308-win11",
+          "parentId": "snap-f308-base",
+          "createdAt": "2026-01-25T08:00:00Z"
+        },
+        {
+          "id": "snap-f308-courseware-v1",
+          "name": "课件制作 v1",
+          "imageId": "img-f308-win11",
+          "parentId": "snap-f308-multi",
+          "createdAt": "2026-02-05T08:00:00Z"
+        },
+        {
+          "id": "snap-f308-courseware-v2",
+          "name": "课件制作 v2",
+          "imageId": "img-f308-win11",
+          "parentId": "snap-f308-courseware-v1",
+          "createdAt": "2026-03-15T08:00:00Z"
+        },
+        {
+          "id": "snap-f308-interactive",
+          "name": "互动教学工具",
+          "imageId": "img-f308-win11",
+          "parentId": "snap-f308-multi",
+          "createdAt": "2026-02-10T08:00:00Z"
+        },
+        {
+          "id": "snap-f308-exam",
+          "name": "在线考试环境",
+          "imageId": "img-f308-win11",
+          "parentId": "snap-f308-base",
+          "createdAt": "2026-03-01T08:00:00Z"
+        },
+        {
+          "id": "snap-f308-teacher",
+          "name": "教师管理环境",
+          "imageId": "img-f308-win11",
+          "parentId": "snap-f308-multi",
+          "createdAt": "2026-02-20T08:00:00Z"
+        }
+      ]
+    }
+  ],
+  "demo": {
+    "focusCampusId": "baoshan",
+    "focusClassroomId": "bs-d105",
+    "motherIndex": 1,
+    "controlledIndex": 2
+  }
+}
