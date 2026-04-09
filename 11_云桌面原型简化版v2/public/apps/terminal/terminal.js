@@ -152,14 +152,13 @@ function shellHtml(){
       <div class="brand">云桌面管理系统</div>
       <div class="status">
         <span class="dot ${m?.online?'dot-ok':'dot-err'}"></span><span class="status-label ${m?.online?'sol':'sol-err'}">${m?.online?'在线':'离线'}</span>
+        <span class="mono">${m?.ip?esc(m.ip):'未配置IP'}</span>
         <span class="sep">·</span>
         <span>${esc(m?.name||'未命名')}</span>
         <span class="sep">·</span>
-        <span>${esc(m?.seat||'--')}</span>
+        <span>座位 ${esc(m?.seat||'--')}</span>
         <span class="sep">·</span>
-        <span class="mono">${m?.ip?esc(m.ip):'未配置IP'}</span>
-        <span class="sep">·</span>
-        <button class="btn btn-secondary" style="padding:4px 14px;font-size:.82rem;color:var(--t-warn);border-color:var(--t-warn)" data-act="exit-to-desktop">退出管理系统</button>
+        <button class="btn btn-secondary btn-sm" style="color:var(--t-warn);border-color:var(--t-warn)" data-act="exit-to-desktop">退出管理系统</button>
       </div>
     </div>
     <div class="term-body">${screenContent(demo().motherScreen)}</div>
@@ -411,13 +410,12 @@ function workbenchScreen(){
       ${esc(c.name)} ${pill(stageLabel(c.stage), c.stage==='deployed'?'ok':'info')}
       <span style="font-size:.78rem;color:var(--t-text2);margin-left:8px">${rt.online}/${rt.total} 在线</span>
     </div>
-    <div style="display:flex;gap:6px">
-      <button class="btn btn-danger" data-act="end-management">结束管理</button>
-    </div>
   </div>
-  <div style="display:flex;gap:6px;margin-bottom:14px">
+  <div style="display:flex;gap:6px;margin-bottom:14px;align-items:center">
     <button class="btn ${activeTab==='layout'?'btn-primary':'btn-secondary'}" ${isRunning?'disabled':''} data-act="wb-tab-layout">设置布局</button>
     <button class="btn ${activeTab==='maint'?'btn-primary':'btn-secondary'}" ${isBlank&&m.controlState!=='mother'?'disabled':''} ${isRunning?'disabled':''} data-act="wb-tab-maint">教室维护</button>
+    <span style="flex:1"></span>
+    <button class="btn btn-danger btn-sm" data-act="end-management">结束管理</button>
   </div>
   ${activeTab==='maint' ? wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning) : wbLayoutContent(terms, rt, c, m, d)}
 </div>`;
@@ -452,7 +450,7 @@ function wbLayoutContent(terms, rt, c, m, d){
   const discoveredCount = onlineTerms.length;
   const scanning = !isTakenOver || (demo().flags?.layoutRescan);
 
-  return `<div style="display:grid;grid-template-columns:300px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden;align-items:start">
+  return `<div style="display:grid;grid-template-columns:300px 1fr;gap:16px;flex:1;min-height:0;overflow:auto">
     <div class="page-scroll" style="display:flex;flex-direction:column;gap:12px">
       <div class="card">
         <div class="card-header">${!isTakenOver?'教室接管':'教室信息'}</div>

@@ -433,7 +433,7 @@ function act(action, payload={}){
     if(payload.ip!==undefined) mt.ip=payload.ip;
     if(payload.subnetMask!==undefined) mt.subnetMask=payload.subnetMask;
     if(payload.gateway!==undefined) mt.gateway=payload.gateway;
-    if(payload.dns!==undefined) mt.dns=payload.dns;
+    if(payload.dns!==undefined) mt.dns=typeof payload.dns==='string'?payload.dns.split(',').map(s=>s.trim()).filter(Boolean):payload.dns;
     return {ok:true};
 
   case 'save-local-network':
