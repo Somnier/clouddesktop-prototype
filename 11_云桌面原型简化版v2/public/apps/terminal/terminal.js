@@ -51,25 +51,53 @@ function showTermAlert(msg){
 }
 
 function showExportDoneDialog(){
-  /* Simulate Electron dialog.showSaveDialog with default path */
-  const defaultPath = 'E:\\CloudDesktop\\desktop-export.cdpkg';
-  showTermConfirm('导出桌面包','系统将打开"保存文件"对话框，默认保存位置：<br><span style="font-family:monospace;font-size:.82rem;color:var(--t-accent)">'+esc(defaultPath)+'</span><br><br>点击确认模拟导出。',()=>{
-    showTermAlert('桌面包已导出到: '+defaultPath+'（原型模拟 — 实际产品使用 Electron showSaveDialog）');
-  });
+  /* Use Electron save dialog if available, otherwise simulate */
+  if(window.electronAPI?.isElectron){
+    window.electronAPI.showSaveDialog({
+      title: '导出桌面包',
+      defaultPath: 'E:\\CloudDesktop\\desktop-export.cdpkg',
+      filters: [{ name: '桌面包', extensions: ['cdpkg'] }]
+    }).then(result => {
+      if(!result.canceled && result.filePath){
+        showTermAlert('桌面包已导出到: '+result.filePath);
+      }
+    });
+  } else {
+    const defaultPath = 'E:\\CloudDesktop\\desktop-export.cdpkg';
+    showTermConfirm('导出桌面包','将通过系统"保存文件"对话框导出桌面包。<br>默认保存路径：<span style="font-family:monospace;font-size:.85rem;color:var(--t-accent)">'+esc(defaultPath)+'</span><br><br>点击确认模拟导出。',()=>{
+      showTermAlert('桌面包已导出到: '+defaultPath+'（原型模拟 — 实际产品使用系统保存对话框）');
+    });
+  }
 }
 
 function showImportDialog(){
-  /* Simulate Electron dialog.showOpenDialog with filters */
-  const defaultDir = 'E:\\CloudDesktop';
-  const filters = '.cdpkg / .vhd / .img';
-  showTermConfirm('导入桌面','系统将打开"选择文件"对话框：<br>默认目录：<span style="font-family:monospace;font-size:.82rem;color:var(--t-accent)">'+esc(defaultDir)+'</span><br>支持格式：<span style="font-size:.82rem;color:var(--t-text2)">'+esc(filters)+'</span><br><br>点击确认模拟选择文件。',()=>{
-    showCreateDesktopDialog('导入的桌面');
-  });
+  /* Use Electron open dialog if available, otherwise simulate */
+  if(window.electronAPI?.isElectron){
+    window.electronAPI.showOpenDialog({
+      title: '导入桌面',
+      defaultPath: 'E:\\CloudDesktop',
+      filters: [
+        { name: '桌面文件', extensions: ['cdpkg','vhd','img'] },
+        { name: '所有文件', extensions: ['*'] }
+      ],
+      properties: ['openFile']
+    }).then(result => {
+      if(!result.canceled && result.filePaths?.length){
+        showCreateDesktopDialog('导入的桌面');
+      }
+    });
+  } else {
+    const defaultDir = 'E:\\CloudDesktop';
+    const filters = '.cdpkg / .vhd / .img';
+    showTermConfirm('导入桌面','将通过系统"选择文件"对话框选择桌面文件。<br>默认目录：<span style="font-family:monospace;font-size:.85rem;color:var(--t-accent)">'+esc(defaultDir)+'</span><br>支持格式：<span style="font-size:.85rem;color:var(--t-text2)">'+esc(filters)+'</span><br><br>点击确认模拟选择文件。',()=>{
+      showCreateDesktopDialog('导入的桌面');
+    });
+  }
 }
 
 function showCreateDesktopDialog(defaultName){
   const ov=document.createElement('div'); ov.className='t-modal-overlay';
-  ov.innerHTML=`<div class="t-modal" style="max-width:420px">
+  ov.innerHTML=`<div class="t-modal" style="max-width:480px">
     <div class="t-modal-title" style="color:var(--t-text)">导入桌面</div>
     <div class="t-modal-msg">请配置桌面信息：</div>
     <div class="prep-field"><label>桌面名称</label><input type="text" id="cd-name" value="${esc(defaultName)}" placeholder="桌面名称"></div>
@@ -77,13 +105,18 @@ function showCreateDesktopDialog(defaultName){
       <option value="false">虚拟部署（VHD）</option>
       <option value="true">物理部署（独立分区）</option>
     </select></div>
-    <div class="prep-field"><label>数据盘</label><select id="cd-disk-size">
+    <div class="prep-field"><label>数据盘</label><select id="cd-disk-sel">
       <option value="">不添加数据盘</option>
-      <option value="20GB">20 GB</option>
-      <option value="50GB" selected>50 GB</option>
-      <option value="100GB">100 GB</option>
+      <option value="yes" selected>添加数据盘</option>
     </select></div>
-    <div id="cd-disk-drive-row" class="prep-field"><label>数据盘盘符</label><input type="text" id="cd-disk-drive" value="D:" placeholder="如 D:"></div>
+    <div id="cd-disk-detail-row">
+      <div class="prep-field"><label>数据盘大小</label><select id="cd-disk-size">
+        <option value="20GB">20 GB</option>
+        <option value="50GB" selected>50 GB</option>
+        <option value="100GB">100 GB</option>
+      </select></div>
+      <div class="prep-field"><label>数据盘盘符</label><input type="text" id="cd-disk-drive" value="D:" placeholder="如 D:"></div>
+    </div>
     <div class="prep-field"><label>备注</label><input type="text" id="cd-remark" value="" placeholder="可选"></div>
     <div class="t-modal-actions">
       <button class="btn btn-ghost" data-tm="cancel">取消</button>
@@ -92,18 +125,19 @@ function showCreateDesktopDialog(defaultName){
   </div>
 </div>`;
   document.body.appendChild(ov);
-  /* Toggle data disk drive row visibility */
-  const diskSel=ov.querySelector('#cd-disk-size');
-  const driveRow=ov.querySelector('#cd-disk-drive-row');
-  function toggleDriveRow(){ driveRow.style.display=diskSel.value?'':'none'; }
-  toggleDriveRow();
-  diskSel.addEventListener('change',toggleDriveRow);
+  /* Toggle data disk detail visibility */
+  const diskSel=ov.querySelector('#cd-disk-sel');
+  const detailRow=ov.querySelector('#cd-disk-detail-row');
+  function toggleDetail(){ detailRow.style.display=diskSel.value?'':'none'; }
+  toggleDetail();
+  diskSel.addEventListener('change',toggleDetail);
   ov.querySelector('[data-tm="cancel"]').addEventListener('click',()=>ov.remove());
   ov.addEventListener('click',(e)=>{if(e.target===ov)ov.remove();});
   ov.querySelector('[data-tm="create"]').addEventListener('click',()=>{
     const name = ov.querySelector('#cd-name')?.value||defaultName;
-    const diskSize = ov.querySelector('#cd-disk-size')?.value;
-    const diskDrive = ov.querySelector('#cd-disk-drive')?.value||'D:';
+    const hasDisk = ov.querySelector('#cd-disk-sel')?.value === 'yes';
+    const diskSize = hasDisk ? (ov.querySelector('#cd-disk-size')?.value || '') : '';
+    const diskDrive = hasDisk ? (ov.querySelector('#cd-disk-drive')?.value||'D:') : '';
     const physical = ov.querySelector('#cd-physical')?.value==='true';
     const remark = ov.querySelector('#cd-remark')?.value||'';
     ov.remove();
@@ -119,7 +153,7 @@ function render(state){
   if(!state) return;
   /* Preserve focused element across full re-render */
   const ae = document.activeElement;
-  let focusSel = null, focusStart = null, focusEnd = null;
+  let focusSel = null, focusStart = null, focusEnd = null, focusValue = null;
   if(ae && ae !== document.body && root.contains(ae)){
     if(ae.id) focusSel = '#' + ae.id;
     else if(ae.dataset?.rule) focusSel = '[data-rule="'+ae.dataset.rule+'"]';
@@ -128,14 +162,23 @@ function render(state){
       /* generic fallback using data-* or name */
       if(ae.name) focusSel = '[name="'+ae.name+'"]';
     }
-    if(focusSel){ focusStart = ae.selectionStart; focusEnd = ae.selectionEnd; }
+    if(focusSel){
+      focusStart = ae.selectionStart;
+      focusEnd = ae.selectionEnd;
+      /* Save value so it's not overwritten by stale state */
+      focusValue = ae.value;
+    }
   }
   root.innerHTML = shellHtml();
   bindAll();
-  /* Restore focus */
+  /* Restore focus and value */
   if(focusSel){
     const el = root.querySelector(focusSel);
     if(el){
+      /* Restore the user's in-progress value before focusing */
+      if(focusValue != null && (el.tagName==='INPUT'||el.tagName==='TEXTAREA')){
+        el.value = focusValue;
+      }
       el.focus();
       if(typeof el.setSelectionRange === 'function' && focusStart != null){
         try { el.setSelectionRange(focusStart, focusEnd); } catch(e){}
@@ -158,7 +201,7 @@ function shellHtml(){
         <span class="sep">·</span>
         <span>座位 ${esc(m?.seat||'--')}</span>
         <span class="sep">·</span>
-        <button class="btn btn-secondary btn-sm" style="color:var(--t-warn);border-color:var(--t-warn)" data-act="exit-to-desktop">退出管理系统</button>
+        <button class="btn exit-btn" data-act="exit-to-desktop">⏻ 退出</button>
       </div>
     </div>
     <div class="term-body">${screenContent(demo().motherScreen)}</div>
@@ -219,13 +262,13 @@ function seatLabel(row, col, rules){
 function homeScreen(){
   const m=mt();
   return `<div class="page" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
-  <div style="display:flex;flex-direction:column;gap:12px;width:360px">
-    <button class="btn btn-secondary" style="padding:14px;font-size:1rem;justify-content:center" data-act="open-local-info">设置本机</button>
-    <button class="btn btn-secondary" style="padding:14px;font-size:1rem;justify-content:center" data-act="open-local-network">设置服务器</button>
-    <button class="btn btn-secondary" style="padding:14px;font-size:1rem;justify-content:center" data-act="open-local-desktop">管理桌面</button>
-    <button class="btn btn-secondary" style="padding:14px;font-size:1rem;justify-content:center" data-act="open-fault-reset-direct">重置终端</button>
-    <button class="btn btn-secondary" style="padding:14px;font-size:1rem;justify-content:center" data-act="open-fault-replace-direct">替换故障终端</button>
-    <button class="btn btn-secondary" style="padding:14px;font-size:1rem;justify-content:center" data-act="open-takeover">${m.controlState==='mother'?'已接管教室 — 进入工作台':'网络同传'}</button>
+  <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:420px;padding:0 16px">
+    <button class="btn btn-primary" style="padding:16px;font-size:1.05rem;justify-content:center" data-act="open-local-info">设置本机</button>
+    <button class="btn btn-primary" style="padding:16px;font-size:1.05rem;justify-content:center" data-act="open-local-network">设置服务器</button>
+    <button class="btn btn-primary" style="padding:16px;font-size:1.05rem;justify-content:center" data-act="open-local-desktop">管理桌面</button>
+    <button class="btn btn-primary" style="padding:16px;font-size:1.05rem;justify-content:center" data-act="open-fault-reset-direct">重置终端</button>
+    <button class="btn btn-primary" style="padding:16px;font-size:1.05rem;justify-content:center" data-act="open-fault-replace-direct">替换故障终端</button>
+    <button class="btn btn-primary" style="padding:16px;font-size:1.05rem;justify-content:center" data-act="open-takeover">网络同传</button>
   </div>
 </div>`;
 }
@@ -237,8 +280,8 @@ function homeScreen(){
 function localInfoScreen(){
   const m=mt(); const c=cr();
   return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
-  <div style="max-width:480px;width:100%">
-  <div class="section-title"><button class="btn btn-ghost btn-sm" data-act="go-home">←</button> 设置本机</div>
+  <div style="max-width:520px;width:100%">
+  <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 设置本机</div>
   <div class="card" style="width:100%">
     <div class="prep-field"><label>机器名</label><input type="text" id="li-name" value="${esc(m.name||'')}" placeholder="输入机器名"></div>
     <div class="prep-field"><label>座位号</label><input type="text" id="li-seat" value="${esc(m.seat||'')}" placeholder="如 A-01"></div>
@@ -268,8 +311,8 @@ function localNetworkScreen(){
   const connOk = connFlag==='ok' || (connFlag==null && hasAddr && cr()?.registeredOnServer);
   const connStatus = isChecking ? 'checking' : !hasAddr ? 'none' : connOk ? 'ok' : 'fail';
   return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
-  <div style="max-width:480px;width:100%">
-  <div class="section-title"><button class="btn btn-ghost btn-sm" data-act="go-home">←</button> 设置服务器</div>
+  <div style="max-width:520px;width:100%">
+  <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 设置服务器</div>
   <div class="card" style="width:100%">
     <div class="prep-field"><label>服务器地址</label><input type="text" id="ln-srv" value="${esc(m.serverAddr||'')}" placeholder="管理服务器 IP 或域名"></div>
     <div style="margin-top:12px;padding:10px 14px;background:${connStatus==='ok'?'var(--t-ok-bg)':connStatus==='fail'?'var(--t-err-bg)':'var(--t-panel)'};border:1px solid ${connStatus==='ok'?'var(--t-ok)':connStatus==='fail'?'var(--t-err)':'var(--t-border)'};border-radius:var(--radius)">
@@ -280,7 +323,7 @@ function localNetworkScreen(){
       </div>
       ${connStatus==='fail'?'<div style="font-size:.75rem;color:var(--t-text3);margin-top:4px">请检查地址是否正确或网络是否通畅</div>':''}
     </div>
-    <div style="display:flex;gap:8px;margin-top:12px">
+    <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn btn-ghost" data-act="go-home">取消</button>
       <button class="btn btn-primary" data-save="local-network">保存</button>
     </div>
@@ -301,13 +344,13 @@ function localDesktopScreen(){
   const returnAct = demo()._desktopReturnScreen ? 'desktop-return-flow' : (m.controlState==='mother'?'return-workbench':'go-home');
   const bid = m.bios?.defaultBootId;
   const diskTotal = m.metrics?.diskTotal || 512;
-  const desktopUsed = desktops.reduce((s,d)=>s+(d.diskSize||45),0);
-  const systemUsed = 38;
+  const systemUsed = 35;
+  const desktopUsed = desktops.reduce((s,d)=>s+(d.diskSize||25),0);
   const diskUsed = desktopUsed + systemUsed;
   const diskFree = Math.max(0, diskTotal - diskUsed);
   const diskPct = Math.round(diskUsed/diskTotal*100);
   return `<div class="page">
-  <div class="section-title"><button class="btn btn-ghost btn-sm" data-act="${returnAct}">←</button> 桌面管理</div>
+  <div class="section-title"><button class="btn btn-ghost" data-act="${returnAct}">←</button> 桌面管理</div>
 
   <div class="disk-summary mb-16">
     <div style="display:flex;align-items:center;gap:20px;padding:14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:var(--radius)">
@@ -325,11 +368,11 @@ function localDesktopScreen(){
         </svg>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700">${diskPct}%</div>
       </div>
-      <div style="font-size:.82rem;line-height:1.8;flex:1">
+      <div style="font-size:.85rem;line-height:1.8;flex:1">
         <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--t-text3);margin-right:6px;vertical-align:middle"></span>系统占用 ${systemUsed} GB</div>
         <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-accent)'};margin-right:6px;vertical-align:middle"></span>桌面占用 ${desktopUsed} GB</div>
         <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--t-border);margin-right:6px;vertical-align:middle"></span>剩余可用 ${diskFree} GB</div>
-        <div style="color:var(--t-text3);font-size:.75rem">总计 ${diskTotal} GB</div>
+        <div style="color:var(--t-text3);font-size:.78rem">总计 ${diskTotal} GB</div>
       </div>
     </div>
   </div>
@@ -345,24 +388,31 @@ function localDesktopScreen(){
     const dataDisks = d.dataDisks || [];
     const uploaded = d.uploaded || d.syncStatus==='synced';
     const isPhysical = d.physicalDeploy || false;
+    const dtSize = d.diskSize || 25;
+    /* Compute system VHD portion = diskSize - data disk total */
+    const dataDiskTotal = dataDisks.reduce((s,dd)=>s+parseInt((dd.size||'0').replace(/\D/g,''),10),0);
+    const sysVhdSize = Math.max(0, dtSize - dataDiskTotal);
     return `
-    <div class="dt-card mb-8 ${isDefault?'selected':''}" data-dt-id="${d.id}" style="position:relative;overflow:hidden${!uploaded?';border-color:var(--t-err);background:var(--t-err-bg)':''}">
+    <div class="dt-card mb-8 ${isDefault?'selected':''} ${!uploaded?'dt-unsync':''}" data-dt-id="${d.id}" style="position:relative;overflow:hidden">
       <span class="dt-card-fill"></span>
       <div style="position:relative;z-index:1">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div class="dt-name">${esc(d.name)}</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div class="dt-name">${esc(d.name)}</div>
+          <div class="dt-meta" style="margin-top:4px">${esc(d.baseImageName||d.os)} · 桌面占用 ${dtSize} GB${dataDisks.length?'（系统盘 '+sysVhdSize+' GB + 数据盘 '+dataDisks.map(dd=>esc(dd.drive||'D:')+' '+esc(dd.size||'20GB')).join(', ')+'）':'（不含数据盘）'}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;flex-shrink:0;margin-left:12px">
           ${isPhysical?pill('物理部署','warn'):''}
           ${pill('还原','info')}
-          ${isDefault?pill('默认启动','info'):`<button class="btn btn-ghost" style="padding:2px 8px;font-size:.7rem" data-dt-default="${d.id}">设为默认</button>`}
-          <button class="btn btn-ghost" style="padding:2px 8px;font-size:.7rem" data-dt-visibility="${d.id}">${isHidden?'取消隐藏':'隐藏'}</button>
+          ${uploaded?pill('已同步','ok'):`<span class="pill err" style="font-weight:600">未同步</span>`}
           ${isHidden?pill('已隐藏','muted'):''}
-          ${uploaded?pill('已同步','ok'):pill('未同步','err')}
+          ${isDefault?pill('默认启动','info'):''}
+          ${!isDefault?`<button class="btn btn-ghost" style="padding:4px 10px;font-size:.78rem" data-dt-default="${d.id}">设为默认</button>`:''}
+          <button class="btn btn-ghost" style="padding:4px 10px;font-size:.78rem" data-dt-visibility="${d.id}">${isHidden?'取消隐藏':'隐藏'}</button>
         </div>
       </div>
-      <div class="dt-meta" style="margin-top:6px">${esc(d.baseImageName||d.os)} · 桌面占用 ${d.diskSize||45} GB（${dataDisks.length?'含数据盘 '+dataDisks.map(dd=>esc(dd.drive||'D:')+' '+esc(dd.size||'20GB')).join(', '):'不含数据盘'}）</div>
       ${d.remark?`<div class="dt-sw">备注: ${esc(d.remark)}</div>`:''}
-      <div style="font-size:.72rem;color:var(--t-text3);margin-top:4px">创建 ${fmtTime(d.createdAt)} · 更新 ${fmtTime(d.editedAt)}</div>
+      <div style="font-size:.75rem;color:var(--t-text3);margin-top:6px">创建 ${fmtTime(d.createdAt)} · 更新 ${fmtTime(d.editedAt)}</div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-ghost" data-dt-edit="${d.id}">编辑桌面</button>
         <button class="btn btn-ghost" data-dt-copy="${d.id}">复制桌面</button>
@@ -406,7 +456,7 @@ function workbenchScreen(){
   return `<div class="page">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <div class="section-title" style="margin:0">
-      <button class="btn btn-ghost btn-sm" data-act="go-home">←</button>
+      <button class="btn btn-ghost" data-act="go-home">←</button>
       ${esc(c.name)} ${pill(stageLabel(c.stage), c.stage==='deployed'?'ok':'info')}
       <span style="font-size:.78rem;color:var(--t-text2);margin-left:8px">${rt.online}/${rt.total} 在线</span>
     </div>
@@ -415,7 +465,7 @@ function workbenchScreen(){
     <button class="btn ${activeTab==='layout'?'btn-primary':'btn-secondary'}" ${isRunning?'disabled':''} data-act="wb-tab-layout">设置布局</button>
     <button class="btn ${activeTab==='maint'?'btn-primary':'btn-secondary'}" ${isBlank&&m.controlState!=='mother'?'disabled':''} ${isRunning?'disabled':''} data-act="wb-tab-maint">教室维护</button>
     <span style="flex:1"></span>
-    <button class="btn btn-danger btn-sm" data-act="end-management">结束管理</button>
+    <button class="btn btn-danger" data-act="end-management">结束管理</button>
   </div>
   ${activeTab==='maint' ? wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning) : wbLayoutContent(terms, rt, c, m, d)}
 </div>`;
@@ -1077,7 +1127,7 @@ function maintIpScreen(){
   /* Sort by seat label for column-major grid rendering */
   const sorted = [...allTerms].sort((a,b)=>(a.seat||'').localeCompare(b.seat||''));
   return `<div class="page">
-  <div class="section-title"><button class="btn btn-ghost btn-sm" data-act="return-workbench">←</button> 修改 IP / 服务器地址</div>
+  <div class="section-title"><button class="btn btn-ghost" data-act="return-workbench">←</button> 修改 IP / 服务器地址</div>
   <div class="page-scroll">
   <div style="display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start">
     <div>
@@ -1181,7 +1231,7 @@ function faultReplaceScreen(){
 
   if(fr.confirmed){
     return `<div class="page">
-    <div class="section-title"><button class="btn btn-ghost btn-sm" data-act="go-home">←</button> 替换故障终端</div>
+    <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 替换故障终端</div>
     <div class="card" style="border-color:var(--t-ok);background:rgba(34,197,94,0.08);max-width:720px;margin-top:24px">
       <div class="card-header" style="color:var(--t-ok)">替换已完成</div>
       <div style="font-size:.85rem">本机已继承 ${esc(fr.suggestedSeat||'--')} 位置的全部配置与桌面资产。</div>
@@ -1189,44 +1239,45 @@ function faultReplaceScreen(){
     </div>`;
   }
 
-  if(fr.replacing){
+  if(fr.replacing || demo().flags?.faultReplacing){
     return `<div class="page" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
     <div style="max-width:480px;width:100%;text-align:center">
       <div style="font-size:1.3rem;font-weight:600;margin-bottom:16px">正在替换中…</div>
       <div class="progress-bar" style="width:100%;height:12px;margin-bottom:12px"><div class="fill" style="width:65%"></div></div>
       <div style="font-size:.85rem;color:var(--t-text2);margin-bottom:8px">正在从服务器同步配置与桌面数据</div>
-      <div style="font-size:.9rem;color:var(--t-err);font-weight:600">⚠ 切勿关闭电源或中断网络</div>
+      <div style="font-size:.95rem;color:var(--t-err);font-weight:600;padding:12px;background:var(--t-err-bg);border:1px solid var(--t-err);border-radius:var(--radius)">⚠ 替换过程中切勿关闭电源、拔掉网线或中断网络连接，否则可能导致终端数据损坏。</div>
     </div>
     </div>`;
   }
 
   return `<div class="page">
-  <div class="section-title"><button class="btn btn-ghost btn-sm" data-act="go-home">←</button> 替换故障终端</div>
+  <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 替换故障终端</div>
   <div class="section-sub">选择教室和要替换的终端座位，本机将继承该终端的配置与桌面。</div>
 
   ${!serverOk?`<div class="card mb-16" style="border-color:var(--t-warn);max-width:720px">
     <div style="font-size:.85rem;color:var(--t-warn)">⚠ 无法连接服务器，请检查网络配置后重试。</div>
   </div>`:`
   <div style="display:grid;grid-template-columns:240px 1fr;gap:16px;align-items:start">
-    <div class="card">
-      <div class="card-header">选择教室</div>
-      ${allCrs.length?allCrs.map(cr=>`
-        <div class="dt-card mb-4 ${cr.id===selectedCrId?'selected':''}" style="cursor:pointer;padding:6px 10px;font-size:.82rem" data-fault-cr="${cr.id}">
-          <span>${esc(cr.name)}</span>
-        </div>
-      `).join(''):'<div style="font-size:.82rem;color:var(--t-text3);padding:8px 0">无已注册教室</div>'}
+    <div>
+      <div class="card">
+        <div class="card-header">❶ 选择教室</div>
+        ${allCrs.length?allCrs.map(cr=>`
+          <div class="dt-card mb-4 ${cr.id===selectedCrId?'selected':''}" style="cursor:pointer;padding:8px 12px;font-size:.85rem" data-fault-cr="${cr.id}">
+            <span>${esc(cr.name)}</span>
+          </div>
+        `).join(''):'<div style="font-size:.85rem;color:var(--t-text3);padding:8px 0">无已注册教室</div>'}
+      </div>
     </div>
     <div class="card">
-      <div class="card-header">选择终端座位 ${selectedCr?'— '+esc(selectedCr.name):''}</div>
-      ${!selectedCr?'<div style="font-size:.82rem;color:var(--t-text3);padding:16px 0;text-align:center">← 请先选择教室</div>'
-        :crTerms.length?`<div style="display:grid;grid-template-columns:repeat(${Math.min(selectedCr.cols||8, 8)},1fr);gap:6px;max-width:640px">
+      <div class="card-header">❷ 选择终端座位 ${selectedCr?'— '+esc(selectedCr.name):''}</div>
+      ${!selectedCr?'<div style="font-size:.85rem;color:var(--t-text3);padding:16px 0;text-align:center">← 请先选择教室</div>'
+        :crTerms.length?`<div style="display:grid;grid-template-columns:repeat(${Math.min(selectedCr.cols||8, 10)},minmax(0,1fr));gap:6px;max-width:100%">
           ${crTerms.map(t=>`
-            <div class="gb gb-active" style="cursor:pointer;aspect-ratio:1;min-height:0" data-fault-select="${t.id}">
+            <div class="gb gb-active" style="cursor:pointer;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:40px;max-width:80px" data-fault-select="${t.id}">
               <div class="gb-seat">${esc(t.seat||'--')}</div>
-              <div style="font-size:.6rem;color:var(--t-text2)">${esc(t.name||'')}</div>
             </div>
           `).join('')}
-        </div>`:'<div style="font-size:.82rem;color:var(--t-text3);padding:16px 0;text-align:center">该教室无其他终端</div>'}
+        </div>`:'<div style="font-size:.85rem;color:var(--t-text3);padding:16px 0;text-align:center">该教室无其他终端</div>'}
     </div>
   </div>`}
 </div>`;
@@ -1239,7 +1290,7 @@ function faultResetScreen(){
   if(frs.confirmed){
     return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
     <div style="max-width:480px;width:100%">
-    <div class="section-title"><button class="btn btn-ghost btn-sm" data-act="go-home">←</button> 重置终端</div>
+    <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 重置终端</div>
     <div class="card" style="border-color:var(--t-ok);background:rgba(34,197,94,0.08);width:100%;margin-top:24px">
       <div class="card-header" style="color:var(--t-ok)">重置已完成</div>
       <div style="font-size:.85rem">已从服务器重新拉取全部注册数据覆盖本机。</div>
@@ -1248,31 +1299,31 @@ function faultResetScreen(){
     </div>`;
   }
 
-  if(frs.resetting){
+  if(frs.resetting || demo().flags?.faultResetting){
     return `<div class="page" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
     <div style="max-width:480px;width:100%;text-align:center">
       <div style="font-size:1.3rem;font-weight:600;margin-bottom:16px">正在重置…</div>
       <div class="progress-bar" style="width:100%;height:12px;margin-bottom:12px"><div class="fill" style="width:40%"></div></div>
       <div style="font-size:.85rem;color:var(--t-text2);margin-bottom:8px">正在从服务器拉取注册数据</div>
-      <div style="font-size:.9rem;color:var(--t-err);font-weight:600">⚠ 切勿关闭电源或中断网络</div>
+      <div style="font-size:.95rem;color:var(--t-err);font-weight:600;padding:12px;background:var(--t-err-bg);border:1px solid var(--t-err);border-radius:var(--radius)">⚠ 重置过程中切勿关闭电源、拔掉网线或中断网络连接，否则可能导致终端无法正常启动。</div>
     </div>
     </div>`;
   }
 
   return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
-  <div style="max-width:480px;width:100%">
-  <div class="section-title"><button class="btn btn-ghost btn-sm" data-act="go-home">←</button> 重置终端</div>
+  <div style="max-width:520px;width:100%">
+  <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 重置终端</div>
 
   ${!serverOk?`<div class="card mb-16" style="border-color:var(--t-warn);width:100%;margin-top:16px">
     <div style="font-size:.85rem;color:var(--t-warn)">⚠ 无法连接服务器，请检查网络配置后重试。重置功能需要服务器在线。</div>
   </div>`:''}
 
   <div class="card mb-16" style="width:100%;border-color:var(--t-err);background:var(--t-err-bg);margin-top:16px">
-    <div style="font-size:.95rem;font-weight:600;color:var(--t-err);margin-bottom:8px">⚠ 重置终端</div>
-    <div style="font-size:.85rem;color:var(--t-text);line-height:1.6">
-      重置将<b>清除本机所有数据</b>，包括桌面、配置和未同步的修改，恢复为服务器上的注册状态。<br><br>
-      此操作<b>不可撤销</b>。如果本机有尚未同步到服务器的桌面或配置变更，重置后将<b>永久丢失</b>。<br><br>
-      <span style="color:var(--t-text2)">建议在重置前确认所有重要数据已同步到服务器。</span>
+    <div style="font-size:1rem;font-weight:600;color:var(--t-err);margin-bottom:10px">⚠ 重置终端</div>
+    <div style="font-size:.88rem;color:var(--t-text);line-height:1.7">
+      重置将<b>清除本机所有数据</b>，包括已安装的桌面、个人配置、未同步的修改等内容，并从服务器重新拉取注册数据恢复到初始状态。<br><br>
+      <span style="color:var(--t-err);font-weight:600">此操作不可撤销。</span>如果本机有尚未同步到服务器的桌面或配置变更，重置后将<b>永久丢失</b>。<br><br>
+      <span style="color:var(--t-text2)">建议在重置前：<br>· 确认所有重要桌面已同步到服务器<br>· 备份本机上的重要数据<br>· 确保网络连接稳定</span>
     </div>
   </div>
 
@@ -1304,7 +1355,7 @@ function exportScreen(){
   const exportName = demo().flags?.exportCrName || c.name;
   const exportRemark = demo().flags?.exportCrRemark || '';
   return `<div class="page">
-  <div class="section-title"><button class="btn btn-ghost btn-sm" data-act="return-workbench">←</button> 导出教室终端清单</div>
+  <div class="section-title"><button class="btn btn-ghost" data-act="return-workbench">←</button> 导出教室终端清单</div>
   <div class="page-scroll">
   <div class="section-sub">导出 Excel 文件，可导入管理服务器完成建档。</div>
   ${incomplete.length?`<div class="card mb-16" style="border-color:var(--t-warn)">
@@ -1367,7 +1418,13 @@ function bindAll(){
       } else if(a==='open-fault-reset-direct'){
         act('open-fault-reset');
       } else if(a==='fault-reset-confirm-with-dialog'){
-        showTermConfirm('确认重置','重置将丢弃本机所有未同步的数据，以服务器注册内容为准。<br><b>此操作不可撤销。</b>',()=>act('fault-reset-confirm'));
+        showTermConfirm('确认重置','<span style="color:var(--t-err)">重置将清除本机所有数据</span>，包括已安装的桌面、个人配置及未同步的修改，恢复到服务器注册的初始状态。<br><br><b>此操作不可撤销。</b>',()=>{
+          act('set-flag',{faultResetting:true});
+          setTimeout(()=>{
+            act('fault-reset-confirm');
+            act('set-flag',{faultResetting:false});
+          }, 2500);
+        });
       } else if(a==='exit-to-desktop'){
         showTermConfirm('退出管理系统','确定要退出管理系统并重启进入桌面吗？',()=>showTermAlert('系统将重启进入桌面（原型模拟）'));
       } else if(a==='deploy-bind-next'){
@@ -1387,9 +1444,16 @@ function bindAll(){
         setTimeout(()=>act('start-deployment'),50);
       } else if(a==='wb-tab-layout'){
         saveGridRulesIfPresent();
-        act('set-flag',{wbTab:'layout'});
+        /* Switching to layout tab — trigger re-scan for new terminals */
+        act('set-flag',{wbTab:'layout', layoutRescan:true});
       } else if(a==='wb-tab-maint'){
         saveGridRulesIfPresent();
+        /* Only allow switching to maint if takeover is confirmed */
+        const isMother = mt()?.controlState==='mother';
+        if(!isMother){
+          showTermAlert('请先确认接管教室后再使用教室维护功能');
+          return;
+        }
         act('set-flag',{wbTab:'maint'});
       } else if(a==='ops-mode-deploy'){
         act('set-flag',{opsMode:'deploy'});
@@ -1415,7 +1479,9 @@ function bindAll(){
           gateway:root.querySelector('#li-gw')?.value, dns:root.querySelector('#li-dns')?.value});
         setTimeout(()=>act('go-home'),50);
       } else if(type==='local-network'){
-        act('save-local-network',{serverAddr:root.querySelector('#ln-srv')?.value});
+        /* Save address and go home immediately — connection check continues in background */
+        const addr = root.querySelector('#ln-srv')?.value || '';
+        act('save-local-network',{serverAddr:addr});
         setTimeout(()=>act('go-home'),50);
       } else if(type==='fault-network'){
         act('save-fault-network',{serverAddr:root.querySelector('#fr-srv')?.value, ip:root.querySelector('#fr-ip')?.value,
@@ -1440,8 +1506,16 @@ function bindAll(){
       const frCr = demo().faultReplace?.selectedClassroomId;
       const frCrObj = frCr ? getClassroom(s(), frCr) : null;
       const crLabel = frCrObj ? esc(frCrObj.name) : '未知教室';
-      const label=t?(esc(t.seat||'--')+' / '+esc(t.name||'--')):'该终端';
-      showTermConfirm('确认替换','确定要替换 <b>'+crLabel+'</b> 的 <b>'+label+'</b> 吗？<br>本机将继承该终端的全部配置与桌面。此操作不可撤销。',()=>act('fault-replace-confirm-direct',{terminalId:tid}));
+      const seatLabel2=t?esc(t.seat||'--'):'--';
+      showTermConfirm('确认替换','确定要替换 <b>'+crLabel+'</b> 教室中座位 <b>'+seatLabel2+'</b> 的终端吗？<br><br>本机将继承该终端的全部配置与桌面。此操作不可撤销。',()=>{
+        /* Set replacing state to show progress */
+        act('set-flag',{faultReplacing:true});
+        act('fault-replace-select',{terminalId:tid});
+        setTimeout(()=>{
+          act('fault-replace-confirm');
+          act('set-flag',{faultReplacing:false});
+        }, 2500);
+      });
     });
   });
 
@@ -1617,21 +1691,19 @@ function bindAll(){
   /* ── server address auto-detect on blur ── */
   const srvInput = root.querySelector('#ln-srv');
   if(srvInput){
+    /* Prevent re-render from overwriting user input: store local edit flag */
+    srvInput._userEdited = false;
+    srvInput.addEventListener('input', () => { srvInput._userEdited = true; });
     srvInput.addEventListener('blur',()=>{
       const addr = srvInput.value.trim();
-      const curAddr = mt()?.serverAddr || '';
-      if(addr && addr !== curAddr){
-        /* Save value FIRST so re-render preserves it, then trigger check animation */
-        act('save-local-network',{serverAddr:addr});
-        setTimeout(()=>{
-          act('set-flag',{serverConnStatus:'checking'});
-          setTimeout(()=>act('set-flag',{serverConnStatus:'ok'}), 1800);
-        }, 100);
-      } else if(addr && addr === curAddr){
-        /* Same address, just show re-check animation */
+      if(!addr) return;
+      /* Immediately save to state so re-render uses user's value */
+      act('save-local-network',{serverAddr:addr});
+      /* Show checking animation, then connected */
+      setTimeout(()=>{
         act('set-flag',{serverConnStatus:'checking'});
         setTimeout(()=>act('set-flag',{serverConnStatus:'ok'}), 1800);
-      }
+      }, 100);
     });
   }
 

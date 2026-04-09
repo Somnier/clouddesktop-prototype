@@ -64,6 +64,16 @@
 .term-app .btn-ghost { color: var(--t-accent); }
 .term-app .btn-ghost:hover:not(:disabled) { background: var(--t-accent-bg); }
 
+/* ── exit button (prominent) ── */
+.exit-btn { background: var(--t-err) !important; color: #fff !important; border: none !important;
+  padding: 4px 14px !important; font-size: .85rem !important; font-weight: 600;
+  border-radius: 4px; letter-spacing: .5px; }
+.exit-btn:hover { background: #ff6961 !important; }
+
+/* ── unsync desktop card (red warning) ── */
+.dt-card.dt-unsync { border-color: var(--t-err) !important; background: var(--t-err-bg) !important; }
+.dt-card.dt-unsync .dt-name { color: var(--t-err); }
+
 /* ── meter (dark) ── */
 .term-app .meter-bar { background: var(--t-border); }
 .term-app .meter-fill.ok  { background: var(--t-ok); }
@@ -198,6 +208,11 @@
 .progress-bar { height: 8px; background: var(--t-border); border-radius: 4px; overflow: hidden; margin-bottom: 4px; }
 .progress-bar .fill { height: 100%; border-radius: 4px; transition: width .4s; background: var(--t-accent); }
 .progress-bar .fill.ok { background: var(--t-ok); }
+
+/* ── connection spinner ── */
+.conn-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--t-border);
+  border-top-color: var(--t-accent); border-radius: 50%; animation: conn-spin .8s linear infinite; flex-shrink: 0; }
+@keyframes conn-spin { to { transform: rotate(360deg); } }
 .progress-bar .fill.err { background: var(--t-err); }
 
 .stat-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }

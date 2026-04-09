@@ -67,8 +67,12 @@ function buildState(s){
           const enrichDt = (d) => {
             const baseImg = (sc.snapshotTree||[]).find(sn=>sn.id===d.snapshotId);
             const rootImg = baseImg ? (sc.imageStore||[]).find(im=>im.id===baseImg.imageId) : null;
+            /* diskSize from seed (total = system VHD + data VHD) */
+            const dataDiskGb = d.dataDisk ? parseInt((d.dataDisk.match(/(\d+)G/)||[])[1]||'0',10) : 0;
+            const computedDiskSize = d.diskSize || (dataDiskGb > 0 ? dataDiskGb + 25 : 25);
             return {
               ...d,
+              diskSize: computedDiskSize,
               restoreMode: d.restoreMode || sc.restoreMode || '还原系统盘，保留数据盘',
               uploaded: d.syncStatus==='synced',
               physicalDeploy: d.physicalDeploy || false,
@@ -102,7 +106,7 @@ function buildState(s){
           gpuTemp: 35+Math.floor(Math.random()*20),
           memUsed: 4+Math.floor(Math.random()*8),
           memTotal: [8,16,16,32][i%4],
-          diskUsed: (()=>{ const dts=isBlank?[]:(sc.desktopCatalog||[]).filter(d=>useLbl==='教师终端'||!/教师/.test(d.name)); const dtSum=dts.reduce((s,d)=>s+(d.diskSize||45),0); return dtSum+35+Math.floor(Math.random()*10); })(),
+          diskUsed: (()=>{ const dts=isBlank?[]:(sc.desktopCatalog||[]).filter(d=>useLbl==='教师终端'||!/教师/.test(d.name)); const dtSum=dts.reduce((s,d)=>{ const ddGb=d.dataDisk?parseInt((d.dataDisk.match(/(\d+)G/)||[])[1]||'0',10):0; return s+(d.diskSize||(ddGb>0?ddGb+25:25)); },0); return dtSum+35; })(),
           diskTotal: i===0 ? 512 : [256,512,512,1024][i%4]
         },
         heartbeat: now(),
