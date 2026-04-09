@@ -809,11 +809,25 @@ function act(action, payload={}){
   }
   case 'open-maint-ip':{
     if(mt.controlState!=='mother') return {ok:false,reason:'未接管教室'};
+    /* Initialize with current values, not empty strings */
+    const currentIpBase = cr.networkBase || '';
+    const currentServer = cr.serverAddress || mt.serverAddr || '';
     demo.maintDraft={step:0,scope:[],keepIds:[],desktopId:null,desktopIds:[],defaultDesktopId:null,
       category:'IP/服务器修改',restoreMode:'还原系统盘，保留数据盘',
-      newServerAddr:'',newIpBase:'',newIpStart:20,newSubnetMask:'255.255.255.0',newGateway:'',newDns:'',ipPreview:[]};
+      newServerAddr:currentServer,newIpBase:currentIpBase,newIpStart:20,
+      newSubnetMask:mt.subnetMask||'255.255.255.0',newGateway:mt.gateway||cr.gateway||'',
+      newDns:(mt.dns||cr.dns||[]).join(','),ipPreview:[]};
     const allCtrl3=termsInCr(cr.id).filter(t=>t.id!==mt.id&&t.online);
     demo.maintDraft.scope=allCtrl3.map(t=>t.id);
+    /* Generate initial IP preview */
+    const initPreview=[];
+    demo.maintDraft.scope.forEach((id,i)=>{
+      const t=termById(id);
+      if(!t) return;
+      const newIp = currentIpBase ? currentIpBase+'.'+(20+i) : t.ip;
+      initPreview.push({terminalId:id, newIp});
+    });
+    demo.maintDraft.ipPreview=initPreview;
     /* If invoked from workbench, stay on workbench */
     if(demo.motherScreen!=='workbench'){
       demo.motherScreen='maint-ip'; mt.screen='maint-ip';
@@ -860,8 +874,28 @@ function act(action, payload={}){
     const scope2=demo.maintDraft.scope.filter(id=>{const t=termById(id);return t&&t.online;});
     if(!scope2.length) return {ok:false,reason:'无有效终端'};
     const keep2=termsInCr(cr.id).filter(t=>!scope2.includes(t.id)&&t.id!==mt.id).map(t=>t.id);
+    /* Build IP assignments so the task can apply them on completion */
+    const ipAssignments = [];
+    const ipPv = demo.maintDraft.ipPreview||[];
+    for(const tid of scope2){
+      const pv = ipPv.find(x=>x.terminalId===tid);
+      ipAssignments.push({
+        terminalId: tid,
+        newIp: pv?.newIp||null,
+        newServerAddr: demo.maintDraft.newServerAddr||null,
+        newSubnetMask: payload.subnetMask||demo.maintDraft.newSubnetMask||null,
+        newGateway: payload.gateway||demo.maintDraft.newGateway||null,
+        newDns: payload.dns||demo.maintDraft.newDns||null
+      });
+    }
     const task2=createTask({type:'maintenance',crId:cr.id,label:'教室维护 — IP/服务器修改',
       sourceDesktopId:null, selectedIds:scope2, keepIds:keep2});
+    task2.ipAssignments = ipAssignments;
+    /* Copy newIp into task items for progress display */
+    for(const item of task2.items){
+      const a = ipAssignments.find(x=>x.terminalId===item.terminalId);
+      if(a) item.newIp = a.newIp;
+    }
     startTask(task2);
     /* If invoked from workbench (integrated), stay on workbench */
     if(demo.motherScreen==='workbench'){
@@ -1465,8 +1499,8 @@ function tickTasks(){
       if(ctrl?.paused) continue;
       if(!t.online&&t.power!=='rebooting'){failItem(task,item,t,'终端离线');changed=true;continue;}
       item.ticks--; if(item.ticks>0) continue;
-      if(item.state==='transferring'){item.state='applying';item.ticks=2;setTermTaskState(t,'applying',dtLabel);changed=true;}
-      else if(item.state==='applying'){item.state='rebooting';item.ticks=item.slow?4:2;setTermTaskState(t,'rebooting',dtLabel);changed=true;}
+      if(item.state==='transferring'){item.state='applying';item.ticks=1;setTermTaskState(t,'applying',dtLabel);changed=true;}
+      else if(item.state==='applying'){item.state='rebooting';item.ticks=item.slow?2:1;setTermTaskState(t,'rebooting',dtLabel);changed=true;}
       else if(item.state==='rebooting'){
         item.state='completed';item.ticks=0;
         if(task.type==='deployment'){
@@ -1480,6 +1514,15 @@ function tickTasks(){
             t.boundClassroom=cr.id;}
         }
         if(task.type==='maintenance'){
+          /* Apply IP assignments if this is an IP modification task */
+          const ipA = task.ipAssignments?.find(a=>a.terminalId===item.terminalId);
+          if(ipA){
+            if(ipA.newIp) t.ip = ipA.newIp;
+            if(ipA.newServerAddr) t.serverAddr = ipA.newServerAddr;
+            if(ipA.newSubnetMask) t.subnetMask = ipA.newSubnetMask;
+            if(ipA.newGateway) t.gateway = ipA.newGateway;
+            if(ipA.newDns) t.dns = ipA.newDns.split ? ipA.newDns.split(',') : ipA.newDns;
+          }
           /* update desktops + bios from classroom catalog after maintenance */
           t.desktops=cr.desktopCatalog.filter(d=>d.visibility!=='hidden').map(d=>({...d}));
           if(task.sourceDesktopId) t.defaultDesktopId=task.sourceDesktopId;
@@ -1490,14 +1533,14 @@ function tickTasks(){
       }
     }
     // advance queue
-    const limit=task.type==='maintenance'?4:task.type==='deployment'?8:16;
+    const limit=task.type==='maintenance'?16:task.type==='deployment'?24:32;
     const active=task.items.filter(i=>['transferring','applying','rebooting'].includes(i.state)).length;
     if(active<limit){
       const queued=task.items.filter(i=>i.state==='queued').slice(0,limit-active);
       for(const item of queued){
         const t=termById(item.terminalId);
         if(!t.online){failItem(task,item,t,'终端离线');changed=true;continue;}
-        item.state='transferring';item.ticks=2;setTermTaskState(t,'transferring',dtLabel);changed=true;
+        item.state='transferring';item.ticks=1;setTermTaskState(t,'transferring',dtLabel);changed=true;
       }
     }
     syncCounts(task);
@@ -1506,7 +1549,13 @@ function tickTasks(){
       task.phase='completed';task.completedAt=now();
       if(task.type==='deployment'){
         cr.stage='deployed'; cr.memberMacs=termsInCr(cr.id).map(t=>t.mac);
-        state.demo.motherScreen='deploy-result'; termById(state.demo.motherId).screen='deploy-result';
+        if(state.demo.motherScreen==='workbench'){
+          /* Auto-switch to maint tab after deployment completes */
+          state.demo.flags.wbTab='maint';
+          state.demo.flags.opsMode='idle';
+        } else {
+          state.demo.motherScreen='deploy-result'; termById(state.demo.motherId).screen='deploy-result';
+        }
       } else if(task.type==='exam-apply'){
         const compIds=task.items.filter(i=>i.state==='completed').map(i=>i.terminalId);
         state.demo.examState={applied:true,appliedAt:now(),appliedDesktopId:task.sourceDesktopId,
@@ -1516,7 +1565,12 @@ function tickTasks(){
         state.demo.examState={applied:false,restoreAvailable:false,entriesHidden:false,appliedIds:[],restored:true};
         state.demo.motherScreen='exam-result'; termById(state.demo.motherId).screen='exam-result';
       } else {
-        state.demo.motherScreen='maint-result'; termById(state.demo.motherId).screen='maint-result';
+        /* maintenance completed — stay on workbench if already there, show inline result */
+        if(state.demo.motherScreen==='workbench'){
+          /* stay — inline progress in maint tab will show completion */
+        } else {
+          state.demo.motherScreen='maint-result'; termById(state.demo.motherId).screen='maint-result';
+        }
       }
       cr.status='active';
       const fCount=task.counts.failed;
@@ -1584,7 +1638,7 @@ async function main(){
     tickHeartbeats();
     const r2=tickTasks();
     if(r1||r2){ state.meta.updatedAt=now(); broadcast(); save(); }
-  }, 2000);
+  }, 600);
 }
 
 function broadcast(){

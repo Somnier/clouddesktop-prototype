@@ -202,7 +202,7 @@ function shellHtml(){
         <span class="sep">|</span>
         <span>座位: ${esc(m?.seat||'--')}</span>
         <span class="sep">|</span>
-        <button class="btn btn-danger" style="padding:6px 18px;font-size:.85rem" data-act="exit-to-desktop">⏻ 退出</button>
+        <button class="btn btn-danger" style="padding:6px 18px;font-size:.85rem;display:inline-flex;align-items:center;justify-content:center;gap:4px;line-height:1" data-act="exit-to-desktop">⏻ 退出</button>
       </div>
     </div>
     <div class="term-body">${screenContent(demo().motherScreen)}</div>
@@ -280,6 +280,8 @@ function homeScreen(){
    ═══════════════════════════════════════════════════ */
 function localInfoScreen(){
   const m=mt(); const c=cr();
+  /* For blank classrooms, show all-empty fields (simulate first-time setup) */
+  const isBlank = !c || c.stage==='blank';
   return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
   <div style="max-width:520px;width:100%">
   <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 设置本机</div>
@@ -290,8 +292,8 @@ function localInfoScreen(){
       <div style="font-size:.82rem;color:var(--t-text3);margin-bottom:8px">网络配置</div>
     </div>
     <div class="prep-field"><label>IP 地址</label><input type="text" id="li-ip" value="${esc(m.ip||'')}" placeholder="如 10.21.31.20"></div>
-    <div class="prep-field"><label>子网掩码</label><input type="text" id="li-mask" value="${esc(m.subnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
-    <div class="prep-field"><label>网关</label><input type="text" id="li-gw" value="${esc(m.gateway||c?.gateway||'')}" placeholder="网关地址"></div>
+    <div class="prep-field"><label>子网掩码</label><input type="text" id="li-mask" value="${esc(m.subnetMask||'')}" placeholder="255.255.255.0"></div>
+    <div class="prep-field"><label>网关</label><input type="text" id="li-gw" value="${esc(m.gateway||'')}" placeholder="网关地址"></div>
     <div class="prep-field"><label>DNS</label><input type="text" id="li-dns" value="${esc((m.dns||[]).join(','))}" placeholder="DNS 地址"></div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn btn-ghost" data-act="go-home">取消</button>
@@ -458,21 +460,25 @@ function workbenchScreen(){
   const opsMode = demo().flags?.opsMode || 'idle';
   const isRunning = tk && tk.phase!=='completed';
 
+  /* Display name: use takeover name if blank, otherwise classroom name */
+  const displayName = isBlank ? (demo().takeover?.classroomName || c.name || '未命名教室') : c.name;
+  const isTakenOver = m.controlState==='mother';
+
   return `<div class="page">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <div class="section-title" style="margin:0">
       <button class="btn btn-ghost" data-act="go-home">←</button>
-      ${esc(c.name)} ${pill(stageLabel(c.stage), c.stage==='deployed'?'ok':'info')}
+      ${esc(displayName)} ${pill(stageLabel(c.stage), c.stage==='deployed'?'ok':'info')}
       <span style="font-size:.78rem;color:var(--t-text2);margin-left:8px">${rt.online}/${rt.total} 在线</span>
     </div>
   </div>
   <div style="display:flex;gap:6px;margin-bottom:14px;align-items:center">
     <button class="btn ${activeTab==='layout'?'btn-primary':'btn-secondary'}" ${isRunning?'disabled':''} data-act="wb-tab-layout">设置布局</button>
-    <button class="btn ${activeTab==='maint'?'btn-primary':'btn-secondary'}" ${(isBlank&&m.controlState!=='mother')||isRunning?'disabled':''} data-act="wb-tab-maint">教室维护</button>
-    ${isBlank&&m.controlState!=='mother'?'<span style="font-size:.72rem;color:var(--t-text3)">请先确认接管教室后使用教室维护</span>':''}
+    <button class="btn ${activeTab==='maint'?'btn-primary':'btn-secondary'}" ${(isBlank&&!isTakenOver)||isRunning?'disabled':''} data-act="wb-tab-maint">教室维护</button>
     <span style="flex:1"></span>
-    ${activeTab==='layout'?`<button class="btn btn-danger" ${isRunning?'disabled':''} data-act="end-management">结束管理</button>`:''}
+    <button class="btn btn-danger" style="margin-left:16px" ${isRunning?'disabled':''} data-act="end-management">结束管理</button>
   </div>
+  <div style="min-height:24px;margin-bottom:8px;font-size:.72rem;color:var(--t-text3)">${isBlank&&!isTakenOver?'请先确认接管教室后使用教室维护':''}</div>
   ${activeTab==='maint' ? wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning) : wbLayoutContent(terms, rt, c, m, d)}
 </div>`;
 }
@@ -486,8 +492,9 @@ function wbLayoutContent(terms, rt, c, m, d){
   const activeCount = grid.blocks.filter(b=>b.state==='active').length;
   const dir = r.gridDirection || 'tl';
 
-  /* Compute grid preview */
-  const prefix = r.namePrefix || c.id.split('-')[1]?.toUpperCase()||'';
+  /* Compute grid preview — only when rules are set */
+  const hasRules = !!(r.ipBase && r.namePrefix);
+  const prefix = r.namePrefix || '';
   const assignable = grid.blocks.filter(b=>b.state!=='deleted');
   const sortedAssignable = [...assignable].sort((a,b)=>{
     const sa=seatLabel(a.row,a.col,r), sb=seatLabel(b.row,b.col,r);
@@ -495,11 +502,13 @@ function wbLayoutContent(terms, rt, c, m, d){
   });
   let ipNum = r.ipStart || 20;
   const previewMap = {};
-  sortedAssignable.forEach(b=>{
-    const seat = seatLabel(b.row, b.col, r);
-    previewMap[b.idx] = { pos:seat, ip:(r.ipBase||c.networkBase)+'.'+ipNum, name:prefix+'-'+seat };
-    ipNum++;
-  });
+  if(hasRules){
+    sortedAssignable.forEach(b=>{
+      const seat = seatLabel(b.row, b.col, r);
+      previewMap[b.idx] = { pos:seat, ip:(r.ipBase)+'.'+ipNum, name:prefix+'-'+seat };
+      ipNum++;
+    });
+  }
 
   /* Terminal discovery simulation */
   const onlineTerms = terms.filter(t=>t.id!==m.id&&t.online);
@@ -507,6 +516,10 @@ function wbLayoutContent(terms, rt, c, m, d){
   const scanning = !isTakenOver || (demo().flags?.layoutRescan);
   /* Check if we have new undiscovered terminals that exceed grid capacity */
   const hasNewTermsBeyondGrid = discoveredCount > activeCount && scanning;
+
+  /* Example seat and machine name for preview (like v10) */
+  const exSeat = seatLabel(0, 0, r);
+  const exName = prefix ? prefix + '-' + exSeat : '';
 
   return `<div style="display:grid;grid-template-columns:300px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden">
     <div class="page-scroll" style="display:flex;flex-direction:column;gap:12px">
@@ -536,7 +549,11 @@ function wbLayoutContent(terms, rt, c, m, d){
       <div class="card">
         <div class="card-header">❹ 机器名 / 座位号</div>
         <div class="prep-field"><label>机器名前缀</label><input type="text" data-rule="namePrefix" value="${esc(r.namePrefix||'')}" placeholder="如 D301"></div>
-        <div class="prep-field"><label>起始字母</label><input type="text" data-rule="startLetter" value="${esc(r.startLetter||'A')}" maxlength="1" style="width:50px;text-transform:uppercase"></div>
+        <div class="prep-field"><label>座位号起始字母</label><input type="text" data-rule="startLetter" value="${esc(r.startLetter||'A')}" maxlength="1" style="width:50px;text-transform:uppercase"></div>
+        ${prefix?`<div style="padding:6px 10px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;color:var(--t-text);margin-top:4px;font-family:monospace">
+          机器名预览: <strong>${esc(exName)}</strong> · 座位号: <strong>${esc(exSeat)}</strong>
+        </div>
+        <div style="font-size:.7rem;color:var(--t-text3);margin-top:2px">机器名 = 前缀 + "-" + 座位号，座位号 = 起始字母 + 序号</div>`:''}
       </div>
       <div class="card">
         <div class="card-header">❺ 布局起点</div>
@@ -555,11 +572,11 @@ function wbLayoutContent(terms, rt, c, m, d){
           :`<div style="color:var(--t-ok);font-weight:600">教室已接管 · 点击方块切换状态（可用 → 禁用 → 删除 → 可用）</div>`}
       </div>
       <div class="page-scroll" style="flex:1;min-height:0">
-        ${renderSeatGrid(grid, r, dir, previewMap, terms, 'layout')}
+        ${renderSeatGrid(grid, r, dir, previewMap, terms, 'layout', isBlank && !isTakenOver)}
       </div>
-      <div style="display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0">
-        ${!isTakenOver?`<button class="btn btn-primary" ${activeCount>0&&discoveredCount>0?'':'disabled'} data-act="confirm-takeover">确认接管教室</button>
-          <span style="font-size:.75rem;color:var(--t-text3);align-self:center">${activeCount<=0?'请先设置网格布局':''}${discoveredCount<=0?'等待终端上线…':''}</span>`
+      <div style="display:flex;gap:8px;padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0;align-items:center;min-height:48px">
+        ${!isTakenOver?`<button class="btn btn-primary" ${activeCount>0&&discoveredCount>0&&hasRules?'':'disabled'} data-act="confirm-takeover">确认接管教室</button>
+          <span style="font-size:.75rem;color:var(--t-text3)">${!hasRules?'请先设置IP前缀和机器名前缀':activeCount<=0?'请先设置网格布局':''}${discoveredCount<=0?'等待终端上线…':''}</span>`
           :`<button class="btn btn-ghost" data-act="deploy-bind-next">模拟绑定下一台</button>
             <button class="btn btn-ghost" data-act="deploy-bind-all">一键全绑定</button>`}
       </div>
@@ -589,7 +606,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         <div class="card-header">功能</div>
         <div style="display:flex;flex-direction:column;gap:6px">
           <button class="btn ${opsMode==='deploy'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="ops-mode-deploy">❶ 部署传输</button>
-          <button class="btn ${opsMode==='maint-ip'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="ops-mode-maint-ip">❷ 修改 IP / 服务器</button>
+          <button class="btn ${opsMode==='maint-ip'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="ops-mode-maint-ip">❷ 修改 IP / 服务器地址</button>
           <button class="btn ${opsMode==='desktop'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="open-local-desktop-flow">❸ 管理桌面</button>
           <button class="btn ${opsMode==='export'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="open-export">❹ 导出终端清单</button>
         </div>
@@ -601,7 +618,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
           <option value="full" ${d.deployMode==='full'?'selected':''}>全量部署</option>
         </select></div>
         <div style="padding:6px 0;font-size:.82rem">
-          已绑定 <strong style="color:var(--t-accent)">${boundCount}</strong> / ${activeBlocks.length} 台
+          已分配 <strong style="color:var(--t-accent)">${boundCount}</strong> / ${activeBlocks.length} 台
         </div>
         ${!isRunning?`<div style="display:flex;flex-direction:column;gap:4px;margin-top:4px">
           <button class="btn btn-ghost" data-act="deploy-bind-next">模拟绑定下一台</button>
@@ -615,13 +632,13 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         </div>`:''}
       </div>`:''}
       ${opsMode==='maint-ip'?`<div class="card">
-        <div class="card-header">修改 IP / 服务器</div>
-        <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(md.newServerAddr||c.serverAddress||'')}" placeholder="留空不修改"></div>
-        <div class="prep-field"><label>IP 前缀</label><input type="text" id="mip-base" value="${esc(md.newIpBase||c.networkBase||'')}" placeholder="留空不修改"></div>
+        <div class="card-header">修改 IP / 服务器地址</div>
+        <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(md.newServerAddr||c.serverAddress||m.serverAddr||'')}" placeholder="如 server.edu.cn"></div>
+        <div class="prep-field"><label>IP 前缀</label><input type="text" id="mip-base" value="${esc(md.newIpBase||c.networkBase||'')}" placeholder="如 10.21.31"></div>
         <div class="prep-field"><label>起始编号</label><input type="number" id="mip-start" value="${md.newIpStart||20}" min="1" max="254"></div>
-        <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(md.newSubnetMask||'255.255.255.0')}"></div>
-        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(md.newGateway||c.gateway||'')}"></div>
-        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(md.newDns||(c.dns||[]).join(','))}"></div>
+        <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(md.newSubnetMask||m.subnetMask||'255.255.255.0')}"></div>
+        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(md.newGateway||m.gateway||c.gateway||'')}"></div>
+        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(md.newDns||(m.dns||c.dns||[]).join(','))}"></div>
         <div style="display:flex;gap:6px;margin-top:8px">
           <button class="btn btn-ghost" data-act="ops-mode-idle">取消</button>
           <button class="btn btn-primary" data-act="start-maint-ip">开始执行</button>
@@ -646,7 +663,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
           '请从左侧选择功能'}
       </div>`}
       <div class="page-scroll" style="flex:1;min-height:0">
-        ${isRunning ? renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels) :
+        ${isRunning ? renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, m) :
           opsMode==='maint-ip' ? renderSeatGridMaint(terms, m, c, d, md) :
           renderSeatGridOps(grid, r, dir, bindings, terms)}
       </div>
@@ -657,7 +674,8 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
 /* ═══════════════════════════════════════════════════
    Shared seat grid renderers for workbench
    ═══════════════════════════════════════════════════ */
-function renderSeatGrid(grid, r, dir, previewMap, terms, mode){
+function renderSeatGrid(grid, r, dir, previewMap, terms, mode, blankNoRules){
+  const hasRules = !!(r.ipBase && r.namePrefix);
   let html='';
   for(let ri=0;ri<grid.rows;ri++){
     for(let ci=0;ci<grid.cols;ci++){
@@ -665,14 +683,14 @@ function renderSeatGrid(grid, r, dir, previewMap, terms, mode){
       const col = (dir==='tr'||dir==='br') ? (grid.cols-1-ci) : ci;
       const b=grid.blocks.find(b2=>b2.row===row&&b2.col===col);
       if(!b){ html+='<div class="gb gb-empty"></div>'; continue; }
-      const seat = seatLabel(row, col, r);
+      const seat = hasRules ? seatLabel(row, col, r) : '#'+(b.idx+1);
       if(b.state==='deleted'){
         html+=`<div class="gb gb-deleted" data-block-idx="${b.idx}" title="已删除 (${seat})"><span class="gb-x">×</span></div>`;
         continue;
       }
       const pv=previewMap[b.idx];
       const isDisabled = b.state==='disabled';
-      const matchTerm = terms.find(t=>t.seat===seat);
+      const matchTerm = hasRules ? terms.find(t=>t.seat===seat) : null;
       const wasDeployed = matchTerm && matchTerm.ip;
       html+=`<div class="gb ${isDisabled?'gb-disabled':wasDeployed?'gb-bound':'gb-active'}" data-block-idx="${b.idx}" title="${seat} · ${isDisabled?'已禁用':wasDeployed?'已部署':'可用'}">
         <div class="gb-seat">${esc(seat)}</div>
@@ -710,7 +728,38 @@ function renderSeatGridOps(grid, r, dir, bindings, terms){
   return `<div class="deploy-grid" style="display:grid;grid-template-columns:repeat(${grid.cols},1fr);gap:6px">${html}</div>`;
 }
 
-function renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels){
+function renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, m){
+  /* Maintenance tasks don't use grid blocks — they use terminal-based layout */
+  if(tk?.type==='maintenance' && terms){
+    const crRows = grid.rows||7; const crCols = grid.cols||6;
+    const sorted = [...terms].sort((a,b)=>(a.seat||'').localeCompare(b.seat||''));
+    return `<div style="display:grid;grid-template-columns:repeat(${Math.min(crCols,8)},1fr);gap:6px">
+      ${sorted.map(t=>{
+        const isMother = t.id===m.id;
+        if(isMother) return `<div class="gb" style="opacity:.5;border-color:var(--t-warn)">
+          <div class="gb-seat">${esc(t.seat||'--')}</div>
+          <div class="gb-tag" style="color:var(--t-warn)">母机</div>
+        </div>`;
+        const item = tk.items?.find(i=>i.terminalId===t.id);
+        if(!item) return `<div class="gb gb-waiting">
+          <div class="gb-seat">${esc(t.seat||'--')}</div>
+          <div class="gb-tag">未参与</div>
+        </div>`;
+        const itemState = item.state||'queued';
+        const pctVal = itemState==='completed'?100:itemState==='failed'?0:itemState==='transferring'?35:itemState==='applying'?70:itemState==='rebooting'?90:5;
+        const fillColor = itemState==='completed'?'var(--t-ok)':itemState==='failed'?'var(--t-err)':'var(--t-accent)';
+        return `<div class="gb gb-transfer" style="position:relative;overflow:hidden">
+          <div style="position:absolute;top:0;left:0;bottom:0;width:${pctVal}%;background:${fillColor};opacity:.2;transition:width .5s ease"></div>
+          <div style="position:relative;z-index:1">
+            <div class="gb-seat">${esc(t.seat||'--')}</div>
+            <div class="gb-ip">${esc(t.ip||'--')}${item.newIp?' → '+esc(item.newIp):''}</div>
+            <div class="gb-status" style="color:${itemState==='completed'?'var(--t-ok)':itemState==='failed'?'var(--t-err)':'var(--t-text2)'}">${stateLabels[itemState]||itemState}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+  /* Deployment tasks use grid blocks */
   let html='';
   for(let ri=0;ri<grid.rows;ri++){
     for(let ci=0;ci<grid.cols;ci++){
@@ -759,9 +808,9 @@ function renderSeatGridMaint(terms, m, c, d, md){
       </div>`;
       const checked=scope.includes(t.id);
       const pv = ipPreview.find(x=>x.terminalId===t.id);
-      return `<div class="gb ${checked?'gb-bound':'gb-active'}" style="cursor:pointer" data-maint-toggle="${t.id}">
+      return `<div class="gb ${checked?'gb-bound':'gb-waiting'}" style="cursor:pointer" data-maint-toggle="${t.id}">
         <div class="gb-seat">${esc(t.seat||'--')}</div>
-        <div class="gb-ip">${esc(t.ip||'--')}${pv?' → '+esc(pv.newIp):''}</div>
+        <div class="gb-ip">${esc(t.ip||'--')}${checked&&pv?' → <span style="color:var(--t-ok)">'+esc(pv.newIp)+'</span>':''}</div>
         ${checked?`<div class="gb-tag" style="color:var(--t-ok)">已选</div>`
           :`<div class="gb-tag">${t.online?'在线':'离线'}</div>`}
       </div>`;
@@ -1167,12 +1216,12 @@ function maintIpScreen(){
     <div>
       <div class="section-title" style="font-size:.9rem">批量规则</div>
       <div class="card mb-16" style="max-width:480px">
-        <div class="prep-field"><label>新服务器地址</label><input type="text" id="mip-srv" value="${esc(d.newServerAddr||c.serverAddress||'')}" placeholder="留空则不修改"></div>
-        <div class="prep-field"><label>新 IP 前缀</label><input type="text" id="mip-base" value="${esc(d.newIpBase||c.networkBase||'')}" placeholder="留空则不修改 IP"></div>
+        <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(d.newServerAddr||c.serverAddress||m.serverAddr||'')}" placeholder="如 server.edu.cn"></div>
+        <div class="prep-field"><label>新 IP 前缀</label><input type="text" id="mip-base" value="${esc(d.newIpBase||c.networkBase||'')}" placeholder="如 10.21.31"></div>
         <div class="prep-field"><label>IP 起始编号</label><input type="number" id="mip-start" value="${d.newIpStart||20}" min="1" max="254"></div>
-        <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(d.newSubnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
-        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(d.newGateway||c.gateway||'')}" placeholder="留空则不修改"></div>
-        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(d.newDns||(c.dns||[]).join(','))}" placeholder="留空则不修改"></div>
+        <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(d.newSubnetMask||m.subnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
+        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(d.newGateway||m.gateway||c.gateway||'')}" placeholder="网关地址"></div>
+        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(d.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="DNS 地址"></div>
       </div>
       <div style="font-size:.75rem;color:var(--t-ok);margin-top:4px">修改规则或拖动终端后自动刷新预览</div>
     </div>
@@ -1401,18 +1450,21 @@ function exportScreen(){
   ${incomplete.length?`<div class="card mb-16" style="border-color:var(--t-warn)">
     <div style="font-size:.85rem;color:var(--t-warn)">提示：有 ${incomplete.length} 台终端信息不完整（缺少机器名或 IP），导出内容可能不全。</div>
   </div>`:''}
-  <div class="card mb-16">
-    <div class="prep-field"><label>教室名称（导出用）</label><input type="text" id="export-cr-name" value="${esc(exportName)}" placeholder="导出时使用的教室名称"></div>
-    <div class="prep-field"><label>教室备注（可选）</label><input type="text" id="export-cr-remark" value="${esc(exportRemark)}" placeholder="填写备注信息，将包含在导出文件中"></div>
-    ${defRow('终端数', terms.length+' 台')}
-    ${defRow('信息完整', (terms.length-incomplete.length)+' / '+terms.length+' 台')}
+  <div class="card mb-16" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+    <div class="prep-field" style="flex:1;min-width:200px"><label style="white-space:nowrap">教室名称（导出用）</label><input type="text" id="export-cr-name" value="${esc(exportName)}" placeholder="导出时使用的教室名称"></div>
+    <div class="prep-field" style="flex:1;min-width:200px"><label style="white-space:nowrap">教室备注（可选）</label><input type="text" id="export-cr-remark" value="${esc(exportRemark)}" placeholder="填写备注信息"></div>
+    <div style="display:flex;gap:16px;font-size:.82rem;color:var(--t-text2);align-items:center;flex-shrink:0">
+      <span>终端数 <strong>${terms.length}</strong></span>
+      <span>完整 <strong>${terms.length-incomplete.length}/${terms.length}</strong></span>
+    </div>
   </div>
-  <table class="data-table" style="font-size:.8rem">
-    <thead><tr><th>#</th><th data-sort>座位</th><th data-sort>机器名</th><th data-sort>IP</th><th>硬盘序列号</th></tr></thead>
+  <table class="data-table" style="font-size:.8rem;white-space:nowrap">
+    <thead><tr><th>#</th><th data-sort>座位</th><th data-sort>机器名</th><th data-sort>IP</th><th>MAC</th><th>硬盘序列号</th></tr></thead>
     <tbody>${terms.map((t,i)=>`<tr class="${(!t.name||!t.ip)?'conflict':''}">
       <td>${i+1}</td>
       <td>${esc(t.seat||'--')}</td><td>${esc(t.name||'--')}</td>
       <td class="mono">${esc(t.ip||'--')}</td>
+      <td class="mono">${esc(t.mac||'--')}</td>
       <td class="mono">${esc(t.hw?.diskSn||'--')}</td></tr>`).join('')}</tbody>
   </table>
   </div>
