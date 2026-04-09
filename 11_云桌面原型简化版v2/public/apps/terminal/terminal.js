@@ -117,8 +117,31 @@ function showCreateDesktopDialog(defaultName){
 
 function render(state){
   if(!state) return;
+  /* Preserve focused element across full re-render */
+  const ae = document.activeElement;
+  let focusSel = null, focusStart = null, focusEnd = null;
+  if(ae && ae !== document.body && root.contains(ae)){
+    if(ae.id) focusSel = '#' + ae.id;
+    else if(ae.dataset?.rule) focusSel = '[data-rule="'+ae.dataset.rule+'"]';
+    else if(ae.dataset?.grid) focusSel = '[data-grid="'+ae.dataset.grid+'"]';
+    else if(ae.tagName==='INPUT'||ae.tagName==='SELECT'||ae.tagName==='TEXTAREA'){
+      /* generic fallback using data-* or name */
+      if(ae.name) focusSel = '[name="'+ae.name+'"]';
+    }
+    if(focusSel){ focusStart = ae.selectionStart; focusEnd = ae.selectionEnd; }
+  }
   root.innerHTML = shellHtml();
   bindAll();
+  /* Restore focus */
+  if(focusSel){
+    const el = root.querySelector(focusSel);
+    if(el){
+      el.focus();
+      if(typeof el.setSelectionRange === 'function' && focusStart != null){
+        try { el.setSelectionRange(focusStart, focusEnd); } catch(e){}
+      }
+    }
+  }
 }
 
 
@@ -324,7 +347,7 @@ function localDesktopScreen(){
     const uploaded = d.uploaded || d.syncStatus==='synced';
     const isPhysical = d.physicalDeploy || false;
     return `
-    <div class="dt-card mb-8 ${isDefault?'selected':''}" data-dt-id="${d.id}" style="position:relative;overflow:hidden${!uploaded?';border-color:var(--t-warn);background:var(--t-warn-bg)':''}">
+    <div class="dt-card mb-8 ${isDefault?'selected':''}" data-dt-id="${d.id}" style="position:relative;overflow:hidden${!uploaded?';border-color:var(--t-err);background:var(--t-err-bg)':''}">
       <span class="dt-card-fill"></span>
       <div style="position:relative;z-index:1">
       <div style="display:flex;justify-content:space-between;align-items:center">
@@ -462,7 +485,7 @@ function wbLayoutContent(terms, rt, c, m, d){
         <div class="card-header">布局起点</div>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
           ${[['tl','↘ 左上'],['tr','↙ 右上'],['bl','↗ 左下'],['br','↖ 右下']].map(([v,l])=>
-            `<button class="btn ${dir===v?'btn-primary':'btn-secondary'}" style="flex:1;min-width:60px" data-rule-dir="${v}">${l}</button>`
+            `<button class="btn ${dir===v?'btn-primary':'btn-secondary'}" style="flex:1;min-width:60px;justify-content:center" data-rule-dir="${v}">${l}</button>`
           ).join('')}
         </div>
       </div>
@@ -819,7 +842,7 @@ function deployGridScreen(){
         <div style="font-size:.78rem;color:var(--t-text2)">起点位置</div>
         <div style="display:flex;gap:4px">
           ${[['tl','↘ 左上'],['tr','↙ 右上'],['bl','↗ 左下'],['br','↖ 右下']].map(([v,l])=>
-            `<button class="btn ${dir===v?'btn-primary':'btn-ghost'}" data-rule-dir="${v}">${l}</button>`
+            `<button class="btn ${dir===v?'btn-primary':'btn-ghost'}" style="justify-content:center" data-rule-dir="${v}">${l}</button>`
           ).join('')}
         </div>
         <div style="font-size:.78rem;color:var(--t-text2);margin-left:8px">编号排布</div>
@@ -1392,8 +1415,10 @@ function bindAll(){
         act('save-local-info',{name:root.querySelector('#li-name')?.value, seat:root.querySelector('#li-seat')?.value,
           ip:root.querySelector('#li-ip')?.value, subnetMask:root.querySelector('#li-mask')?.value,
           gateway:root.querySelector('#li-gw')?.value, dns:root.querySelector('#li-dns')?.value});
+        setTimeout(()=>act('go-home'),50);
       } else if(type==='local-network'){
         act('save-local-network',{serverAddr:root.querySelector('#ln-srv')?.value});
+        setTimeout(()=>act('go-home'),50);
       } else if(type==='fault-network'){
         act('save-fault-network',{serverAddr:root.querySelector('#fr-srv')?.value, ip:root.querySelector('#fr-ip')?.value,
           subnetMask:root.querySelector('#fr-mask')?.value, gateway:root.querySelector('#fr-gw')?.value,
@@ -1596,7 +1621,16 @@ function bindAll(){
   if(srvInput){
     srvInput.addEventListener('blur',()=>{
       const addr = srvInput.value.trim();
-      if(addr){
+      const curAddr = mt()?.serverAddr || '';
+      if(addr && addr !== curAddr){
+        /* Save value FIRST so re-render preserves it, then trigger check animation */
+        act('save-local-network',{serverAddr:addr});
+        setTimeout(()=>{
+          act('set-flag',{serverConnStatus:'checking'});
+          setTimeout(()=>act('set-flag',{serverConnStatus:'ok'}), 1800);
+        }, 100);
+      } else if(addr && addr === curAddr){
+        /* Same address, just show re-check animation */
         act('set-flag',{serverConnStatus:'checking'});
         setTimeout(()=>act('set-flag',{serverConnStatus:'ok'}), 1800);
       }

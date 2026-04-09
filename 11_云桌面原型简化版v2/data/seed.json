@@ -398,7 +398,7 @@
           "visibility": "default",
           "remark": "通用教学环境，Python + VS Code 已配置",
           "syncStatus": "synced",
-          "diskSize": 45,
+          "diskSize": 55,
           "dataDisk": "D: 30GB VHD",
           "createdAt": "2025-12-01T08:00:00Z",
           "editedAt": "2026-03-20T16:00:00Z",
@@ -413,7 +413,7 @@
           "visibility": "default",
           "remark": "Java/Web开发课程用，数据库已预配",
           "syncStatus": "none",
-          "diskSize": 60,
+          "diskSize": 80,
           "dataDisk": "D: 50GB VHD",
           "createdAt": "2026-03-01T08:00:00Z",
           "editedAt": "2026-03-19T10:00:00Z",
@@ -460,7 +460,7 @@
           "physicalDeploy": true,
           "remark": "物理部署，独立分区直接引导，含 PyTorch + CUDA 训练环境",
           "syncStatus": "synced",
-          "diskSize": 55,
+          "diskSize": 88,
           "dataDisk": "D: 50GB VHD",
           "createdAt": "2026-03-21T09:00:00Z",
           "editedAt": "2026-03-21T09:30:00Z",
@@ -475,7 +475,7 @@
           "visibility": "default",
           "remark": "教师授课专用，已装授课管理软件和 WOL 控制组件",
           "syncStatus": "synced",
-          "diskSize": 50,
+          "diskSize": 52,
           "dataDisk": "D: 30GB VHD",
           "createdAt": "2026-02-20T08:00:00Z",
           "editedAt": "2026-03-20T10:00:00Z",
@@ -490,7 +490,7 @@
           "visibility": "hidden",
           "remark": "纯净 OS 环境，教学桌面和考试桌面均基于此派生",
           "syncStatus": "synced",
-          "diskSize": 25,
+          "diskSize": 22,
           "dataDisk": "",
           "createdAt": "2026-01-10T08:00:00Z",
           "editedAt": "2026-01-10T08:00:00Z",
@@ -875,7 +875,7 @@
   "demo": {
     "focusCampusId": "west",
     "focusClassroomId": "bs-d105",
-    "motherIndex": 1,
-    "controlledIndex": 2
+    "motherIndex": 0,
+    "controlledIndex": 1
   }
 }

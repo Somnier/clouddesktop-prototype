@@ -58,7 +58,6 @@ function buildState(s){
         ...(() => {
           const allDts = isBlank ? [] : (sc.desktopCatalog||[]);
           const visibleDts = allDts.filter(d=>{
-            if(d.visibility==='hidden') return false;
             if(useLbl!=='教师终端' && /教师/.test(d.name)) return false;
             return true;
           });
@@ -104,7 +103,7 @@ function buildState(s){
           memUsed: 4+Math.floor(Math.random()*8),
           memTotal: [8,16,16,32][i%4],
           diskUsed: (()=>{ const dts=isBlank?[]:(sc.desktopCatalog||[]).filter(d=>useLbl==='教师终端'||!/教师/.test(d.name)); const dtSum=dts.reduce((s,d)=>s+(d.diskSize||45),0); return dtSum+35+Math.floor(Math.random()*10); })(),
-          diskTotal: [256,512,512,1024][i%4]
+          diskTotal: i===0 ? 512 : [256,512,512,1024][i%4]
         },
         heartbeat: now(),
         // internal
@@ -265,6 +264,18 @@ function crById(id){ return state.classrooms.find(c=>c.id===id); }
 function termById(id){ return state.terminals.find(t=>t.id===id); }
 function termsInCr(crId){ return state.terminals.filter(t=>t.classroomId===crId); }
 function taskForCr(crId){ return state.tasks.find(t=>t.classroomId===crId && t.phase==='running') || state.tasks.find(t=>t.classroomId===crId); }
+/* Generate seat grid blocks from classroom dimensions */
+function initGridBlocks(crId, crObj){
+  const crRows=crObj.rows||7;
+  const crCols=crObj.cols||Math.max(1,Math.ceil(Math.max(1,(termsInCr(crId).length-1))/crRows));
+  const blocks=[];
+  for(let col=0;col<crCols;col++){
+    for(let row=0;row<crRows;row++){
+      blocks.push({idx:col*crRows+row,pos:String.fromCharCode(65+col)+String(row+1).padStart(2,'0'),row,col,state:'active'});
+    }
+  }
+  return {rows:crRows,cols:crCols,blocks};
+}
 function addLog(level, source, title, detail=''){
   state.logs.unshift({id:uid(),level,source,title,detail,at:now()});
   if(state.logs.length>100) state.logs.length=100;
@@ -361,7 +372,7 @@ function act(action, payload={}){
   switch(action){
 
   /* ── GLOBAL ── */
-  case 'reset': state=buildState(seed); return {ok:true};
+  case 'reset': state=buildState(seed); { const fcr2=crById(state.demo.focusClassroomId); if(fcr2) state.demo.deployDraft.grid=initGridBlocks(fcr2.id,fcr2); } return {ok:true};
   case 'clear-logs': state.logs=[]; return {ok:true};
   case 'clear-alerts': state.alerts.forEach(a=>a.status='closed'); return {ok:true};
   case 'all-online': state.terminals.forEach(t=>{t.online=true;t.power='on';t.heartbeat=now();}); return {ok:true};
@@ -369,24 +380,29 @@ function act(action, payload={}){
   case 'switch-focus':{
     const newCr=crById(payload.classroomId); if(!newCr) return {ok:false,reason:'教室不存在'};
     const terms=termsInCr(payload.classroomId); if(!terms.length) return {ok:false,reason:'教室无终端'};
-    demo.focusClassroomId=payload.classroomId; demo.motherId=terms[0].id;
-    demo.controlledId=terms.length>1?terms[1].id:terms[0].id; demo.focusCampusId=newCr.campusId;
+    /* Use seed motherIndex for proper terminal selection */
+    const seedCr=seed.classrooms.find(sc=>sc.id===payload.classroomId);
+    const mIdx=seedCr?.motherIndex||0;
+    const motherTerm=terms[Math.min(mIdx,terms.length-1)];
+    const ctrlIdx=mIdx===0?1:0;
+    demo.focusClassroomId=payload.classroomId; demo.motherId=motherTerm.id;
+    demo.controlledId=terms.length>1?terms[Math.min(ctrlIdx,terms.length-1)].id:motherTerm.id; demo.focusCampusId=newCr.campusId;
     demo.takeover={mode:null,scannedMacs:[],groups:{main:[],unbound:[],other:[]},classroomName:null,confirmed:false};
     demo.deployDraft.step=0; demo.deployDraft.scope=[]; demo.deployDraft.assignments=[];
-    demo.deployDraft.bindings={}; demo.deployDraft.grid={rows:newCr.rows||7,cols:6,blocks:[]};
+    demo.deployDraft.bindings={}; demo.deployDraft.grid=initGridBlocks(payload.classroomId,newCr);
     demo.deployDraft.rules.ipBase=newCr.networkBase; demo.deployDraft.rules.namePrefix=payload.classroomId.split('-')[1].toUpperCase();
     demo.maintDraft={step:0,scope:[],keepIds:[],desktopId:null,desktopIds:[],defaultDesktopId:null,restoreMode:'还原系统盘，保留数据盘',category:'桌面更新',ipPreview:[],newServerAddr:'',newIpBase:'',newIpStart:20,newSubnetMask:'255.255.255.0',newGateway:'',newDns:''};
     demo.examDraft={step:0,scope:[],keepIds:[],desktopId:null,desktopIds:[],hideEntries:true,restoreMode:'还原系统盘和数据盘'};
     demo.transferControl={}; demo._desktopReturnScreen=null;
     // For deployed classrooms, auto-set mother and go to workbench
     if(newCr.stage==='deployed'){
-      terms[0].controlState='mother'; terms[0].boundClassroom=newCr.id;
+      motherTerm.controlState='mother'; motherTerm.boundClassroom=newCr.id;
       terms.forEach(t=>{
-        if(t.id!==terms[0].id&&t.online){t.controlState='controlled';t.boundClassroom=newCr.id;t.screen='home';}
-        else if(t.id===terms[0].id){t.screen='workbench';}
+        if(t.id!==motherTerm.id&&t.online){t.controlState='controlled';t.boundClassroom=newCr.id;t.screen='home';}
+        else if(t.id===motherTerm.id){t.screen='workbench';}
         else{t.screen='home';t.controlState='unmanaged';}
       });
-      newCr.motherId=terms[0].id; newCr.status='active';
+      newCr.motherId=motherTerm.id; newCr.status='active';
       demo.motherScreen='workbench';
     } else {
       demo.motherScreen='home';
@@ -574,6 +590,7 @@ function act(action, payload={}){
   case 'open-takeover':{
     /* If already mother, go to workbench directly */
     if(mt.controlState==='mother'){
+      if(!demo.deployDraft.grid.blocks.length) demo.deployDraft.grid=initGridBlocks(cr.id,cr);
       demo.motherScreen='workbench'; mt.screen='workbench'; return {ok:true};
     }
     demo.motherScreen='takeover'; mt.screen='takeover';
@@ -618,6 +635,8 @@ function act(action, payload={}){
     // init deploy rules from classroom
     demo.deployDraft.rules.ipBase=cr.networkBase;
     demo.deployDraft.rules.namePrefix=cr.id.split('-')[1].toUpperCase();
+    // init grid blocks if empty
+    if(!demo.deployDraft.grid.blocks.length) demo.deployDraft.grid=initGridBlocks(cr.id,cr);
     addLog('info','终端',cr.name+' 教室已接管','母机 '+mt.mac+' 管理 '+memberMacs.length+' 台终端');
     return {ok:true};
   }
@@ -1487,6 +1506,11 @@ async function main(){
   if(existsSync(STATE_FILE)){
     try{ state=JSON.parse(readFileSync(STATE_FILE,'utf8')); }catch(e){ state=buildState(seed); }
   } else { state=buildState(seed); }
+  /* Ensure grid blocks exist for the initial classroom */
+  if(!state.demo.deployDraft.grid.blocks.length){
+    const fcr=crById(state.demo.focusClassroomId);
+    if(fcr) state.demo.deployDraft.grid=initGridBlocks(fcr.id,fcr);
+  }
 
   const app = express();
   app.use(express.json());
