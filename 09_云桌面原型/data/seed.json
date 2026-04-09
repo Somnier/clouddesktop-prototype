@@ -1,25 +1,25 @@
 {
   "school": {
-    "name": "上海大学",
-    "shortName": "上大"
+    "name": "示例大学",
+    "shortName": "示例"
   },
   "campuses": [
     {
-      "id": "yangpu",
-      "name": "杨浦校区",
-      "serverId": "srv-yp"
+      "id": "east",
+      "name": "东区校区",
+      "serverId": "srv-east"
     },
     {
-      "id": "baoshan",
-      "name": "宝山校区",
-      "serverId": "srv-bs"
+      "id": "west",
+      "name": "西区校区",
+      "serverId": "srv-west"
     }
   ],
   "servers": [
     {
-      "id": "srv-yp",
-      "campusId": "yangpu",
-      "name": "杨浦校区云桌面管理服务器",
+      "id": "srv-east",
+      "campusId": "east",
+      "name": "东区校区云桌面管理服务器",
       "address": "10.21.0.18",
       "internalIp": "10.21.0.18",
       "externalIp": "202.120.95.18",
@@ -31,9 +31,9 @@
       "storage": 58
     },
     {
-      "id": "srv-bs",
-      "campusId": "baoshan",
-      "name": "宝山校区云桌面管理服务器",
+      "id": "srv-west",
+      "campusId": "west",
+      "name": "西区校区云桌面管理服务器",
       "address": "10.22.0.18",
       "internalIp": "10.22.0.18",
       "externalIp": "202.120.96.22",
@@ -48,7 +48,7 @@
   "classrooms": [
     {
       "id": "yp-a301",
-      "campusId": "yangpu",
+      "campusId": "east",
       "name": "A301 公共教学机房",
       "building": "工学楼A座",
       "floor": "3F",
@@ -71,7 +71,7 @@
     },
     {
       "id": "yp-b207",
-      "campusId": "yangpu",
+      "campusId": "east",
       "name": "B207 数字媒体实验室",
       "building": "创意楼B座",
       "floor": "2F",
@@ -240,7 +240,7 @@
     },
     {
       "id": "bs-c402",
-      "campusId": "baoshan",
+      "campusId": "west",
       "name": "C402 网络安全实训室",
       "building": "信息楼C座",
       "floor": "4F",
@@ -407,7 +407,7 @@
     },
     {
       "id": "bs-d105",
-      "campusId": "baoshan",
+      "campusId": "west",
       "name": "D105 通用机房",
       "building": "教学楼D座",
       "floor": "1F",
@@ -599,7 +599,7 @@
     },
     {
       "id": "yp-e210",
-      "campusId": "yangpu",
+      "campusId": "east",
       "name": "E210 外语语音实验室",
       "building": "外语楼E座",
       "floor": "2F",
@@ -754,7 +754,7 @@
     },
     {
       "id": "bs-f308",
-      "campusId": "baoshan",
+      "campusId": "west",
       "name": "F308 多媒体互动教室",
       "building": "综合楼F座",
       "floor": "3F",
@@ -909,7 +909,7 @@
     }
   ],
   "demo": {
-    "focusCampusId": "baoshan",
+    "focusCampusId": "west",
     "focusClassroomId": "bs-d105",
     "motherIndex": 1,
     "controlledIndex": 2
