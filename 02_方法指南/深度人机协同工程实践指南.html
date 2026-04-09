@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>深度人机协同工程实践指南</title>
+<style>
+/* ── GitHub Markdown Body ───────────────────────────── */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC",
+    "Microsoft YaHei", Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #1f2328;
+  word-wrap: break-word;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Headings ───────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 24px; margin-bottom: 16px;
+  font-weight: 600; line-height: 1.25;
+}
+h1 { font-size: 2em; padding-bottom: .3em; border-bottom: 1px solid #d1d9e0; }
+h2 { font-size: 1.5em; padding-bottom: .3em; border-bottom: 1px solid #d1d9e0; }
+h3 { font-size: 1.25em; }
+h4 { font-size: 1em; }
+h1:first-child { margin-top: 0; }
+
+/* ── Paragraph & inline ─────────────────────────────── */
+p { margin-top: 0; margin-bottom: 16px; }
+strong { font-weight: 600; }
+a { color: #0969da; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Blockquote ─────────────────────────────────────── */
+blockquote {
+  margin: 0 0 16px 0; padding: 0 1em;
+  color: #656d76; border-left: .25em solid #d0d7de;
+}
+blockquote > :first-child { margin-top: 0; }
+blockquote > :last-child { margin-bottom: 0; }
+
+/* ── Code ───────────────────────────────────────────── */
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 85%; padding: .2em .4em;
+  margin: 0; background: rgba(175,184,193,.2); border-radius: 6px;
+}
+pre {
+  margin-top: 0; margin-bottom: 16px; padding: 16px;
+  overflow: auto; font-size: 85%; line-height: 1.45;
+  background: #f6f8fa; border-radius: 6px;
+}
+pre code {
+  display: inline; padding: 0; margin: 0;
+  overflow: visible; line-height: inherit; word-wrap: normal;
+  background: transparent; border: 0; font-size: 100%;
+}
+
+/* ── Table ──────────────────────────────────────────── */
+table {
+  border-spacing: 0; border-collapse: collapse;
+  margin-top: 0; margin-bottom: 16px;
+  display: table; width: max-content; max-width: 100%; overflow: auto;
+}
+th, td {
+  padding: 6px 13px; border: 1px solid #d0d7de;
+}
+th {
+  font-weight: 600; background-color: #f6f8fa;
+}
+tr { background-color: #ffffff; border-top: 1px solid #d8dee4; }
+tr:nth-child(2n) { background-color: #f6f8fa; }
+
+/* ── Lists ──────────────────────────────────────────── */
+ul, ol { margin-top: 0; margin-bottom: 16px; padding-left: 2em; }
+li { margin-top: .25em; }
+li + li { margin-top: .25em; }
+
+/* ── Horizontal rule ────────────────────────────────── */
+hr {
+  height: .25em; padding: 0; margin: 24px 0;
+  background-color: #d0d7de; border: 0; overflow: hidden;
+}
+
+/* ── TOC page ───────────────────────────────────────── */
+.pdf-toc {
+  page-break-after: always;
+}
+.toc-title {
+  font-size: 1.5em; font-weight: 600;
+  border-bottom: 1px solid #d1d9e0;
+  padding-bottom: .3em;
+  margin-bottom: 1em;
+}
+.toc-part {
+  font-weight: 600;
+  margin: .6em 0 .1em 0;
+  font-size: 1em;
+}
+.toc-part a { color: #1f2328; text-decoration: none; }
+.toc-section {
+  margin: .1em 0 .1em 2em;
+  font-size: .92em;
+  line-height: 1.55;
+}
+.toc-section a { color: #656d76; text-decoration: none; }
+.toc-section a:hover, .toc-part a:hover { color: #0969da; }
+
+/* ── Print / PDF ────────────────────────────────────── */
+@page { size: A4; }
+
+/* Avoid orphaned headings at page bottom */
+h2, h3, h4 { page-break-after: avoid; }
+table, pre, blockquote, figure { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+<nav class="pdf-toc"><h2 class="toc-title">目　录</h2>
+<div class="toc-part"><a href="#h-2">第一部分　认知基础</a></div>
+<div class="toc-section"><a href="#h-3">1. 深度协作的本质问题</a></div>
+<div class="toc-section"><a href="#h-4">2. AI Agent 的上下文现实</a></div>
+<div class="toc-section"><a href="#h-5">3. 幻觉的工程分类</a></div>
+<div class="toc-section"><a href="#h-6">4. 偏移的五个高发场景</a></div>
+<div class="toc-part"><a href="#h-7">第二部分　协作架构</a></div>
+<div class="toc-section"><a href="#h-8">5. 事实分层体系</a></div>
+<div class="toc-section"><a href="#h-9">6. 锚点机制</a></div>
+<div class="toc-section"><a href="#h-13">7. 边界定义</a></div>
+<div class="toc-section"><a href="#h-17">8. 修正协议</a></div>
+<div class="toc-part"><a href="#h-21">第三部分　协作工程实践</a></div>
+<div class="toc-section"><a href="#h-22">9. 会话管理</a></div>
+<div class="toc-section"><a href="#h-26">10. 记忆管理</a></div>
+<div class="toc-section"><a href="#h-30">11. 批量任务管理</a></div>
+<div class="toc-section"><a href="#h-34">12. 术语管理</a></div>
+<div class="toc-section"><a href="#h-37">13. 版本与基线管理</a></div>
+<div class="toc-part"><a href="#h-41">第四部分　高级实践</a></div>
+<div class="toc-section"><a href="#h-42">14. 复杂任务的分解策略</a></div>
+<div class="toc-section"><a href="#h-45">15. AI 幻觉的实时监控</a></div>
+<div class="toc-section"><a href="#h-46">16. 与 AI 的有效沟通模式</a></div>
+<div class="toc-section"><a href="#h-50">17. 质量门禁</a></div>
+<div class="toc-part"><a href="#h-51">第五部分　反模式与陷阱</a></div>
+<div class="toc-section"><a href="#h-52">18. 十大反模式</a></div>
+<div class="toc-part"><a href="#h-53">第六部分　工具与环境</a></div>
+<div class="toc-section"><a href="#h-54">19. IDE Agent 环境的工程本质</a></div>
+<div class="toc-section"><a href="#h-55">20. 工具使用的最佳实践</a></div>
+<div class="toc-part"><a href="#h-56">附录</a></div>
+<div class="toc-section"><a href="#h-57">A. 快速参考：开场模板</a></div>
+<div class="toc-section"><a href="#h-58">B. 快速参考：修改完成检查清单</a></div>
+<div class="toc-section"><a href="#h-59">C. 快速参考：幻觉分级应对</a></div>
+</nav>
+
+<h1 id="h-1">深度人机协同工程实践指南</h1><blockquote>
+<p><strong>适用读者</strong>：产品经理、研发经理、架构师——任何需要与 AI Agent 进行多轮、多文件、多阶段深度协作的技术人员。</p>
+<p><strong>定位</strong>：不是某个项目的复盘，而是从大量长线协作实战中提炼的、可复用的通用工程方法论。本指南假设你使用的 AI Agent 具备读写文件、执行命令、维护记忆、管理任务计划等 Agent 级能力（如 VS Code Copilot Agent、Cursor、Windsurf 等 IDE Agent，或类似的 Agentic 工作流平台）。</p>
+</blockquote>
+<hr>
+<h2 id="h-2">第一部分　认知基础</h2><h3 id="h-3">1. 深度协作的本质问题</h3><p>单轮问答的失败模式是&quot;答错了&quot;——成本可控，重来即可。深度协作的失败模式完全不同：<strong>AI 在一个局部正确、全局偏移的上下文里持续认真工作，产出看起来很完整、方向已经错位的结果</strong>。</p>
+<p>这种偏移不是因为 AI &quot;不聪明&quot;，而是因为深度协作涉及三个单轮问答不涉及的工程维度：</p>
+<table>
+<thead>
+<tr>
+<th align="left">维度</th>
+<th align="left">单轮问答</th>
+<th align="left">深度协作</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>事实来源</strong></td>
+<td align="left">用户当场给全</td>
+<td align="left">散落在几十份文档和历史对话中</td>
+</tr>
+<tr>
+<td align="left"><strong>上下文范围</strong></td>
+<td align="left">一个请求 + 一个回复</td>
+<td align="left">跨轮、跨文件、跨阶段的累积状态</td>
+</tr>
+<tr>
+<td align="left"><strong>错误传播</strong></td>
+<td align="left">错了就错了，不影响下一轮</td>
+<td align="left">一个错误结论会以&quot;既定事实&quot;身份污染后续所有轮次</td>
+</tr>
+</tbody></table>
+<p>因此，深度协作的核心挑战不是&quot;让 AI 理解你这句话&quot;，而是<strong>控制 AI 在长程工作中的事实锚定、推理边界和错误传播半径</strong>。</p>
+<h3 id="h-4">2. AI Agent 的上下文现实</h3><p>一个关键认知前提：<strong>AI 每一轮实际工作的依据，远小于工作区里存在的全部事实。</strong></p>
+<p>当前主流 AI Agent 每一轮推理的实际输入通常由以下几层叠加构成：</p>
+<ol>
+<li><strong>系统指令层</strong>：宿主平台注入的行为规则和输出约束。</li>
+<li><strong>用户请求层</strong>：当前这轮用户说的话。</li>
+<li><strong>会话压缩层</strong>：历史对话被压缩后的摘要（不是原文）。</li>
+<li><strong>本轮读取层</strong>：这一轮 AI 通过工具真正重新读过的文件。</li>
+<li><strong>运行时状态层</strong>：当前打开的编辑器、终端输出、错误信息。</li>
+<li><strong>外部记忆层</strong>：用户记忆、会话记忆、仓库记忆。</li>
+</ol>
+<p>这意味着：</p>
+<ul>
+<li>&quot;我们前面说过的&quot;不等于 AI 当前还记得。凡是没有落到正式文档或记忆里的结论，都有概率被遗忘。</li>
+<li>&quot;工作区里有这份文件&quot;不等于 AI 读过它。只有这一轮被工具主动读取的内容，才真正进入了推理上下文。</li>
+<li>会话越长，压缩越重。任何只在早期对话中临时提到的细节，到后期几乎一定被压缩消失。</li>
+</ul>
+<p><strong>工程推论</strong>：凡是你希望 AI 在后续轮次中仍然遵守的结论，必须让它存在于 AI 每轮都能读到的载体上——正式文档、记忆文件或当前轮显式指令中。依赖 AI &quot;应该还记得&quot;是最常见的深度协作失败来源。</p>
+<h3 id="h-5">3. 幻觉的工程分类</h3><p>在长线协作中，AI 的错误不止一种&quot;幻觉&quot;。按工程影响从小到大，可以分为四个等级：</p>
+<table>
+<thead>
+<tr>
+<th align="left">等级</th>
+<th align="left">类型</th>
+<th align="left">典型表现</th>
+<th align="left">危害程度</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">L1</td>
+<td align="left"><strong>表达幻觉</strong></td>
+<td align="left">措辞不符合产品口径、术语使用不一致</td>
+<td align="left">低——逐条纠正即可</td>
+</tr>
+<tr>
+<td align="left">L2</td>
+<td align="left"><strong>补全幻觉</strong></td>
+<td align="left">文档有空白时，AI 自行补充了未经确认的细节</td>
+<td align="left">中——已补内容会被后续轮次当成已定事实</td>
+</tr>
+<tr>
+<td align="left">L3</td>
+<td align="left"><strong>结构幻觉</strong></td>
+<td align="left">AI 发明了不存在的业务对象、页面关系或流程分支</td>
+<td align="left">高——修正成本大，且可能已扩散到多个文件</td>
+</tr>
+<tr>
+<td align="left">L4</td>
+<td align="left"><strong>锚点偏移</strong></td>
+<td align="left">AI 把派生文档、探索稿或旧版本当成了正式基线</td>
+<td align="left">致命——在错误锚点上产出的所有工作都需要重做</td>
+</tr>
+</tbody></table>
+<p><strong>工程推论</strong>：纠偏不应只纠表面结果，而应先判断错误属于哪个等级。L1-L2 可以逐条修正；L3-L4 必须回退到底层规则上重新校准，否则逐条修正只会修出更多新错误。</p>
+<h3 id="h-6">4. 偏移的五个高发场景</h3><p>以下场景在长线协作中反复出现，每一个都已在实战中造成过实质性返工：</p>
+<p><strong>场景一：最近读过的内容压过正式基线。</strong> AI 刚刚大量阅读和修改了某份派生文档，接下来的工作就会不自觉地以这份派生文档为事实源，即使正式基线说的是另一回事。</p>
+<p><strong>场景二：空白被补成事实。</strong> 当页面设计或流程描述有未填项时，AI 倾向于补成一个&quot;最完整&quot;的版本，而不是标注&quot;此处待确认&quot;。这些被补出来的细节一旦进入文档，后续轮次就会把它当成已确认结论继续引用。</p>
+<p><strong>场景三：人类的&quot;常识&quot;对 AI 不生效。</strong> 项目做深之后，人类大脑中有大量内化的背景知识——哪些方案已经被否掉、哪些词只是临时用过、哪些机制只是探索不是结论。这些信息如果没有显式文档化，AI 不会自动继承。</p>
+<p><strong>场景四：跨页面、跨文件的一致性崩塌。</strong> 在一个文件内把逻辑改对了，但忘记同步到引用它的其他 5 个文件，导致系统内出现两套甚至三套口径。AI 尤其容易犯此错误，因为它每轮只处理有限数量的文件。</p>
+<p><strong>场景五：修一个 bug 创造三个 bug。</strong> 在代码协作中极常见：AI 修复了你指出的问题，但修复方式引入了新的属性名不匹配、事件绑定遗漏、状态跨页泄漏等问题。这是因为 AI 在修复时的上下文范围不足以覆盖所有受影响的代码路径。</p>
+<hr>
+<h2 id="h-7">第二部分　协作架构</h2><h3 id="h-8">5. 事实分层体系</h3><p>深度协作的首要任务是建立清晰的事实分层。在实战中，以下三层划分被证明最为有效：</p>
+<pre><code>┌─────────────────────────────────────────┐
+│  第一层：正式基线（Baseline）              │
+│  被项目方确认的需求、业务对象、PRD           │
+│  修改需要项目方重新确认                      │
+├─────────────────────────────────────────┤
+│  第二层：稳定结论（Established Facts）      │
+│  从基线推导出的、已被多轮验证的事实           │
+│  修改需要追溯到基线变更或新增确认            │
+├─────────────────────────────────────────┤
+│  第三层：派生文档（Derived Documents）      │
+│  页面设计稿、原型代码、探索记录              │
+│  可以自由修改，但必须与上两层一致            │
+└─────────────────────────────────────────┘
+</code></pre>
+<p><strong>关键准则</strong>：</p>
+<ul>
+<li>信息只能从上层向下层流动。派生文档可以引用稳定结论，但派生文档中的内容永远不能反向覆盖基线。</li>
+<li>AI 每轮工作前，必须明确当前任务锚定的是哪一层。如果任务涉及基线修改，这是一个需要人类确认的重大动作，不是 AI 可以自行决定的。</li>
+<li>当派生文档和稳定结论出现冲突时，以稳定结论为准。当稳定结论和正式基线出现冲突时，必须停下来确认。</li>
+</ul>
+<h3 id="h-9">6. 锚点机制</h3><p>&quot;锚点&quot;是深度协作中最重要的概念。它回答一个问题：<strong>AI 这一轮到底拿什么当出发点。</strong></p>
+<h4 id="h-10">6.1 显式锚定</h4><p>每次启动一轮重要工作时，显式告诉 AI 当前锚点：</p>
+<pre><code class="language-text">本次任务锚定以下文档：
+- 正式基线：04_正式基线/云桌面PRD-20260323.md
+- 稳定结论：05_事实层/终端侧跨页结论.md
+- 当前工作文件：06_页面设计/TERM-04_单教室部署.md
+
+04 和 05 中的内容有冲突时以 04 为准。
+06 是本次修改目标，修改后必须与 04、05 一致。
+</code></pre>
+<h4 id="h-11">6.2 隐式锚点的危险</h4><p>如果你不显式锚定，AI 会自行选择锚点。它的选择逻辑通常是：</p>
+<ol>
+<li>最近一轮读过的文件 → 2. 会话记忆中的摘要 → 3. 仓库记忆 → 4. 自行推理</li>
+</ol>
+<p>这个优先级序列意味着：如果你上一轮让 AI 大量阅读了一份已过时的派生文档，这份文档就会在下一轮成为 AI 的事实上的锚点——即使正式基线完全不同。</p>
+<h4 id="h-12">6.3 锚点陈旧检测</h4><p>长线项目中，锚点文件本身也可能过时。以下信号提示你需要刷新锚点：</p>
+<ul>
+<li>AI 的产出里开始出现你&quot;几个版本前&quot;用过的术语。</li>
+<li>AI 引用的业务规则是对的，但版本是旧的。</li>
+<li>AI 对某个机制的描述&quot;大致正确但细节偏移&quot;。</li>
+</ul>
+<p>此时正确做法不是逐条纠正细节，而是重新锚定到最新版本的基线文档。</p>
+<h3 id="h-13">7. 边界定义</h3><p>告诉 AI &quot;做什么&quot;只完成了一半工作，另一半是告诉它&quot;不做什么&quot;。</p>
+<h4 id="h-14">7.1 必须显式禁止的行为</h4><p>以下行为在深度协作中被证明必须显式禁止，因为 AI 的默认倾向就是做这些事：</p>
+<ol>
+<li><strong>禁止发明业务对象。</strong> 除非基线中已定义，否则 AI 不得引入新的业务实体。</li>
+<li><strong>禁止把机制猜测写成页面行为。</strong> 如果某个机制在基线中没有定义，AI 不得在页面设计稿中把它当成已定行为。</li>
+<li><strong>禁止把空白补成结论。</strong> 遇到文档空白时，应标注&quot;待确认&quot;而非自行补齐。</li>
+<li><strong>禁止把技术实现细节写成用户可见流程。</strong> 例如数据库主键策略不应出现在用户可见的页面描述中。</li>
+<li><strong>禁止跳过确认环节。</strong> 涉及基线修改的动作，必须先获得人类确认。</li>
+</ol>
+<h4 id="h-15">7.2 必须显式允许的行为</h4><p>某些行为 AI 默认不会主动去做，需要显式允许：</p>
+<ol>
+<li><strong>允许重新阅读正式基线。</strong> 即使之前读过，新一轮工作开始时仍应重新读取。</li>
+<li><strong>允许花时间取证。</strong> 不要求 AI 立即给出结果，允许它先做调查。</li>
+<li><strong>允许先交冲突清单再动笔。</strong> 比直接产出&quot;看起来完整但锚点可能错位&quot;的结果好得多。</li>
+<li><strong>允许说&quot;不确定&quot;。</strong> 鼓励 AI 标注不确定的地方，而非硬猜。</li>
+<li><strong>允许重构。</strong> 允许 AI 为了逻辑一致性重新组织文档结构，而非在旧结构上打补丁。</li>
+</ol>
+<h4 id="h-16">7.3 必须停下来提问的条件</h4><p>以下情况 AI 必须停下来向人类确认，而不是自行决定继续：</p>
+<ul>
+<li>正式基线和当前派生文档出现冲突。</li>
+<li>页面职责可以合理地归属到两个不同的页面，且选择会影响后续设计结构。</li>
+<li>继续工作需要先假定某个业务机制成立，但该机制尚未被基线确认。</li>
+<li>即将引入新术语、新业务对象或新的流程分支。</li>
+<li>人类显然认为某件事&quot;已经定过了&quot;，但当前可读的文档中找不到这个结论。</li>
+</ul>
+<h3 id="h-17">8. 修正协议</h3><p>错误发生后如何修正，决定了长线项目的总修正成本。</p>
+<h4 id="h-18">8.1 分层修正原则</h4><p><strong>永远按照&quot;从底层到表层&quot;的顺序修正：</strong></p>
+<pre><code>修正事实结论 → 修正页面设计 → 修正原型代码
+</code></pre>
+<p>反过来——先改了代码再补文档——是最危险的做法。它会让文档逐渐失真，最终变成&quot;代码是真相，文档是装饰&quot;的局面。在后续轮次中，AI 如果读到这些失真文档，就会在错误的事实上继续工作。</p>
+<h4 id="h-19">8.2 纠偏应纠规则而非表面</h4><p>当 AI 产出的结果有问题时，最有效的反馈方式不是逐句修正措辞，而是指出底层判断规则的错误：</p>
+<p><strong>低效纠偏</strong>：&quot;这个标题应该叫&#39;终端配置&#39;不是&#39;终端设置&#39;&quot;
+<strong>高效纠偏</strong>：&quot;你搞混了两个概念——&#39;配置&#39;指的是已持久化的业务值，&#39;设置&#39;指的是本次任务中用户正在选择的参数。请以这条规则为基准，自查整个文档中的用词。&quot;</p>
+<p>高效纠偏能修正 AI 后续所有相关产出，低效纠偏只修正了当前这一处。</p>
+<h4 id="h-20">8.3 扩散半径控制</h4><p>修正一个结论时，必须评估它的扩散半径——这个结论被多少其他文档引用了？</p>
+<pre><code>扩散半径检查清单：
+□ 这个结论在事实文档里出现过吗？
+□ 哪些页面设计稿引用了它？
+□ 原型代码中有对应的实现吗？
+□ 会话记忆或仓库记忆里有相关记录吗？
+</code></pre>
+<p>只有当扩散半径内的所有载体都被同步修改后，修正才算完成。</p>
+<hr>
+<h2 id="h-21">第三部分　协作工程实践</h2><h3 id="h-22">9. 会话管理</h3><h4 id="h-23">9.1 会话的生命周期</h4><p>一个深度协作会话不是无限延伸的。会话越长，以下风险越高：</p>
+<ul>
+<li><strong>压缩损失</strong>：早期对话被压缩成越来越短的摘要，细节丢失。</li>
+<li><strong>锚点漂移</strong>：AI 的事实上锚点从正式基线漂移到最近产出的派生文档。</li>
+<li><strong>错误固化</strong>：早期产出中的小错误被后续轮次反复引用，逐渐变成&quot;既定事实&quot;。</li>
+</ul>
+<h4 id="h-24">9.2 会话断点设计</h4><p>长任务应有意识地设计断点：</p>
+<ol>
+<li><strong>阶段性落盘</strong>：每完成一个阶段，将关键结论写入正式文档，而非依赖会话记忆。</li>
+<li><strong>显式清点</strong>：在断点处列出&quot;本阶段已确认的结论&quot;&quot;下阶段需要做的事&quot;&quot;当前已知的未决问题&quot;。</li>
+<li><strong>重锚定</strong>：新会话开始时，显式重新锚定到正式文档，而非要求 AI &quot;继续上次的工作&quot;。</li>
+</ol>
+<h4 id="h-25">9.3 交接文档</h4><p>当会话必须切换（换人、换工具、换会话窗口）时，交接文档是唯一可靠的衔接手段：</p>
+<pre><code>交接文档必须包含：
+1. 当前正式基线版本及位置
+2. 本阶段已完成的具体工作
+3. 下一步具体需要做什么
+4. 当前已知的未决问题清单
+5. 需要特别注意的约束和边界
+</code></pre>
+<h3 id="h-26">10. 记忆管理</h3><p>AI Agent 的外部记忆系统是深度协作的基础设施，但使用不当反而会制造混乱。</p>
+<h4 id="h-27">10.1 三层记忆模型</h4><table>
+<thead>
+<tr>
+<th align="left">记忆层</th>
+<th align="left">作用域</th>
+<th align="left">生命周期</th>
+<th align="left">适合存什么</th>
+<th align="left">不适合存什么</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>用户记忆</strong></td>
+<td align="left">跨项目</td>
+<td align="left">永久</td>
+<td align="left">个人偏好、通用工作习惯</td>
+<td align="left">项目特定细节</td>
+</tr>
+<tr>
+<td align="left"><strong>会话记忆</strong></td>
+<td align="left">当前对话</td>
+<td align="left">会话结束清空</td>
+<td align="left">临时工作状态、中间结论</td>
+<td align="left">需要长期保留的结论</td>
+</tr>
+<tr>
+<td align="left"><strong>仓库记忆</strong></td>
+<td align="left">当前项目</td>
+<td align="left">跟随项目</td>
+<td align="left">已验证的项目事实、术语规则</td>
+<td align="left">未验证的猜测、冗长原文</td>
+</tr>
+</tbody></table>
+<h4 id="h-28">10.2 记忆写入准则</h4><ul>
+<li><strong>只写已验证的结论。</strong> 未经确认的推测写入记忆后，后续轮次会把它当成已定事实。</li>
+<li><strong>简洁优先。</strong> 记忆条目应该是高度浓缩的结论，而非段落式描述。</li>
+<li><strong>附带来源。</strong> 每条记忆应能追溯到正式文档或人类确认。</li>
+<li><strong>定期清理。</strong> 过时的记忆比没有记忆更危险，因为它会误导 AI。</li>
+</ul>
+<h4 id="h-29">10.3 记忆与文档的关系</h4><p>记忆是文档的索引和加速器，不是文档的替代品。</p>
+<ul>
+<li>仓库记忆适合写&quot;最新需求基线是 04_正式基线/xxx.md&quot;，不适合把整份基线复制进去。</li>
+<li>会话记忆适合写&quot;本轮已完成 TERM-01 到 TERM-03 的修改，TERM-04 待做&quot;，不适合把所有修改细节记录下来。</li>
+<li>如果一条信息重要到需要长期保留，它应该进入正式文档，记忆只保留指向该文档的指针。</li>
+</ul>
+<h3 id="h-30">11. 批量任务管理</h3><p>深度协作中经常需要对多个文件、多个页面的相似结构做批量修改（如统一术语、统一数据分层口径、统一按钮承接方式）。这是错误率最高的操作之一。</p>
+<h4 id="h-31">11.1 一致性优先原则</h4><p><strong>做 N 个相似页面的修改，一致性的优先级永远高于单页完整度。</strong></p>
+<p>错误做法：把每个页面当成独立任务，逐一完善到&quot;完美&quot;——结果 10 个页面有 7 种不同的字段命名。</p>
+<p>正确做法：先定义一份跨页规则文档，然后让所有页面引用并遵守同一套规则。</p>
+<h4 id="h-32">11.2 批量修改的安全顺序</h4><pre><code>1. 先在一个文件上验证修改方案
+2. 确认方案正确后，列出所有受影响的文件清单
+3. 对每个文件执行相同模式的修改
+4. 每个文件修改后立即验证（不要积累未验证的修改）
+5. 全部完成后做一次交叉检查：A 文件里引用 B 的地方是否和 B 的修改一致
+</code></pre>
+<h4 id="h-33">11.3 "改一个 bug 创造三个 bug"的防治</h4><p>这是深度协作中最痛苦的模式。根本原因是 AI 在修复一个问题时，上下文范围不足以覆盖所有关联代码。</p>
+<p>防治措施：</p>
+<ol>
+<li><strong>修改前让 AI 先做影响面审计。</strong> 要求 AI 先列出本次修改可能影响的所有文件、函数、数据属性和事件绑定。</li>
+<li><strong>修改后要求 AI 做全流程自检。</strong> 不只检查修改的那个点，而是从入口到出口走一遍完整流程。</li>
+<li><strong>每次修改控制范围。</strong> 一次改一类问题，而不是一次性改所有问题。先改完一类，验证通过，再改下一类。</li>
+<li><strong>保持对&quot;沉默区&quot;的警惕。</strong> AI 修改某处代码时，最容易遗漏的是事件处理器、属性名一致性、CSS 选择器匹配这些&quot;不在当前视野内但会受影响&quot;的代码。</li>
+</ol>
+<h3 id="h-34">12. 术语管理</h3><p>术语不一致是长线协作中最常见、损害最大、但最容易被忽视的问题。</p>
+<h4 id="h-35">12.1 术语三分法</h4><p>任何一个术语体系中，至少需要区分三类词：</p>
+<table>
+<thead>
+<tr>
+<th align="left">类别</th>
+<th align="left">含义</th>
+<th align="left">示例</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>视角词</strong></td>
+<td align="left">用户看到的界面标签</td>
+<td align="left">&quot;当前教室&quot;&quot;终端列表&quot;&quot;桌面更新&quot;</td>
+</tr>
+<tr>
+<td align="left"><strong>动作词</strong></td>
+<td align="left">系统正在执行的操作</td>
+<td align="left">&quot;写入&quot;&quot;下发&quot;&quot;同步&quot;&quot;注册&quot;</td>
+</tr>
+<tr>
+<td align="left"><strong>存储词</strong></td>
+<td align="left">持久化的数据结构名</td>
+<td align="left">&quot;配置&quot;&quot;主档&quot;&quot;服务器注册数据&quot;</td>
+</tr>
+</tbody></table>
+<p>这三类词混用是术语混乱的根源。例如：&quot;设置&quot;可以是视角词（页面标题&quot;终端设置&quot;）、动作词（&quot;设置默认启动桌面&quot;）或存储词（&quot;已保存的设置&quot;）。当三种含义混在同一个词上时，用户无法区分。</p>
+<h4 id="h-36">12.2 术语统一的执行方式</h4><p>仅仅&quot;定义术语表&quot;是不够的。需要：</p>
+<ol>
+<li>术语表本身入正式基线。</li>
+<li>每次 AI 产出文档后，用搜索工具做一轮旧术语扫描。</li>
+<li>发现术语不一致时，先修术语规则，再全局替换——不要在不同文件中做不彻底的手工替换。</li>
+</ol>
+<h3 id="h-37">13. 版本与基线管理</h3><h4 id="h-38">13.1 文档版本命名</h4><p>推荐使用日期标记而非递增版本号：<code>云桌面PRD-20260323.md</code> 而非 <code>云桌面PRD_v4.md</code>。</p>
+<p>理由：递增版本号在长线协作中很快就会失去意义（v8 和 v12 有什么区别？），而日期天然携带时间信息。</p>
+<h4 id="h-39">13.2 基线锁定</h4><p>一旦文档成为正式基线（项目方确认），应：</p>
+<ol>
+<li>复制到独立基线目录（如 <code>04_正式基线/</code>）。</li>
+<li>该文件不再直接修改。所有修改在派生文档中进行。</li>
+<li>如需修改基线本身，必须走&quot;新基线确认&quot;流程。</li>
+</ol>
+<h4 id="h-40">13.3 派生文档的追溯链</h4><p>每份派生文档应注明它依据的基线版本。当基线更新后，所有引用旧基线的派生文档都应标记为&quot;待同步&quot;。</p>
+<hr>
+<h2 id="h-41">第四部分　高级实践</h2><h3 id="h-42">14. 复杂任务的分解策略</h3><h4 id="h-43">14.1 深度优先 vs. 广度优先</h4><ul>
+<li><strong>深度优先</strong>：先把一个模块做到完整，再做下一个。适合模块间耦合度低的场景。</li>
+<li><strong>广度优先</strong>：先把所有模块的骨架搭起来，再逐一完善。适合模块间有大量交叉引用的场景。</li>
+</ul>
+<p>对于涉及多页面、多端联动的原型项目，通常广度优先更安全——先确保跨页关系和数据口径一致，再逐页深化。</p>
+<h4 id="h-44">14.2 任务拆分的颗粒度</h4><p>太粗的任务（&quot;做完终端侧所有页面&quot;）会让 AI 失去控制——它会在一个巨大的任务中逐步偏移。太细的任务（&quot;改第 3 行的逗号&quot;）会失去上下文——AI 不理解为什么要改这个逗号。</p>
+<p>经验法则：<strong>一个任务应该对应一个可验证的交付物，且 AI 完成它所需的上下文不超过 5-8 个文件。</strong></p>
+<h3 id="h-45">15. AI 幻觉的实时监控</h3><p>不要等最终结果才检查幻觉。在过程中持续监控以下信号：</p>
+<table>
+<thead>
+<tr>
+<th align="left">信号</th>
+<th align="left">可能的幻觉类型</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">AI 使用了你从未定义过的术语</td>
+<td align="left">L3 结构幻觉</td>
+</tr>
+<tr>
+<td align="left">AI 提到了你不认识的业务对象</td>
+<td align="left">L3 结构幻觉</td>
+</tr>
+<tr>
+<td align="left">AI 的产出&quot;太完整了&quot;，没有任何待确认项</td>
+<td align="left">L2 补全幻觉</td>
+</tr>
+<tr>
+<td align="left">AI 引用的规则是对的但版本是旧的</td>
+<td align="left">L4 锚点偏移</td>
+</tr>
+<tr>
+<td align="left">AI 对你的问题给出的回答避重就轻</td>
+<td align="left">可能在掩盖不确定性</td>
+</tr>
+<tr>
+<td align="left">修一个问题后出现了新问题</td>
+<td align="left">上下文覆盖不足</td>
+</tr>
+</tbody></table>
+<h3 id="h-46">16. 与 AI 的有效沟通模式</h3><h4 id="h-47">16.1 开场模板</h4><p>对于重要任务，使用结构化的开场指令：</p>
+<pre><code class="language-text">本次目标：[具体要做什么]
+正式锚点：[列出基线文档路径]
+背景参考：[列出可参考但不作为基线的材料]
+禁止事项：[列出不允许 AI 自行做的事]
+允许事项：[列出允许 AI 主动做的事]
+停顿条件：[什么情况下必须先问我]
+输出格式：[期望的产出形式]
+</code></pre>
+<h4 id="h-48">16.2 纠偏话术</h4><table>
+<thead>
+<tr>
+<th align="left">情况</th>
+<th align="left">低效说法</th>
+<th align="left">高效说法</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">AI 用错了术语</td>
+<td align="left">&quot;这里应该叫 X 不是 Y&quot;</td>
+<td align="left">&quot;你混淆了 X 和 Y。X 的定义是…，Y 的定义是…。请以此规则全局自查。&quot;</td>
+</tr>
+<tr>
+<td align="left">AI 发明了新机制</td>
+<td align="left">&quot;不要加这个功能&quot;</td>
+<td align="left">&quot;这个机制在基线里没有定义。你的产出应严格限定在基线已确认的范围内。&quot;</td>
+</tr>
+<tr>
+<td align="left">AI 的结果方向偏了</td>
+<td align="left">&quot;不对，重做&quot;</td>
+<td align="left">&quot;你这版的锚点错了，你用的是 XX 文档，但正式基线是 YY。请重新锚定后再做。&quot;</td>
+</tr>
+<tr>
+<td align="left">AI 修改引入新 bug</td>
+<td align="left">&quot;你修了 A 但弄坏了 B&quot;</td>
+<td align="left">&quot;修改前请先做影响面审计，列出所有引用了 [相关属性/函数] 的位置，确保修改后全部一致。&quot;</td>
+</tr>
+</tbody></table>
+<h4 id="h-49">16.3 确认环节</h4><p>对于 AI 产出的重要结论，养成要求溯源的习惯：</p>
+<ul>
+<li>&quot;这个业务规则你是从哪份文档得出的？&quot;</li>
+<li>&quot;这个页面关系在信息架构总纲里有对应吗？&quot;</li>
+<li>&quot;这个流程分支是基线里定义的，还是你自行推理的？&quot;</li>
+</ul>
+<h3 id="h-50">17. 质量门禁</h3><p>在每个阶段设置质量门禁，通过才能进入下一阶段：</p>
+<table>
+<thead>
+<tr>
+<th align="left">阶段</th>
+<th align="left">门禁条件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">需求分析完成</td>
+<td align="left">每条需求可追溯到原始来源；矛盾项已标注</td>
+</tr>
+<tr>
+<td align="left">事实层固化</td>
+<td align="left">每条结论可追溯到基线；不同结论间无矛盾</td>
+</tr>
+<tr>
+<td align="left">页面设计完成</td>
+<td align="left">每个按钮有承接；每页有入口和出口；术语一致</td>
+</tr>
+<tr>
+<td align="left">原型实现完成</td>
+<td align="left">全流程可走通；数据来自共享状态；无硬编码假数据</td>
+</tr>
+<tr>
+<td align="left">修改完成</td>
+<td align="left">影响面全部同步；语法验证通过；全流程回归</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="h-51">第五部分　反模式与陷阱</h2><h3 id="h-52">18. 十大反模式</h3><ol>
+<li><p><strong>信任幻觉</strong>：AI 产出的结果看起来很专业，就默认它是对的。实际上越&quot;流畅完整&quot;的结果越需要检查，因为 AI 很擅长把猜测包装成结论。</p>
+</li>
+<li><p><strong>历史对话依赖</strong>：以为&quot;我们之前聊过这件事&quot;就等于 AI 记得。任何没有落到正式文档的结论，在新会话中大概率不存在。</p>
+</li>
+<li><p><strong>全量委托</strong>：把一个大任务完全交给 AI，最后只检查最终结果。中间过程中的偏移在最终结果中很难识别。</p>
+</li>
+<li><p><strong>逐条补丁</strong>：发现 10 个问题，逐一告诉 AI 修改。AI 修完第 7 个时，前面修过的第 3 个可能又被改回去了。应该先找到根因，修一条规则解决一类问题。</p>
+</li>
+<li><p><strong>代码先行</strong>：先让 AI 改代码，成功后才补文档。文档会逐渐失真，后续 AI 读到失真文档会产出更多错误。</p>
+</li>
+<li><p><strong>沉默确认</strong>：AI 产出后不说话就等于确认。实际上应该对重要结论显式确认，否则 AI 可能把你的沉默理解为&quot;随便你发挥&quot;。</p>
+</li>
+<li><p><strong>一次性同步</strong>：一个判断还没稳定，就同时回写到基线、事实、设计、代码和记忆。一旦判断有误，回退成本极大。应该先在最小载体上验证，稳定后再逐层同步。</p>
+</li>
+<li><p><strong>忽视隐性依赖</strong>：修改了一个函数的参数，但没有检查所有调用方。修改了一个数据属性名，但没有检查所有模板中的引用。这类隐性依赖是&quot;改一个 bug 产生三个 bug&quot;的根源。</p>
+</li>
+<li><p><strong>术语随意替换</strong>：在一个文件里把&quot;A&quot;改成了&quot;B&quot;，但其他文件里仍然用&quot;A&quot;。或者更糟——部分文件用&quot;A&quot;，部分用&quot;B&quot;，AI 以后看到两者共存，会以为它们是不同概念。</p>
+</li>
+<li><p><strong>无限会话</strong>：一个会话持续几十轮不中断。随着对话越来越长，AI 的有效上下文窗口比例越来越低，偏移风险越来越高。应该有意识地在适当节点落盘、分段。</p>
+</li>
+</ol>
+<hr>
+<h2 id="h-53">第六部分　工具与环境</h2><h3 id="h-54">19. IDE Agent 环境的工程本质</h3><p>当前主流 IDE Agent（VS Code Copilot Agent、Cursor、Windsurf 等）的共同架构可以理解为：</p>
+<pre><code>模型能力 + 指令栈 + 上下文采集 + 工具编排 + 计划管理 + 校验闭环
+</code></pre>
+<table>
+<thead>
+<tr>
+<th align="left">层</th>
+<th align="left">作用</th>
+<th align="left">协作者应了解的</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>模型层</strong></td>
+<td align="left">理解、推理、生成</td>
+<td align="left">模型有能力上限，不是全知系统</td>
+</tr>
+<tr>
+<td align="left"><strong>指令层</strong></td>
+<td align="left">约束 Agent 行为方式</td>
+<td align="left">系统指令不可见但会影响行为偏好</td>
+</tr>
+<tr>
+<td align="left"><strong>上下文层</strong></td>
+<td align="left">注入当前任务相关事实</td>
+<td align="left">主动读取 &gt; 被动继承</td>
+</tr>
+<tr>
+<td align="left"><strong>工具层</strong></td>
+<td align="left">读写文件、搜索、终端执行</td>
+<td align="left">工具有权限边界和安全约束</td>
+</tr>
+<tr>
+<td align="left"><strong>计划层</strong></td>
+<td align="left">多步骤任务分解和追踪</td>
+<td align="left">任务拆分越清晰，执行越稳定</td>
+</tr>
+<tr>
+<td align="left"><strong>记忆层</strong></td>
+<td align="left">跨轮次信息保留</td>
+<td align="left">记忆是加速器不是真相源</td>
+</tr>
+<tr>
+<td align="left"><strong>验证层</strong></td>
+<td align="left">结果校验</td>
+<td align="left">AI 自检比不检好，但不能替代人类审查</td>
+</tr>
+</tbody></table>
+<h3 id="h-55">20. 工具使用的最佳实践</h3><ul>
+<li><strong>搜索优于猜测</strong>：让 AI 搜索工作区验证某件事是否存在，比让它&quot;根据记忆回答&quot;可靠得多。</li>
+<li><strong>读取优于假设</strong>：让 AI 重新读取正式文档，即使&quot;之前读过&quot;。重复读取的成本远低于在错误假设上工作的成本。</li>
+<li><strong>验证优于信任</strong>：每次文件修改后，让 AI 做语法检查、影响面扫描、全流程回归。</li>
+<li><strong>增量优于全量</strong>：每次修改一小块并验证，好过一次性做大量修改再统一验证。</li>
+</ul>
+<hr>
+<h2 id="h-56">附录</h2><h3 id="h-57">A. 快速参考：开场模板</h3><pre><code class="language-text">本次目标：
+正式锚点：
+背景参考：
+禁止事项：
+允许事项：
+停顿条件：
+输出格式：
+</code></pre>
+<h3 id="h-58">B. 快速参考：修改完成检查清单</h3><pre><code class="language-text">□ 语法/编译验证通过
+□ 影响面内的所有文件已同步修改
+□ 全流程可走通（不只是修改点）
+□ 术语一致性检查通过
+□ 事件绑定与数据属性名一一对应
+□ 正式文档与代码之间无矛盾
+□ 记忆中无过时记录
+</code></pre>
+<h3 id="h-59">C. 快速参考：幻觉分级应对</h3><table>
+<thead>
+<tr>
+<th align="left">等级</th>
+<th align="left">应对</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">L1 表达幻觉</td>
+<td align="left">逐条纠正</td>
+</tr>
+<tr>
+<td align="left">L2 补全幻觉</td>
+<td align="left">标记所有&quot;待确认&quot;，删除未经确认的补充内容</td>
+</tr>
+<tr>
+<td align="left">L3 结构幻觉</td>
+<td align="left">回退到基线，重新推导结构</td>
+</tr>
+<tr>
+<td align="left">L4 锚点偏移</td>
+<td align="left">停止当前工作，重新显式锚定</td>
+</tr>
+</tbody></table>
+
+</body>
+</html>
