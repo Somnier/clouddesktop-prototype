@@ -6,9 +6,9 @@
 
 | 文件 | 说明 |
 |---|---|
+| AI Agent工作模式说明.md | VS Code + Copilot Agent 环境的能力路径、工具体系和记忆机制分析 |
 | 原型设计工程实践指南.md | 五阶段原型设计工程经验：原始资料整理 → 事实层固化 → 页面结构设计 → 可交互原型实现 → 评审与修正 |
 | 深度人机协同工程实践指南.md | 与 AI Agent 进行多轮多文件协作的工程经验：事实分层、锚点机制、偏移控制、边界定义 |
-| AI Agent工作模式说明.md | VS Code + Copilot Agent 环境的能力路径、工具体系和记忆机制分析 |
 | md2pdf.mjs | Markdown → PDF 导出脚本 |
 | package.json | Node.js 依赖声明（marked、puppeteer-core） |
 | _archived_*.md | 已归档的早期版本 |
