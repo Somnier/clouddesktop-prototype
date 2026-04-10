@@ -53,7 +53,7 @@ export function termUse(t) {
 
 /* Stage label in Chinese */
 export function stageLabel(stage) {
-  const map = { blank: '未部署', bound: '已绑定', deployed: '已部署', registered: '已注册' };
+  const map = { blank: '未部署', bound: '已设置布局', deployed: '已部署', registered: '已注册' };
   return map[stage] || stage || '--';
 }
 

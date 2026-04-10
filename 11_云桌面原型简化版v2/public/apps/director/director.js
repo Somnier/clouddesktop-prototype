@@ -37,7 +37,7 @@ function page(){
   const terms = termsInCr(state, c.id);
   const studentTerms = terms.filter(t=>t.use!=='教师终端');
 
-  const stageLabel = {blank:'未部署',bound:'已绑定',deployed:'已部署',registered:'已注册'};
+  const stageLabel = {blank:'未部署',bound:'已设置布局',deployed:'已部署',registered:'已注册'};
 
   /* aggregate data stats */
   const allCrs = state.classrooms;

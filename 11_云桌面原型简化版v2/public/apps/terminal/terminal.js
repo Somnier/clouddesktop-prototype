@@ -154,7 +154,6 @@ function showCreateDesktopDialog(defaultName){
 const _inputCache = {};
 let _lastScreen = null;
 let _isRendering = false; /* guard: prevents blur handlers firing during innerHTML replacement */
-let _lastStateJson = null; /* skip re-render when state unchanged */
 
 function _cacheAllInputs(){
   root.querySelectorAll('input, textarea, select').forEach(el=>{
@@ -186,10 +185,6 @@ function _restoreScrollPositions(positions){
 
 function render(state){
   if(!state) return;
-  /* Skip re-render if state is unchanged (SSE pushes identical data) */
-  const stateJson = JSON.stringify(state);
-  if(stateJson === _lastStateJson) return;
-  _lastStateJson = stateJson;
   /* Clear input cache on screen change */
   const curScreen = state.demo?.motherScreen;
   if(_lastScreen !== curScreen){ Object.keys(_inputCache).forEach(k=>delete _inputCache[k]); _lastScreen = curScreen; }
@@ -394,83 +389,60 @@ function localDesktopScreen(){
   const diskUsed = desktopUsed + systemUsed;
   const diskFree = Math.max(0, diskTotal - diskUsed);
   const diskPct = Math.round(diskUsed/diskTotal*100);
+  const diskColor = diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-text3)';
   return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
-  <div style="width:100%;max-width:720px">
-  <div class="section-title"><button class="btn btn-ghost" data-act="${returnAct}">←</button> 桌面管理</div>
+  <div style="width:100%;max-width:720px;display:flex;flex-direction:column;flex:1;min-height:0">
+  <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+    <div><button class="btn btn-ghost" data-act="${returnAct}">←</button> 桌面管理</div>
+    <span style="font-size:.75rem;color:${diskColor};font-weight:400">磁盘 ${diskUsed}/${diskTotal} GB (${diskPct}%)</span>
+  </div>
 
-  <div class="disk-summary mb-16">
-    <div style="display:flex;align-items:center;gap:20px;padding:14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:var(--radius)">
-      <div style="position:relative;width:80px;height:80px;flex-shrink:0">
-        <svg viewBox="0 0 42 42" style="width:80px;height:80px">
-          <circle cx="21" cy="21" r="16" fill="none" stroke="var(--t-border)" stroke-width="5"></circle>
-          ${(()=>{
-            const sysPct = Math.round(systemUsed/diskTotal*100);
-            const dtPct = Math.round(desktopUsed/diskTotal*100);
-            let arcs = `<circle cx="21" cy="21" r="16" fill="none" stroke="var(--t-text3)" stroke-width="5"
-              stroke-dasharray="${sysPct*1.005} ${100.5-sysPct}" stroke-dashoffset="25" stroke-linecap="round"></circle>`;
-            if(dtPct > 0) arcs += `<circle cx="21" cy="21" r="16" fill="none" stroke="${diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-accent)'}" stroke-width="5"
-              stroke-dasharray="${dtPct*1.005} ${100.5-dtPct}" stroke-dashoffset="${25-sysPct*1.005}" stroke-linecap="round"></circle>`;
-            return arcs;
-          })()}
-        </svg>
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700">${diskPct}%</div>
-      </div>
-      <div style="font-size:.85rem;line-height:1.8;flex:1">
-        <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--t-text3);margin-right:6px;vertical-align:middle"></span>系统占用 ${systemUsed} GB</div>
-        <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${desktopUsed>0?(diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-accent)'):'var(--t-border)'};margin-right:6px;vertical-align:middle"></span>桌面占用 ${desktopUsed} GB</div>
-        <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--t-border);margin-right:6px;vertical-align:middle"></span>剩余可用 ${diskFree} GB</div>
-        <div style="color:var(--t-text3);font-size:.78rem">总计 ${diskTotal} GB</div>
+  <div class="page-scroll" style="padding-bottom:12px">
+  <div class="dt-grid">
+    <div class="dt-card dt-add-card" data-desktop-action="import">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:110px;height:100%">
+        <div style="font-size:2rem;line-height:1;color:var(--t-text3)">+</div>
+        <div style="font-size:.78rem;color:var(--t-text3);margin-top:6px">导入桌面</div>
       </div>
     </div>
-  </div>
-
-  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-    <button class="btn btn-primary" data-desktop-action="import">导入桌面</button>
-    <button class="btn btn-secondary" data-desktop-action="export-pkg">导出桌面包</button>
-  </div>
-
-  ${desktops.length ? '<div class="page-scroll">' + desktops.map(d=>{
+    ${desktops.map(d=>{
     const isDefault = d.id===bid;
     const isHidden = d.visibility==='hidden';
-    const dataDisks = d.dataDisks || [];
     const uploaded = d.uploaded || d.syncStatus==='synced';
-    const isPhysical = d.physicalDeploy || false;
     const dtSize = d.diskSize || 25;
-    /* Compute system VHD portion = diskSize - data disk total */
-    const dataDiskTotal = dataDisks.reduce((s,dd)=>s+parseInt((dd.size||'0').replace(/\D/g,''),10),0);
-    const sysVhdSize = Math.max(0, dtSize - dataDiskTotal);
     return `
-    <div class="dt-card mb-8 ${isDefault?'selected':''} ${!uploaded?'dt-unsync':''}" data-dt-id="${d.id}" style="position:relative;overflow:hidden">
+    <div class="dt-card ${isDefault?'selected':''} ${!uploaded?'dt-unsync':''}" data-dt-id="${d.id}" style="position:relative;overflow:hidden">
       <span class="dt-card-fill"></span>
       <div style="position:relative;z-index:1">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
-          <div class="dt-name">${esc(d.name)}</div>
-          <div class="dt-meta" style="margin-top:4px">${esc(d.baseImageName||d.os)} · 桌面占用 ${dtSize} GB${dataDisks.length?'（系统盘 '+sysVhdSize+' GB + 数据盘 '+dataDisks.map(dd=>esc(dd.drive||'D:')+' '+esc(dd.size||'20GB')).join(', ')+'）':'（不含数据盘）'}</div>
-          <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:6px">
-            ${isPhysical?`<span class="pill warn pill-sm">物理部署</span>`:''}
-            <span class="pill info pill-sm">还原</span>
-            ${uploaded?`<span class="pill ok pill-sm">已同步</span>`:`<span class="pill err pill-sm">未同步</span>`}
-            ${isHidden?`<span class="pill muted pill-sm">已隐藏</span>`:''}
-            ${isDefault?`<span class="pill info pill-sm">默认启动</span>`:''}
-          </div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div class="dt-name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name)}</div>
+          <button class="btn btn-ghost dt-overflow-btn" data-dt-overflow="${d.id}" title="更多操作" style="padding:2px 6px;font-size:1rem;line-height:1;flex-shrink:0;margin:-2px -4px 0 4px">⋯</button>
         </div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;flex-shrink:0;margin-left:12px">
-          ${!isDefault?`<button class="btn btn-ghost" style="padding:4px 10px;font-size:.78rem" data-dt-default="${d.id}">设为默认</button>`:''}
-          <button class="btn btn-ghost" style="padding:4px 10px;font-size:.78rem" data-dt-visibility="${d.id}">${isHidden?'取消隐藏':'隐藏'}</button>
+        <div class="dt-meta">${esc(d.baseImageName||d.os)} · ${dtSize} GB</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:6px">
+          ${uploaded?`<span class="pill ok pill-sm">已同步</span>`:`<span class="pill err pill-sm">未同步</span>`}
+          ${isDefault?`<span class="pill info pill-sm">默认启动</span>`:''}
+          ${isHidden?`<span class="pill muted pill-sm">已隐藏</span>`:''}
         </div>
       </div>
-      ${d.remark?`<div class="dt-sw">备注: ${esc(d.remark)}</div>`:''}
-      <div style="font-size:.75rem;color:var(--t-text3);margin-top:6px">创建 ${fmtTime(d.createdAt)} · 更新 ${fmtTime(d.editedAt)}</div>
-      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
-        <button class="btn btn-ghost" data-dt-edit="${d.id}">编辑桌面</button>
-        <button class="btn btn-ghost" data-dt-copy="${d.id}">复制桌面</button>
-        ${!uploaded?`<button class="btn btn-primary" data-dt-upload="${d.id}">同步到服务器</button>`:''}
-        <button class="btn btn-ghost" style="color:var(--t-err)" data-dt-delete="${d.id}">删除</button>
-      </div>
+      <div class="dt-overflow-menu" data-dt-menu="${d.id}">
+        <button data-dt-edit="${d.id}">编辑桌面</button>
+        ${!isDefault?`<button data-dt-default="${d.id}">设为默认</button>`:''}
+        <button data-dt-visibility="${d.id}">${isHidden?'取消隐藏':'隐藏'}</button>
+        <button data-dt-copy="${d.id}">复制桌面</button>
+        ${!uploaded?`<button data-dt-upload="${d.id}">同步到服务器</button>`:''}
+        <div class="dt-menu-divider"></div>
+        <button data-dt-delete="${d.id}" style="color:var(--t-err)">删除</button>
       </div>
     </div>`;
-  }).join('') + '</div>' : empty('暂无本机桌面','请导入桌面镜像或桌面包')}
+    }).join('')}
+  </div>
+  ${!desktops.length ? empty('暂无本机桌面','请点击 + 导入桌面镜像或桌面包') : ''}
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;padding:8px 0;border-top:1px solid var(--t-border)">
+    <button class="btn btn-ghost" style="font-size:.78rem" data-desktop-action="export-pkg">导出桌面包 →</button>
+  </div>
   </div>
   </div>`;
 }
@@ -651,10 +623,9 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
     <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px">
       <div class="card">
         <div class="card-header">功能</div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <button class="btn ${opsMode==='deploy'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="ops-mode-deploy">❶ 部署传输</button>
-          <button class="btn ${opsMode==='maint-ip'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="ops-mode-maint-ip">❷ 修改 IP / 服务器地址</button>
-          <button class="btn ${opsMode==='export'?'btn-primary':'btn-secondary'}" style="width:100%;justify-content:center" ${isRunning?'disabled':''} data-act="open-export">❸ 导出终端清单</button>
+        <div style="display:flex;gap:0;border:1px solid var(--t-border);border-radius:var(--radius);overflow:hidden">
+          <button class="maint-tab-btn ${opsMode==='deploy'?'active':''}" ${isRunning?'disabled':''} data-act="ops-mode-deploy" style="flex:1">部署传输</button>
+          <button class="maint-tab-btn ${opsMode==='maint-ip'?'active':''}" ${isRunning?'disabled':''} data-act="ops-mode-maint-ip" style="flex:1">修改 IP / 服务器地址</button>
         </div>
       </div>
       ${opsMode==='deploy'||tk?`<div class="card">
@@ -666,9 +637,6 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         <div style="padding:6px 0;font-size:.82rem">
           已分配 <strong style="color:var(--t-accent)">${boundCount}</strong> / ${activeBlocks.length} 台
         </div>
-        ${!isRunning?`<div style="display:flex;flex-direction:column;gap:4px;margin-top:4px">
-          <button class="btn btn-primary" ${boundCount>=1?'':'disabled'} data-act="start-deployment">开始部署（${boundCount} 台）</button>
-        </div>`:''}
         ${tk?`<div style="margin-top:8px;padding:8px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.82rem">
           <div>${done?'✓ 部署完成':'⏳ 部署进行中'}</div>
           <div>成功 ${tk.counts.completed||0} · 失败 ${tk.counts.failed||0} / ${tk.counts.total||0}</div>
@@ -688,12 +656,6 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
           <button class="btn btn-primary" data-act="start-maint-ip">开始执行</button>
         </div>
       </div>`:''}
-      <div class="card">
-        <div class="card-header">教室状态</div>
-        ${defRow('在线', rt.online+' / '+rt.total)}
-        ${defRow('已部署', rt.deployed+' / '+rt.total)}
-        ${defRow('阶段', stageLabel(c.stage))}
-      </div>
     </div>
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
       ${isRunning?`<div style="padding:10px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.82rem">
@@ -709,6 +671,12 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         ${isRunning ? renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, m) :
           opsMode==='maint-ip' ? renderSeatGridMaint(terms, m, c, d, md) :
           renderSeatGridOps(grid, r, dir, bindings, terms)}
+      </div>
+      <div style="display:flex;gap:8px;padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0;align-items:center;min-height:44px;justify-content:space-between">
+        <div style="display:flex;gap:8px;align-items:center">
+          ${opsMode==='deploy'&&!isRunning?`<button class="btn btn-primary" ${boundCount>=1?'':'disabled'} data-act="start-deployment">开始部署（${boundCount} 台）</button>`:''}
+        </div>
+        <button class="btn btn-ghost" style="font-size:.78rem" ${isRunning?'disabled':''} data-act="open-export">导出教室终端清单 →</button>
       </div>
     </div>
   </div>`;
@@ -769,18 +737,18 @@ function renderSeatGridLayout(grid, r, dir, previewMap, termBlockMap, isTakenOve
         continue;
       }
       if(term){
-        /* Discovered terminal occupying this cell — show MAC */
-        html+=`<div class="gb ${isTakenOver?'gb-bound':'gb-active'}" data-block-idx="${b.idx}" title="${seat} · ${esc(term.mac)}">
+        /* Discovered terminal: if it already has IP+seat assigned, show seat/IP only (no MAC); else show MAC */
+        const hasAssigned = term.ip && term.seat;
+        html+=`<div class="gb ${isTakenOver?'gb-bound':'gb-active'}" data-block-idx="${b.idx}" title="${seat}${hasAssigned?'':' · '+esc(term.mac)}">
           <div class="gb-seat">${esc(seat)}</div>
-          <div class="gb-mac">${esc(term.mac)}</div>
+          ${!hasAssigned?`<div class="gb-mac">${esc(term.mac)}</div>`:''}
           ${pv?`<div class="gb-ip">${esc(pv.ip)}</div>`:''}
         </div>`;
       } else {
-        /* Empty predefined cell — no terminal yet */
+        /* Empty predefined cell — grey out seat number */
         html+=`<div class="gb gb-waiting" data-block-idx="${b.idx}" title="${seat} · 空位">
-          <div class="gb-seat">${esc(seat)}</div>
-          ${pv?`<div class="gb-ip" style="opacity:.4">${esc(pv.ip)}</div>`:''}
-          <div class="gb-tag">空位</div>
+          <div class="gb-seat" style="color:var(--t-text3)">${esc(seat)}</div>
+          ${pv?`<div class="gb-ip" style="opacity:.3">${esc(pv.ip)}</div>`:''}
         </div>`;
       }
     }
@@ -802,12 +770,11 @@ function renderSeatGridOps(grid, r, dir, bindings, terms){
         html+=`<div class="gb gb-disabled"><div class="gb-seat">${esc(seat)}</div><div class="gb-tag">禁用</div></div>`;
         continue;
       }
+      /* Plain layout block — selectable for deploy/IP operations */
       const binding=bindings[b.idx];
       const isBound = !!binding;
       html+=`<div class="gb ${isBound?'gb-bound':'gb-active'}" data-deploy-toggle-bind="${b.idx}" style="cursor:pointer">
         <div class="gb-seat">${esc(seat)}</div>
-        ${isBound?`<div class="gb-tag" style="color:var(--t-ok)">已分配</div>`
-          :`<div class="gb-tag">等待</div>`}
       </div>`;
     }
   }
@@ -1863,6 +1830,22 @@ function bindAll(){
   });
 
   /* ── desktop management ── */
+  /* overflow menu toggle */
+  root.querySelectorAll('[data-dt-overflow]').forEach(el=>{
+    el.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      const menu = root.querySelector(`[data-dt-menu="${el.dataset.dtOverflow}"]`);
+      if(!menu) return;
+      const wasOpen = menu.classList.contains('open');
+      root.querySelectorAll('.dt-overflow-menu').forEach(m=>m.classList.remove('open'));
+      if(!wasOpen) menu.classList.add('open');
+    });
+  });
+  /* close overflow menus on outside click */
+  root.addEventListener('click',(e)=>{
+    if(!e.target.closest('[data-dt-overflow]') && !e.target.closest('.dt-overflow-menu'))
+      root.querySelectorAll('.dt-overflow-menu').forEach(m=>m.classList.remove('open'));
+  });
   root.querySelectorAll('[data-desktop-action]').forEach(el=>{
     el.addEventListener('click',()=>{
       if(el.dataset.desktopAction==='import') showImportDialog();

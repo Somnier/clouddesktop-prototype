@@ -108,6 +108,9 @@
 .term-row .mono { font-family: var(--mono); font-size: .75rem; }
 
 /* ── desktop cards ── */
+.dt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.dt-add-card { border-style: dashed !important; }
+.dt-add-card:hover { border-color: var(--t-accent); background: var(--t-accent-bg); }
 .dt-card { padding: 12px; border-radius: var(--radius); background: var(--t-panel); border: 1px solid var(--t-border);
   cursor: pointer; transition: all .15s; }
 .dt-card:hover { border-color: var(--t-accent); }
@@ -115,6 +118,22 @@
 .dt-card .dt-name { font-weight: 600; font-size: .9rem; }
 .dt-card .dt-meta { font-size: .75rem; color: var(--t-text2); margin-top: 4px; }
 .dt-card .dt-sw { font-size: .75rem; color: var(--t-text3); margin-top: 6px; }
+.dt-overflow-menu { display: none; position: absolute; right: 8px; top: 36px; z-index: 10;
+  background: var(--t-panel); border: 1px solid var(--t-border); border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0,0,0,.4); min-width: 130px; padding: 4px 0; }
+.dt-overflow-menu.open { display: block; }
+.dt-overflow-menu button { display: block; width: 100%; text-align: left; padding: 6px 14px;
+  font-size: .78rem; background: none; border: none; color: var(--t-text); cursor: pointer; font-family: inherit; }
+.dt-overflow-menu button:hover { background: rgba(255,255,255,.06); }
+.dt-menu-divider { height: 1px; background: var(--t-border); margin: 4px 0; }
+
+/* ── maint tab buttons ── */
+.maint-tab-btn { padding: 8px 4px; font-size: .82rem; background: none; border: none;
+  color: var(--t-text2); cursor: pointer; font-family: inherit; transition: all .15s; text-align: center; }
+.maint-tab-btn:not(:last-child) { border-right: 1px solid var(--t-border); }
+.maint-tab-btn:hover { background: rgba(255,255,255,.04); color: var(--t-text); }
+.maint-tab-btn.active { background: var(--t-accent-bg); color: var(--t-accent); font-weight: 600; }
+.maint-tab-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ── progress ── */
 .progress-ring { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
@@ -289,6 +308,7 @@
   .home-actions { max-width: 320px; gap: 10px; }
   .home-actions .btn { padding: 11px; font-size: .9rem; }
   .dt-card { padding: 10px; }
+  .dt-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
   .section-title { font-size: 1.05rem; }
   .prep-field label { width: 70px; font-size: .8rem; }
   .term-topbar { padding: 0 16px; }
