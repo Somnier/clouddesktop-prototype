@@ -136,12 +136,12 @@ function asideContent(){
     cards+=`<div class="aside-card" style="flex:7;min-height:0;overflow-y:auto"><div class="aside-title">活跃告警 (${campusAlerts.length})</div>
       ${campusAlerts.slice(0,alertLimit).map(a=>{
         const t=getTerm(state,a.terminalId);
-        return `<div class="aside-item" style="flex-direction:column;align-items:flex-start;gap:2px">
+        const crObj=state.classrooms.find(c=>c.id===a.classroomId);
+        return `<div class="aside-item clickable" data-nav-cr="${a.classroomId}" style="flex-direction:column;align-items:flex-start;gap:2px;cursor:pointer">
           <div>${pill(a.level==='high'?'高':a.level==='medium'?'中':'低',a.level==='high'?'err':a.level==='medium'?'warn':'muted')} <span style="font-weight:500">${esc(a.title)}</span></div>
-          <div style="font-size:.75rem;color:var(--c-text3)">${t?esc(t.seat||'--')+' · '+esc(t.name||''):''} ${relTime(a.at)}</div>
+          <div style="font-size:.75rem;color:var(--c-text3)">${crObj?esc(crObj.name)+' · ':''}${t?esc(t.seat||'--')+' · '+esc(t.name||''):''} ${relTime(a.at)}</div>
         </div>`;
       }).join('')}
-      ${campusAlerts.length>alertLimit?`<div style="font-size:.78rem;text-align:center;padding-top:4px"><a class="clickable" data-nav="alerts" style="cursor:pointer">查看全部 ${campusAlerts.length} 条</a></div>`:''}
     </div>`;
   } else if(view.page==='classrooms'){
     if(view.classroomId){
@@ -256,41 +256,48 @@ function dashboardPage(){
   const cpuColor=(server?.cpu||0)>80?'#ef4444':(server?.cpu||0)>60?'#f59e0b':'#22c55e';
   const memColor=(server?.memory||0)>80?'#ef4444':(server?.memory||0)>60?'#f59e0b':'#3b82f6';
   const stoColor=(server?.storage||0)>85?'#ef4444':(server?.storage||0)>70?'#f59e0b':'#3b82f6';
+  const stoPct=server?.storage||0;
+  const stoFree=100-stoPct;
 
   return `
   <div class="metric-grid">
     <div class="metric-card"><div class="mc-label">教室</div><div class="mc-value">${stats.classrooms}</div>
-      <div class="mc-sub">已建档 ${stats.registered} · ${esc(campus?.name||'')}</div></div>
+      <div class="mc-sub">${esc(campus?.name||'')}</div></div>
     <div class="metric-card"><div class="mc-label">终端 / 在线</div><div class="mc-value">${stats.terminals} <span style="font-size:.7em;color:var(--c-text3)">/</span> ${stats.online}</div>
       <div class="mc-sub">在线率 ${pct(stats.online,stats.terminals)}% · 离线 ${stats.offline}</div></div>
     <div class="metric-card"><div class="mc-label">桌面资产</div><div class="mc-value">${totalDesktops}</div>
       <div class="mc-sub">占用 ${totalDiskGB} GB</div></div>
-    <div class="metric-card"><div class="mc-label">服务器存储</div><div class="mc-value" style="color:${stoColor}">${server?server.storage+'%':'--'}</div>
-      <div class="mc-sub">授权 ${server?.license||'--'} 终端</div></div>
     <div class="metric-card"><div class="mc-label">活跃告警</div><div class="mc-value${campusAlerts.length?' text-err':''}">${campusAlerts.length}</div>
       <div class="mc-sub">${campusAlerts.length?'需关注':'无告警'}</div></div>
   </div>
 
   ${server?`<div class="section">
-    <div class="section-head"><h3>服务器监控</h3></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;max-width:960px">
-      <div class="sparkline-wrap">
-        <div class="spark-label"><span class="spark-title">CPU</span><span class="spark-value" style="color:${cpuColor}">${server.cpu}%</span></div>
-        ${sparklineSvg(cpuHist, cpuColor, 200, 48)}
-      </div>
-      <div class="sparkline-wrap">
-        <div class="spark-label"><span class="spark-title">内存</span><span class="spark-value" style="color:${memColor}">${server.memory}%</span></div>
-        ${sparklineSvg(memHist, memColor, 200, 48)}
-      </div>
-      <div class="sparkline-wrap">
-        <div class="spark-label"><span class="spark-title">存储</span><span class="spark-value" style="color:${stoColor}">${server.storage}%</span></div>
-        <div style="height:8px;background:var(--c-border);border-radius:4px;overflow:hidden;margin-top:8px">
-          <div style="height:100%;width:${server.storage}%;background:${stoColor};border-radius:4px"></div>
+    <div class="section-head"><h3>服务器状态</h3></div>
+    <div style="display:grid;grid-template-columns:1fr 280px;gap:20px;max-width:960px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div class="sparkline-wrap">
+          <div class="spark-label"><span class="spark-title">CPU</span><span class="spark-value" style="color:${cpuColor}">${server.cpu}%</span></div>
+          ${sparklineSvg(cpuHist, cpuColor, 200, 48)}
+        </div>
+        <div class="sparkline-wrap">
+          <div class="spark-label"><span class="spark-title">内存</span><span class="spark-value" style="color:${memColor}">${server.memory}%</span></div>
+          ${sparklineSvg(memHist, memColor, 200, 48)}
+        </div>
+        <div class="sparkline-wrap">
+          <div class="spark-label"><span class="spark-title">以太网</span><span class="spark-value" style="color:#6366f1">${netHist.length?netHist[netHist.length-1].toFixed(1):'--'} MB/s</span></div>
+          ${sparklineSvg(netHist, '#6366f1', 200, 48)}
         </div>
       </div>
-      <div class="sparkline-wrap">
-        <div class="spark-label"><span class="spark-title">以太网</span><span class="spark-value" style="color:#6366f1">${netHist.length?netHist[netHist.length-1].toFixed(1):'--'} MB/s</span></div>
-        ${sparklineSvg(netHist, '#6366f1', 200, 48)}
+      <div class="sparkline-wrap" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <div class="spark-title" style="margin-bottom:8px">服务器存储</div>
+        <div style="position:relative;width:90px;height:90px">
+          <svg viewBox="0 0 42 42" style="width:90px;height:90px">
+            <circle cx="21" cy="21" r="16" fill="none" stroke="var(--c-border)" stroke-width="5"></circle>
+            <circle cx="21" cy="21" r="16" fill="none" stroke="${stoColor}" stroke-width="5" stroke-dasharray="${stoPct*1.005} ${100.5-stoPct*1.005}" stroke-dashoffset="25" stroke-linecap="round"></circle>
+          </svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:700;color:${stoColor}">${stoPct}%</div>
+        </div>
+        <div style="font-size:.78rem;color:var(--c-text3);margin-top:6px">授权 ${server.license||'--'} 终端</div>
       </div>
     </div>
   </div>`:''}
@@ -299,7 +306,6 @@ function dashboardPage(){
     <div class="section-head"><h3>教室健康度</h3></div>
     ${(()=>{
       const deployed=crsInCampus.filter(c=>c.stage==='deployed');
-      /* Sort by health ascending — worst first */
       const scored=deployed.map(c=>({c,hs:healthScore(state,c.id)})).sort((a,b)=>a.hs-b.hs);
       const healthy=scored.filter(x=>x.hs>=80).length;
       const warning=scored.filter(x=>x.hs>=50&&x.hs<80).length;
@@ -307,7 +313,7 @@ function dashboardPage(){
       const total=deployed.length||1;
       const hPct=Math.round(healthy/total*100), wPct=Math.round(warning/total*100), cPct=100-hPct-wPct;
       const hDash=hPct*1.005, wDash=wPct*1.005, cDash=cPct*1.005;
-      return `<div style="display:flex;gap:24px;align-items:center;margin-bottom:16px">
+      return `<div style="display:flex;gap:24px;align-items:center">
         <div style="position:relative;width:100px;height:100px;flex-shrink:0">
           <svg viewBox="0 0 42 42" style="width:100px;height:100px">
             <circle cx="21" cy="21" r="16" fill="none" stroke="var(--c-border)" stroke-width="5"></circle>
@@ -322,21 +328,8 @@ function dashboardPage(){
           <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f59e0b;margin-right:6px;vertical-align:middle"></span>警告（50-79） ${warning} 间</div>
           <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ef4444;margin-right:6px;vertical-align:middle"></span>异常（<50） ${critical} 间</div>
         </div>
-      </div>
-      <table class="data-table">
-        <thead><tr><th>教室</th><th>位置</th><th>健康度</th><th>终端</th><th>在线</th><th>告警</th></tr></thead>
-        <tbody>${scored.map(({c,hs})=>{
-          const rt=crRuntime(state,c.id); const als=alertsInCr(state,c.id);
-          const hsColor=hs>=80?'var(--c-ok)':hs>=50?'var(--c-warn)':'var(--c-err)';
-          return `<tr>
-            <td class="clickable" data-nav-cr="${c.id}">${esc(c.name)}</td>
-            <td>${esc(c.building)} ${esc(c.floor)}</td>
-            <td><span style="font-weight:700;color:${hsColor}">${hs}</span><span style="font-size:.75rem;color:var(--c-text3)">/100</span></td>
-            <td>${rt.total}</td><td>${rt.online}/${rt.total}</td>
-            <td>${als.length?`<span class="text-err">${als.length}</span>`:'-'}</td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>`;
+        <div style="margin-left:auto"><button class="btn btn-ghost" data-nav="classrooms" style="cursor:pointer;font-size:.85rem">查看教室管理 →</button></div>
+      </div>`;
     })()}
   </div>
   `;
