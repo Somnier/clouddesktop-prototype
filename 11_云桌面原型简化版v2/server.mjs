@@ -219,7 +219,7 @@ function buildState(s){
   if(motherTerm && focusSeedCr && focusSeedCr.stage==='blank'){
     /* 1) 本机设置 — simulate user having done "设置本机" */
     motherTerm.name = 'D301-T01';
-    motherTerm.seat = 'T-01';
+    motherTerm.seat = 'T01';
     motherTerm.use  = '教师终端';
     motherTerm.ip   = focusSeedCr.networkBase+'.20';
     motherTerm.subnetMask = '255.255.255.0';
