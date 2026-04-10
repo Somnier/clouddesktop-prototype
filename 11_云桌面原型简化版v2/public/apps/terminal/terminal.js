@@ -773,10 +773,10 @@ function renderSeatGrid(grid, r, dir, previewMap, terms, mode, blankNoRules){
       const isDisabled = b.state==='disabled';
       const matchTerm = hasRules ? terms.find(t=>t.seat===seat) : null;
       const wasDeployed = matchTerm && matchTerm.ip;
-      html+=`<div class="gb ${isDisabled?'gb-disabled':wasDeployed?'gb-bound':'gb-active'}" data-block-idx="${b.idx}" title="${seat} · ${isDisabled?'已禁用':wasDeployed?'已部署':'可用'}">
+      html+=`<div class="gb ${isDisabled?'gb-disabled':wasDeployed?'gb-bound':'gb-active'}" data-block-idx="${b.idx}" title="${seat} · ${isDisabled?'已禁用':wasDeployed?'已设置布局':'可用'}">
         <div class="gb-seat">${esc(seat)}</div>
         ${pv?`<div class="gb-ip">${esc(pv.ip)}</div>`:''}
-        ${isDisabled?`<div class="gb-tag">禁用</div>`:wasDeployed?`<div class="gb-tag" style="color:var(--t-ok)">已部署</div>`:''}
+        ${isDisabled?`<div class="gb-tag">禁用</div>`:wasDeployed?`<div class="gb-tag" style="color:var(--t-ok)">已设置布局</div>`:''}
       </div>`;
     }
   }

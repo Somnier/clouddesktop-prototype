@@ -1529,7 +1529,7 @@ function act(action, payload={}){
     const cr=crById(crId);
     if(cr&&!cr.registeredOnServer){
       cr.registeredOnServer=true;cr.lastSyncTime=now();
-      addLog('info','平台','终端清单导入',`${cr.name} 已完成服务器注册建档`);
+      addLog('info','平台','终端清单导入',`${cr.name} 已完成服务器注册`);
     }
     return {ok:true};
   }

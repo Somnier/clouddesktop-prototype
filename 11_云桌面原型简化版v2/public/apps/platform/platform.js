@@ -154,7 +154,7 @@ function asideContent(){
       cards+=`<div class="aside-card"><div class="aside-title">教室概况</div>
         <div class="aside-item" style="justify-content:space-between"><span>健康度</span><span style="font-weight:700;color:${hsColor}">${hs}/100</span></div>
         <div class="aside-item" style="justify-content:space-between"><span>终端</span><span>${rt.online}/${rt.total} 在线</span></div>
-        <div class="aside-item" style="justify-content:space-between"><span>已部署</span><span>${rt.deployed}/${rt.total}</span></div>
+        <div class="aside-item" style="justify-content:space-between"><span>桌面已同步</span><span>${rt.deployed}/${rt.total}</span></div>
         <div class="aside-item" style="justify-content:space-between"><span>阶段</span><span>${cr?stageLabel(cr.stage):'--'}</span></div>
       </div>`;
       if(crAlerts.length){
@@ -176,7 +176,7 @@ function asideContent(){
       const totalTerms=stats.terminals;
       cards+=`<div class="aside-card"><div class="aside-title">校区概况</div>
         <div class="aside-item" style="justify-content:space-between"><span>教室</span><span style="font-weight:600">${crsInCampus.length}</span></div>
-        <div class="aside-item" style="justify-content:space-between"><span>已部署</span><span style="font-weight:600">${deployed}</span></div>
+        <div class="aside-item" style="justify-content:space-between"><span>桌面已同步</span><span style="font-weight:600">${deployed}</span></div>
         <div class="aside-item" style="justify-content:space-between"><span>终端总数</span><span style="font-weight:600">${totalTerms}</span></div>
         <div class="aside-item" style="justify-content:space-between"><span>在线率</span><span style="font-weight:600">${pct(stats.online,stats.terminals)}%</span></div>
         <div class="aside-item" style="justify-content:space-between"><span>活跃告警</span><span style="font-weight:600${campusAlerts.length?' ;color:var(--c-err)':''}">${campusAlerts.length}</span></div>
@@ -1027,7 +1027,7 @@ function terminalDetailPage(){
   </div>
 
   ${desktops.length?`<div class="card mt-16">
-    <div class="card-header">已部署桌面 · ${desktops.length} 个</div>
+    <div class="card-header">终端桌面 · ${desktops.length} 个</div>
     <div style="font-size:.82rem;color:var(--c-text3);margin-bottom:8px">数据来自终端自行上报</div>
     ${desktops.map(d=>{
       const isDefault = d.id===bios?.defaultBootId;
