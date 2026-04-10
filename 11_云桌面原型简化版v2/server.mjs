@@ -91,7 +91,7 @@ function buildState(s){
           };
         })(),
         // state
-        online: true, power: 'on', screen: 'home',
+        online: isBlank ? false : true, power: isBlank ? 'off' : 'on', screen: 'home',
         controlState: 'unmanaged', boundClassroom: isBlank?null:c.id,
         taskState: null, taskNote: '',
         // registration & sync
@@ -209,6 +209,10 @@ function buildState(s){
   const focusCrTerms = terminals.filter(t=>t.classroomId===focusCr);
   const motherId = focusCrTerms[s.demo.motherIndex]?.id;
   const controlledId = focusCrTerms[s.demo.controlledIndex]?.id;
+
+  /* Mother terminal is always online (it's the machine running the UI) */
+  const motherTerm = terminals.find(t=>t.id===motherId);
+  if(motherTerm){ motherTerm.online=true; motherTerm.power='on'; motherTerm.heartbeat=now(); }
 
   return {
     meta: { version: 3, updatedAt: now() },
@@ -822,25 +826,28 @@ function act(action, payload={}){
   }
   case 'open-maint-ip':{
     if(mt.controlState!=='mother') return {ok:false,reason:'未接管教室'};
-    /* Initialize with current values, not empty strings */
-    const currentIpBase = cr.networkBase || '';
-    const currentServer = cr.serverAddress || mt.serverAddr || '';
-    demo.maintDraft={step:0,scope:[],keepIds:[],desktopId:null,desktopIds:[],defaultDesktopId:null,
-      category:'IP/服务器修改',restoreMode:'还原系统盘，保留数据盘',
-      newServerAddr:currentServer,newIpBase:currentIpBase,newIpStart:20,
-      newSubnetMask:mt.subnetMask||'255.255.255.0',newGateway:mt.gateway||cr.gateway||'',
-      newDns:(mt.dns||cr.dns||[]).join(','),ipPreview:[]};
-    const allCtrl3=termsInCr(cr.id).filter(t=>t.id!==mt.id&&t.online);
-    demo.maintDraft.scope=allCtrl3.map(t=>t.id);
-    /* Generate initial IP preview */
-    const initPreview=[];
-    demo.maintDraft.scope.forEach((id,i)=>{
-      const t=termById(id);
-      if(!t) return;
-      const newIp = currentIpBase ? currentIpBase+'.'+(20+i) : t.ip;
-      initPreview.push({terminalId:id, newIp});
-    });
-    demo.maintDraft.ipPreview=initPreview;
+    /* Preserve existing draft when switching back to maint-ip mode */
+    const hasExisting = demo.maintDraft && demo.maintDraft.category==='IP/服务器修改' && demo.maintDraft.newServerAddr;
+    if(!hasExisting){
+      const currentIpBase = cr.networkBase || '';
+      const currentServer = cr.serverAddress || mt.serverAddr || '';
+      demo.maintDraft={step:0,scope:[],keepIds:[],desktopId:null,desktopIds:[],defaultDesktopId:null,
+        category:'IP/服务器修改',restoreMode:'还原系统盘，保留数据盘',
+        newServerAddr:currentServer,newIpBase:currentIpBase,newIpStart:20,
+        newSubnetMask:mt.subnetMask||'255.255.255.0',newGateway:mt.gateway||cr.gateway||'',
+        newDns:(mt.dns||cr.dns||[]).join(','),ipPreview:[]};
+      const allCtrl3=termsInCr(cr.id).filter(t=>t.id!==mt.id&&t.online);
+      demo.maintDraft.scope=allCtrl3.map(t=>t.id);
+      /* Generate initial IP preview */
+      const initPreview=[];
+      demo.maintDraft.scope.forEach((id,i)=>{
+        const t=termById(id);
+        if(!t) return;
+        const newIp = currentIpBase ? currentIpBase+'.'+(20+i) : t.ip;
+        initPreview.push({terminalId:id, newIp});
+      });
+      demo.maintDraft.ipPreview=initPreview;
+    }
     /* If invoked from workbench, stay on workbench */
     if(demo.motherScreen!=='workbench'){
       demo.motherScreen='maint-ip'; mt.screen='maint-ip';
@@ -1039,12 +1046,10 @@ function act(action, payload={}){
   case 'deploy-toggle-block':{
     const block = demo.deployDraft.grid.blocks.find(b=>b.idx===payload.idx);
     if(!block) return {ok:false,reason:'块不存在'};
-    /* cycle: active → disabled → deleted → active */
-    if(block.state==='active') block.state='disabled';
-    else if(block.state==='disabled') block.state='deleted';
-    else block.state='active';
-    /* remove binding if not active */
-    if(block.state!=='active') delete demo.deployDraft.bindings[block.idx];
+    /* toggle: active ↔ disabled */
+    block.state = block.state==='active' ? 'disabled' : 'active';
+    /* remove binding if disabled */
+    if(block.state==='disabled') delete demo.deployDraft.bindings[block.idx];
     return {ok:true};
   }
   case 'deploy-bind-skip':{
@@ -1517,6 +1522,21 @@ function tickRecover(){
       state.demo.motherScreen=scr; mt.screen=scr;
     }
     changed=true;
+  }
+  /* Terminal discovery simulation: gradually bring blank classroom terminals online
+     when mother is on workbench in layout tab */
+  if(state.demo.motherScreen==='workbench'){
+    const focusCr = state.classrooms.find(c=>c.id===state.demo.focusClassroomId);
+    if(focusCr && (focusCr.stage==='blank'||focusCr.stage==='bound')){
+      const crTerms = state.terminals.filter(t=>t.classroomId===focusCr.id && t.id!==state.demo.motherId);
+      const offlineTerms = crTerms.filter(t=>!t.online);
+      /* Bring 1-2 terminals online per tick */
+      const batchSize = Math.min(offlineTerms.length, 1 + (Math.random()>0.5?1:0));
+      for(let i=0;i<batchSize;i++){
+        offlineTerms[i].online=true; offlineTerms[i].power='on'; offlineTerms[i].heartbeat=now();
+      }
+      if(batchSize>0) changed=true;
+    }
   }
   /* any non-mother terminal rebooting (from plat-restart etc.) */
   state.terminals.forEach(t=>{

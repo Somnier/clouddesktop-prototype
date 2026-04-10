@@ -54,6 +54,8 @@
 .term-app .pill.warn{ background: var(--t-warn-bg); color: var(--t-warn); }
 .term-app .pill.err { background: var(--t-err-bg); color: var(--t-err); }
 .term-app .pill.muted{ background: rgba(110,118,129,.15); color: var(--t-text3); }
+/* ── small status pill — lighter weight than action buttons ── */
+.term-app .pill-sm { font-size: .68rem; padding: 1px 6px; opacity: .75; font-weight: 400; }
 
 /* ── buttons (dark) ── */
 .term-app .btn-primary { background: var(--t-accent); color: #0e1117; }
@@ -64,7 +66,12 @@
 .term-app .btn-ghost { color: var(--t-accent); }
 .term-app .btn-ghost:hover:not(:disabled) { background: var(--t-accent-bg); }
 
-/* ── exit button — now uses standard .btn .btn-danger, no special override needed ── */
+/* ── exit button — subtle icon-style power button ── */
+.btn-exit { background: transparent; color: var(--t-text3); border: 1px solid var(--t-border);
+  padding: 4px 10px; font-size: .78rem; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;
+  transition: all .2s; cursor: pointer; }
+.btn-exit:hover { color: var(--t-err); border-color: var(--t-err); background: var(--t-err-bg); }
+.btn-exit:active { background: rgba(248,81,73,.2); }
 
 /* ── unsync desktop card (red warning) ── */
 .dt-card.dt-unsync { border-color: var(--t-err) !important; background: var(--t-err-bg) !important; }

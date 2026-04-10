@@ -34,9 +34,10 @@ function bindTableSort(){
   root.querySelectorAll('.data-table tbody tr').forEach((r,i)=>{r.dataset.origIdx=String(i);});
 }
 
-function showTermConfirm(title,msg,onOk){
+function showTermConfirm(title,msg,onOk,opts={}){
+  const btnClass = opts.danger===false ? 'btn btn-primary' : 'btn btn-danger';
   const ov=document.createElement('div'); ov.className='t-modal-overlay';
-  ov.innerHTML=`<div class="t-modal"><div class="t-modal-title">${title}</div><div class="t-modal-msg">${msg}</div><div class="t-modal-actions"><button class="btn btn-ghost" data-tm="cancel">取消</button><button class="btn btn-danger" data-tm="ok">确认</button></div></div>`;
+  ov.innerHTML=`<div class="t-modal"><div class="t-modal-title">${title}</div><div class="t-modal-msg">${msg}</div><div class="t-modal-actions"><button class="btn btn-ghost" data-tm="cancel">取消</button><button class="${btnClass}" data-tm="ok">确认</button></div></div>`;
   document.body.appendChild(ov);
   ov.querySelector('[data-tm="cancel"]').addEventListener('click',()=>ov.remove());
   ov.querySelector('[data-tm="ok"]').addEventListener('click',()=>{ov.remove();onOk();});
@@ -66,7 +67,7 @@ function showExportDoneDialog(){
     const defaultPath = 'E:\\CloudDesktop\\desktop-export.cdpkg';
     showTermConfirm('导出桌面包','将通过系统"保存文件"对话框导出桌面包。<br>默认保存路径：<span style="font-family:monospace;font-size:.85rem;color:var(--t-accent)">'+esc(defaultPath)+'</span><br><br>点击确认模拟导出。',()=>{
       showTermAlert('桌面包已导出到: '+defaultPath+'（原型模拟 — 实际产品使用系统保存对话框）');
-    });
+    },{danger:false});
   }
 }
 
@@ -91,7 +92,7 @@ function showImportDialog(){
     const filters = '.cdpkg / .vhd / .img';
     showTermConfirm('导入桌面','将通过系统"选择文件"对话框选择桌面文件。<br>默认目录：<span style="font-family:monospace;font-size:.85rem;color:var(--t-accent)">'+esc(defaultDir)+'</span><br>支持格式：<span style="font-size:.85rem;color:var(--t-text2)">'+esc(filters)+'</span><br><br>点击确认模拟选择文件。',()=>{
       showCreateDesktopDialog('导入的桌面');
-    });
+    },{danger:false});
   }
 }
 
@@ -149,36 +150,69 @@ function showCreateDesktopDialog(defaultName){
   });
 }
 
+/* ── Local input cache to survive SSE re-renders ── */
+const _inputCache = {};
+let _lastScreen = null;
+
+function _cacheAllInputs(){
+  root.querySelectorAll('input, textarea, select').forEach(el=>{
+    const key = el.id || el.dataset?.rule || el.dataset?.grid || el.name;
+    if(!key) return;
+    _inputCache[key] = el.value;
+  });
+}
+function _restoreAllInputs(){
+  root.querySelectorAll('input, textarea, select').forEach(el=>{
+    const key = el.id || el.dataset?.rule || el.dataset?.grid || el.name;
+    if(!key || !(key in _inputCache)) return;
+    if(el.value !== _inputCache[key]) el.value = _inputCache[key];
+  });
+}
+function _cacheScrollPositions(){
+  const positions = {};
+  root.querySelectorAll('.page-scroll').forEach((el,i)=>{
+    if(el.scrollTop > 0) positions['ps-'+i] = el.scrollTop;
+  });
+  return positions;
+}
+function _restoreScrollPositions(positions){
+  root.querySelectorAll('.page-scroll').forEach((el,i)=>{
+    const key = 'ps-'+i;
+    if(positions[key]) el.scrollTop = positions[key];
+  });
+}
+
 function render(state){
   if(!state) return;
-  /* Preserve focused element across full re-render */
+  /* Clear input cache on screen change */
+  const curScreen = state.demo?.motherScreen;
+  if(_lastScreen !== curScreen){ Object.keys(_inputCache).forEach(k=>delete _inputCache[k]); _lastScreen = curScreen; }
+  /* Save ALL dirty input values before re-render */
+  _cacheAllInputs();
+  /* Preserve focused element */
   const ae = document.activeElement;
-  let focusSel = null, focusStart = null, focusEnd = null, focusValue = null;
+  let focusSel = null, focusStart = null, focusEnd = null;
   if(ae && ae !== document.body && root.contains(ae)){
     if(ae.id) focusSel = '#' + ae.id;
     else if(ae.dataset?.rule) focusSel = '[data-rule="'+ae.dataset.rule+'"]';
     else if(ae.dataset?.grid) focusSel = '[data-grid="'+ae.dataset.grid+'"]';
     else if(ae.tagName==='INPUT'||ae.tagName==='SELECT'||ae.tagName==='TEXTAREA'){
-      /* generic fallback using data-* or name */
       if(ae.name) focusSel = '[name="'+ae.name+'"]';
     }
-    if(focusSel){
-      focusStart = ae.selectionStart;
-      focusEnd = ae.selectionEnd;
-      /* Save value so it's not overwritten by stale state */
-      focusValue = ae.value;
-    }
+    if(focusSel){ focusStart = ae.selectionStart; focusEnd = ae.selectionEnd; }
   }
+  /* Save scroll positions */
+  const scrollPos = _cacheScrollPositions();
   root.innerHTML = shellHtml();
   bindAll();
-  /* Restore focus and value */
+  /* Restore ALL cached input values */
+  _restoreAllInputs();
+  /* Restore scroll positions */
+  _restoreScrollPositions(scrollPos);
+  /* Restore focus */
   if(focusSel){
     const el = root.querySelector(focusSel);
     if(el){
-      /* Restore the user's in-progress value before focusing */
-      if(focusValue != null && (el.tagName==='INPUT'||el.tagName==='TEXTAREA')){
-        el.value = focusValue;
-      }
       el.focus();
       if(typeof el.setSelectionRange === 'function' && focusStart != null){
         try { el.setSelectionRange(focusStart, focusEnd); } catch(e){}
@@ -202,7 +236,7 @@ function shellHtml(){
         <span class="sep">|</span>
         <span>座位: ${esc(m?.seat||'--')}</span>
         <span class="sep">|</span>
-        <button class="btn btn-danger" data-act="exit-to-desktop">⏻ 退出</button>
+        <button class="btn-exit" data-act="exit-to-desktop">⏻ 退出</button>
       </div>
     </div>
     <div class="term-body">${screenContent(demo().motherScreen)}</div>
@@ -364,17 +398,18 @@ function localDesktopScreen(){
           ${(()=>{
             const sysPct = Math.round(systemUsed/diskTotal*100);
             const dtPct = Math.round(desktopUsed/diskTotal*100);
-            return `<circle cx="21" cy="21" r="16" fill="none" stroke="var(--t-text3)" stroke-width="5"
-              stroke-dasharray="${sysPct*1.005} ${100.5-sysPct}" stroke-dashoffset="25" stroke-linecap="round"></circle>
-            <circle cx="21" cy="21" r="16" fill="none" stroke="${diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-accent)'}" stroke-width="5"
+            let arcs = `<circle cx="21" cy="21" r="16" fill="none" stroke="var(--t-text3)" stroke-width="5"
+              stroke-dasharray="${sysPct*1.005} ${100.5-sysPct}" stroke-dashoffset="25" stroke-linecap="round"></circle>`;
+            if(dtPct > 0) arcs += `<circle cx="21" cy="21" r="16" fill="none" stroke="${diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-accent)'}" stroke-width="5"
               stroke-dasharray="${dtPct*1.005} ${100.5-dtPct}" stroke-dashoffset="${25-sysPct*1.005}" stroke-linecap="round"></circle>`;
+            return arcs;
           })()}
         </svg>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700">${diskPct}%</div>
       </div>
       <div style="font-size:.85rem;line-height:1.8;flex:1">
         <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--t-text3);margin-right:6px;vertical-align:middle"></span>系统占用 ${systemUsed} GB</div>
-        <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-accent)'};margin-right:6px;vertical-align:middle"></span>桌面占用 ${desktopUsed} GB</div>
+        <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${desktopUsed>0?(diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-accent)'):'var(--t-border)'};margin-right:6px;vertical-align:middle"></span>桌面占用 ${desktopUsed} GB</div>
         <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--t-border);margin-right:6px;vertical-align:middle"></span>剩余可用 ${diskFree} GB</div>
         <div style="color:var(--t-text3);font-size:.78rem">总计 ${diskTotal} GB</div>
       </div>
@@ -405,11 +440,11 @@ function localDesktopScreen(){
           <div class="dt-name">${esc(d.name)}</div>
           <div class="dt-meta" style="margin-top:4px">${esc(d.baseImageName||d.os)} · 桌面占用 ${dtSize} GB${dataDisks.length?'（系统盘 '+sysVhdSize+' GB + 数据盘 '+dataDisks.map(dd=>esc(dd.drive||'D:')+' '+esc(dd.size||'20GB')).join(', ')+'）':'（不含数据盘）'}</div>
           <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:6px">
-            ${isPhysical?pill('物理部署','warn'):''}
-            ${pill('还原','info')}
-            ${uploaded?pill('已同步','ok'):`<span class="pill err" style="font-weight:600">未同步</span>`}
-            ${isHidden?pill('已隐藏','muted'):''}
-            ${isDefault?pill('默认启动','info'):''}
+            ${isPhysical?`<span class="pill warn pill-sm">物理部署</span>`:''}
+            <span class="pill info pill-sm">还原</span>
+            ${uploaded?`<span class="pill ok pill-sm">已同步</span>`:`<span class="pill err pill-sm">未同步</span>`}
+            ${isHidden?`<span class="pill muted pill-sm">已隐藏</span>`:''}
+            ${isDefault?`<span class="pill info pill-sm">默认启动</span>`:''}
           </div>
         </div>
         <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;flex-shrink:0;margin-left:12px">
@@ -572,7 +607,7 @@ function wbLayoutContent(terms, rt, c, m, d){
         ${!isTakenOver?`<div style="color:var(--t-accent);font-weight:600;margin-bottom:4px">操作指南</div>
           <div style="color:var(--t-text2)">1. 左侧设置教室名称和网格布局 → 2. 配置IP和机器名规则 → 3. 右侧预览确认后接管教室</div>
           <div style="color:var(--t-text3);font-size:.75rem;margin-top:4px">接管后将进入终端绑定阶段，终端按照回车顺序分配座位</div>`
-          :`<div style="color:var(--t-ok);font-weight:600">教室已接管 · 点击方块切换状态（可用 → 禁用 → 删除 → 可用）</div>`}
+          :`<div style="color:var(--t-ok);font-weight:600">教室已接管 · 点击方块切换状态（可用 ↔ 禁用）</div>`}
       </div>
       <div class="page-scroll" style="flex:1;min-height:0">
         ${renderSeatGrid(grid, r, dir, previewMap, terms, 'layout', isBlank && !isTakenOver)}
@@ -962,7 +997,7 @@ function deployGridScreen(){
         <div style="font-size:.7rem;color:var(--t-text3);margin-top:2px">机器名 = 机器名前缀 + "-" + 座位号，座位号 = 字母 + 序号</div>
       </div>
       <div style="font-size:.75rem;color:var(--t-ok)">点击右侧网格块可切换状态</div>
-      <div style="font-size:.7rem;color:var(--t-text3);margin-top:4px">● 可用 → 禁用 → 删除 → 可用 循环切换</div>
+      <div style="font-size:.7rem;color:var(--t-text3);margin-top:4px">● 点击切换 可用 ↔ 禁用</div>
     </div>
 
     <div>
@@ -1528,7 +1563,7 @@ function bindAll(){
           }, 2500);
         });
       } else if(a==='exit-to-desktop'){
-        showTermConfirm('退出管理系统','确定要退出管理系统并重启进入桌面吗？',()=>showTermAlert('系统将重启进入桌面（原型模拟）'));
+        showTermConfirm('退出管理系统','确定要退出管理系统并重启进入桌面吗？',()=>showTermAlert('系统将重启进入桌面（原型模拟）'),{danger:false});
       } else if(a==='deploy-bind-next'){
         /* Simulate binding the next available online controlled terminal */
         const terms = termsInCr(s(), cr().id).filter(t=>t.id!==mt().id&&t.online&&t.controlState==='controlled');
