@@ -642,8 +642,9 @@ function wbLayoutContent(terms, rt, c, m, d){
           <div class="prep-field" style="padding:0;font-size:.78rem;gap:6px"><label style="width:auto;flex-shrink:0;color:var(--t-text2)">列数</label><input type="number" data-grid="cols" value="${grid.cols}" min="1" max="15" style="width:56px"></div>
           <span style="font-size:.75rem;color:var(--t-text2)">${pill('可用 '+activeCount,'ok')}${hasNewTermsBeyondGrid?` <span style="color:var(--t-err);font-weight:600">终端 ${totalTermCount} 超出容量 ${activeCount}</span>`:''}</span>
         </div>
+        <div style="font-size:.7rem;color:var(--t-text3);margin-bottom:6px">每列 = 网格行数，列数 = 网格列数</div>
         <div style="display:flex;gap:4px;margin-bottom:6px;align-items:center">
-          <span style="font-size:.72rem;color:var(--t-text3);margin-right:4px">编号方向</span>
+          <span style="font-size:.72rem;color:var(--t-text3);margin-right:4px">布局起点</span>
           ${[['tl','↘ 左上'],['tr','↙ 右上'],['bl','↗ 左下'],['br','↖ 右下']].map(([v,l])=>
             `<button class="btn ${dir===v?'btn-primary':'btn-secondary'}" style="padding:3px 8px;font-size:.72rem;justify-content:center" data-rule-dir="${v}">${l}</button>`
           ).join('')}
@@ -696,17 +697,11 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
           <option value="incremental" ${(d.deployMode||'incremental')==='incremental'?'selected':''}>增量更新</option>
           <option value="full" ${d.deployMode==='full'?'selected':''}>全量部署</option>
         </select></div>
-        <div style="padding:6px 0;font-size:.82rem">
-          已部署 <strong style="color:var(--t-accent)">${boundCount}</strong> / ${activeBlocks.length} 台
-        </div>
-        ${lastResult&&!isRunning?`<div style="margin-top:8px;padding:8px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.82rem">
-          <div style="color:var(--t-ok)">上次部署: 成功 ${lastResult.completed||0} · 失败 ${lastResult.failed||0} / ${lastResult.total||0}</div>
-          <button class="btn btn-ghost btn-sm" style="margin-top:4px" data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看上次结果'}</button>
-        </div>`:''}
-        ${tk&&isRunning?`<div style="margin-top:8px;padding:8px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.82rem">
-          <div>${done?'✓ 部署完成':'⏳ 部署进行中'}</div>
-          <div>成功 ${tk.counts.completed||0} · 失败 ${tk.counts.failed||0} / ${tk.counts.total||0}</div>
-        </div>`:''}
+      </div>`:''}
+      ${lastResult&&!isRunning?`<div class="card">
+        <div class="card-header">上次部署结果</div>
+        <div style="font-size:.82rem;color:var(--t-ok)">成功 ${lastResult.completed||0} · 失败 ${lastResult.failed||0} / ${lastResult.total||0}</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看详情'}</button>
       </div>`:''}
       ${opsMode==='maint-ip'?`<div class="card">
         <div class="card-header">修改 IP / 服务器地址</div>
@@ -859,37 +854,8 @@ function renderSeatGridOps(grid, r, dir, bindings, terms, m){
 }
 
 function renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, m){
-  /* Maintenance tasks don't use grid blocks — they use terminal-based layout */
-  if(tk?.type==='maintenance' && terms){
-    const crRows = grid.rows||7; const crCols = grid.cols||6;
-    const sorted = [...terms].filter(t=>t.seat).sort((a,b)=>(a.seat||'').localeCompare(b.seat||''));
-    return `<div style="display:grid;grid-template-columns:repeat(${Math.min(crCols,8)},1fr);gap:6px">
-      ${sorted.map(t=>{
-        const isMother = t.id===m.id;
-        if(isMother) return `<div class="gb" style="opacity:.5;border-color:var(--t-warn)">
-          <div class="gb-seat">${esc(t.seat)}</div>
-          <div class="gb-tag" style="color:var(--t-warn)">本机</div>
-        </div>`;
-        const item = tk.items?.find(i=>i.terminalId===t.id);
-        if(!item) return `<div class="gb gb-waiting">
-          <div class="gb-seat">${esc(t.seat)}</div>
-          <div class="gb-tag">未参与</div>
-        </div>`;
-        const itemState = item.state||'queued';
-        const pctVal = itemState==='completed'?100:itemState==='failed'?0:itemState==='transferring'?35:itemState==='applying'?70:itemState==='rebooting'?90:5;
-        const fillColor = itemState==='completed'?'var(--t-ok)':itemState==='failed'?'var(--t-err)':'var(--t-accent)';
-        return `<div class="gb gb-transfer" style="position:relative;overflow:hidden">
-          <div style="position:absolute;top:0;left:0;bottom:0;width:${pctVal}%;background:${fillColor};opacity:.2;transition:width .5s ease"></div>
-          <div style="position:relative;z-index:1">
-            <div class="gb-seat">${esc(t.seat)}</div>
-            <div class="gb-ip">${esc(t.ip||'--')}${item.newIp?' → '+esc(item.newIp):''}</div>
-            <div class="gb-status" style="color:${itemState==='completed'?'var(--t-ok)':itemState==='failed'?'var(--t-err)':'var(--t-text2)'}">${stateLabels[itemState]||itemState}</div>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>`;
-  }
-  /* Deployment tasks use grid blocks */
+  /* Both maintenance and deploy tasks now use grid-block-based layout */
+  /* This ensures blank classrooms (no terminal seats) can render progress correctly */
   let html='';
   for(let ri=0;ri<grid.rows;ri++){
     for(let ci=0;ci<grid.cols;ci++){
@@ -904,7 +870,7 @@ function renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, 
         continue;
       }
       const binding=bindings[b.idx];
-      /* Mother block — non-participant */
+      /* Mother block */
       if(binding && m && binding.terminalId===m.id){
         html+=`<div class="gb" style="opacity:.5;border-color:var(--t-warn)">
           <div class="gb-seat">${esc(seat)}</div>
@@ -933,10 +899,57 @@ function renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, 
 }
 
 function renderSeatGridMaint(terms, m, c, d, md){
-  const crRows = c.rows||7; const crCols = c.cols||6;
-  const sorted = [...terms].filter(t=>t.seat).sort((a,b)=>(a.seat||'').localeCompare(b.seat||''));
+  /* Use grid blocks + bindings if available (handles blank classroom with no seats assigned yet) */
+  const grid = d.grid||{rows:c.rows||7,cols:c.cols||6,blocks:[]};
+  const r = d.rules||{};
+  const dir = r.gridDirection || 'tl';
+  const bindings = d.bindings||{};
   const scope = md.scope || [];
   const ipPreview = md.ipPreview || [];
+
+  if(grid.blocks.length>0 && Object.keys(bindings).length>0){
+    let html='';
+    for(let ri=0;ri<grid.rows;ri++){
+      for(let ci=0;ci<grid.cols;ci++){
+        const row = (dir==='bl'||dir==='br') ? (grid.rows-1-ri) : ri;
+        const col = (dir==='tr'||dir==='br') ? (grid.cols-1-ci) : ci;
+        const b=grid.blocks.find(b2=>b2.row===row&&b2.col===col);
+        if(!b){ html+='<div class="gb gb-empty"></div>'; continue; }
+        const seat = seatLabel(row, col, r);
+        if(b.state==='deleted'){ html+='<div class="gb gb-empty"></div>'; continue; }
+        if(b.state==='disabled'){
+          html+=`<div class="gb gb-disabled"><div class="gb-seat">${esc(seat)}</div><div class="gb-tag">禁用</div></div>`;
+          continue;
+        }
+        const binding=bindings[b.idx];
+        /* Mother block */
+        if(binding && binding.terminalId===m.id){
+          html+=`<div class="gb" style="opacity:.5;border-color:var(--t-warn)">
+            <div class="gb-seat">${esc(seat)}</div>
+            <div class="gb-tag" style="color:var(--t-warn)">本机</div>
+          </div>`;
+          continue;
+        }
+        if(!binding){
+          html+=`<div class="gb gb-empty"><div class="gb-seat" style="opacity:.3">${esc(seat)}</div></div>`;
+          continue;
+        }
+        const t = terms.find(tt=>tt.id===binding.terminalId);
+        const checked = scope.includes(binding.terminalId);
+        const pv = ipPreview.find(x=>x.terminalId===binding.terminalId);
+        html+=`<div class="gb ${checked?'gb-bound':'gb-waiting'}" style="cursor:pointer" data-maint-toggle="${binding.terminalId}">
+          <div class="gb-seat">${esc(seat)}</div>
+          <div class="gb-ip">${esc(t?.ip||'--')}${checked&&pv?' → <span style="color:var(--t-ok)">'+esc(pv.newIp)+'</span>':''}</div>
+          ${checked?'<div class="gb-tag" style="color:var(--t-ok)">已选</div>':`<div class="gb-tag">${t?.online?'在线':'离线'}</div>`}
+        </div>`;
+      }
+    }
+    return `<div class="deploy-grid" style="display:grid;grid-template-columns:repeat(${grid.cols},1fr);gap:6px">${html}</div>`;
+  }
+
+  /* Fallback: terminal-based layout for classrooms with pre-assigned seats */
+  const crCols = c.cols||6;
+  const sorted = [...terms].filter(t=>t.seat).sort((a,b)=>(a.seat||'').localeCompare(b.seat||''));
   return `<div style="display:grid;grid-template-columns:repeat(${Math.min(crCols,8)},1fr);gap:6px">
     ${sorted.map(t=>{
       const isMother = t.id===m.id;
