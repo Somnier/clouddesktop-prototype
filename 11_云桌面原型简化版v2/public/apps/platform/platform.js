@@ -123,18 +123,17 @@ function asideContent(){
 
   let cards='';
   if(view.page==='dashboard'){
-    /* dashboard aside: recent logs + alerts */
-    const logLimit = recentLogs.length<=8 ? recentLogs.length : 8;
-    cards+=`<div class="aside-card"><div class="aside-title">最近日志</div>
+    /* dashboard aside: recent logs (30%) + alerts (70%) */
+    const logLimit = Math.min(recentLogs.length, 4);
+    cards+=`<div class="aside-card" style="flex:3;min-height:0"><div class="aside-title">最近日志</div>
       ${recentLogs.length?recentLogs.slice(0,logLimit).map(l=>`<div class="aside-item">
         ${pill(logLevelLabel[l.level]||l.level,tone(l.level==='warn'?'warning':l.level==='info'?'ok':'offline'))}
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.title)}</span>
         <span style="color:var(--c-text3);font-size:.72rem;white-space:nowrap">${relTime(l.at)}</span>
       </div>`).join(''):'<div style="font-size:.8rem;color:var(--c-text3)">暂无日志</div>'}
-      ${recentLogs.length>logLimit?`<div style="font-size:.78rem;text-align:center;padding-top:4px"><a class="clickable" style="cursor:pointer">查看全部 ${recentLogs.length} 条</a></div>`:''}
     </div>`;
-    const alertLimit = campusAlerts.length<=8 ? campusAlerts.length : 8;
-    cards+=`<div class="aside-card"><div class="aside-title">活跃告警 (${campusAlerts.length})</div>
+    const alertLimit = Math.min(campusAlerts.length, 12);
+    cards+=`<div class="aside-card" style="flex:7;min-height:0;overflow-y:auto"><div class="aside-title">活跃告警 (${campusAlerts.length})</div>
       ${campusAlerts.slice(0,alertLimit).map(a=>{
         const t=getTerm(state,a.terminalId);
         return `<div class="aside-item" style="flex-direction:column;align-items:flex-start;gap:2px">
@@ -145,18 +144,44 @@ function asideContent(){
       ${campusAlerts.length>alertLimit?`<div style="font-size:.78rem;text-align:center;padding-top:4px"><a class="clickable" data-nav="alerts" style="cursor:pointer">查看全部 ${campusAlerts.length} 条</a></div>`:''}
     </div>`;
   } else if(view.page==='classrooms'){
-    /* classroom aside: alerts */
-    const alertLimit2 = campusAlerts.length<=8 ? campusAlerts.length : 8;
-    cards+=`<div class="aside-card"><div class="aside-title">告警 (${campusAlerts.length})</div>
-      ${campusAlerts.slice(0,alertLimit2).map(a=>{
-        const t=getTerm(state,a.terminalId);
-        return `<div class="aside-item" style="flex-direction:column;align-items:flex-start;gap:2px">
-          <div>${pill(a.level==='high'?'高':'中',a.level==='high'?'err':'warn')} <span style="font-weight:500">${esc(a.title)}</span></div>
-          <div style="font-size:.75rem;color:var(--c-text3)">${t?esc(t.seat||''):''}${relTime(a.at)}</div>
+    if(view.classroomId){
+      /* Inside a classroom — show classroom-specific info */
+      const cr=state.classrooms.find(c=>c.id===view.classroomId);
+      const crAlerts=alertsInCr(state,view.classroomId);
+      const rt=crRuntime(state,view.classroomId);
+      const hs=cr?healthScore(state,cr.id):0;
+      const hsColor=hs>=80?'var(--c-ok)':hs>=50?'var(--c-warn)':'var(--c-err)';
+      cards+=`<div class="aside-card"><div class="aside-title">教室概况</div>
+        <div class="aside-item" style="justify-content:space-between"><span>健康度</span><span style="font-weight:700;color:${hsColor}">${hs}/100</span></div>
+        <div class="aside-item" style="justify-content:space-between"><span>终端</span><span>${rt.online}/${rt.total} 在线</span></div>
+        <div class="aside-item" style="justify-content:space-between"><span>已部署</span><span>${rt.deployed}/${rt.total}</span></div>
+        <div class="aside-item" style="justify-content:space-between"><span>阶段</span><span>${cr?stageLabel(cr.stage):'--'}</span></div>
+      </div>`;
+      if(crAlerts.length){
+        const alertLimit2 = Math.min(crAlerts.length, 10);
+        cards+=`<div class="aside-card" style="flex:1;min-height:0;overflow-y:auto"><div class="aside-title">教室告警 (${crAlerts.length})</div>
+          ${crAlerts.slice(0,alertLimit2).map(a=>{
+            const t=getTerm(state,a.terminalId);
+            return `<div class="aside-item" style="flex-direction:column;align-items:flex-start;gap:2px">
+              <div>${pill(a.level==='high'?'高':a.level==='medium'?'中':'低',a.level==='high'?'err':a.level==='medium'?'warn':'muted')} <span style="font-weight:500">${esc(a.title)}</span></div>
+              <div style="font-size:.75rem;color:var(--c-text3)">${t?esc(t.seat||'--')+' · '+esc(t.name||''):''} ${relTime(a.at)}</div>
+            </div>`;
+          }).join('')}
         </div>`;
-      }).join('')}
-      ${campusAlerts.length>alertLimit2?`<div style="font-size:.78rem;text-align:center;padding-top:4px"><a class="clickable" data-nav="alerts" style="cursor:pointer">查看全部 ${campusAlerts.length} 条</a></div>`:''}
-    </div>`;
+      }
+    } else {
+      /* Classroom list — show campus deployment summary */
+      const crsInCampus=state.classrooms.filter(c=>c.campusId===cId);
+      const deployed=crsInCampus.filter(c=>c.stage==='deployed').length;
+      const totalTerms=stats.terminals;
+      cards+=`<div class="aside-card"><div class="aside-title">校区概况</div>
+        <div class="aside-item" style="justify-content:space-between"><span>教室</span><span style="font-weight:600">${crsInCampus.length}</span></div>
+        <div class="aside-item" style="justify-content:space-between"><span>已部署</span><span style="font-weight:600">${deployed}</span></div>
+        <div class="aside-item" style="justify-content:space-between"><span>终端总数</span><span style="font-weight:600">${totalTerms}</span></div>
+        <div class="aside-item" style="justify-content:space-between"><span>在线率</span><span style="font-weight:600">${pct(stats.online,stats.terminals)}%</span></div>
+        <div class="aside-item" style="justify-content:space-between"><span>活跃告警</span><span style="font-weight:600${campusAlerts.length?' ;color:var(--c-err)':''}">${campusAlerts.length}</span></div>
+      </div>`;
+    }
   } else if(view.page==='assets'){
     /* assets aside: storage summary */
     cards+=`<div class="aside-card"><div class="aside-title">存储概况</div>
@@ -204,9 +229,12 @@ function sparklineSvg(data, color, w, h){
 function healthScore(state,crId){
   const rt=crRuntime(state,crId);
   const alerts=alertsInCr(state,crId);
-  const onlineRate=rt.total?rt.online/rt.total:1;
-  const alertPenalty=Math.min(alerts.length*10,40);
-  return Math.max(0,Math.round(onlineRate*100-alertPenalty));
+  /* Weighted alert penalty: high=15, medium=8, low=3 */
+  const penalty=alerts.reduce((s,a)=>s+(a.level==='high'?15:a.level==='medium'?8:3),0);
+  /* Online rate contributes 60 pts, alert penalty deducts from remaining 40 */
+  const onlinePts=rt.total?Math.round(rt.online/rt.total*60):60;
+  const alertPts=Math.max(0,40-penalty);
+  return Math.max(0,Math.min(100,onlinePts+alertPts));
 }
 
 function dashboardPage(){
@@ -217,6 +245,7 @@ function dashboardPage(){
   const campusAlerts=allAlerts.filter(a=>crIdsInCampus.has(a.classroomId));
   const crsInCampus=state.classrooms.filter(c=>c.campusId===cId);
   const totalDesktops=crsInCampus.reduce((n,c)=>(c.desktopCatalog||[]).length+n,0);
+  const totalDiskGB=crsInCampus.reduce((n,c)=>(c.desktopCatalog||[]).reduce((s2,d)=>s2+(d.diskSize||25),0)+n,0);
 
   /* time-series data from server */
   const hist=server?.monitorHistory||[];
@@ -226,35 +255,42 @@ function dashboardPage(){
 
   const cpuColor=(server?.cpu||0)>80?'#ef4444':(server?.cpu||0)>60?'#f59e0b':'#22c55e';
   const memColor=(server?.memory||0)>80?'#ef4444':(server?.memory||0)>60?'#f59e0b':'#3b82f6';
+  const stoColor=(server?.storage||0)>85?'#ef4444':(server?.storage||0)>70?'#f59e0b':'#3b82f6';
 
   return `
   <div class="metric-grid">
-    <div class="metric-card"><div class="mc-label">教室数</div><div class="mc-value">${stats.classrooms}</div>
+    <div class="metric-card"><div class="mc-label">教室</div><div class="mc-value">${stats.classrooms}</div>
       <div class="mc-sub">已建档 ${stats.registered} · ${esc(campus?.name||'')}</div></div>
-    <div class="metric-card"><div class="mc-label">注册终端</div><div class="mc-value">${stats.terminals}</div>
-      <div class="mc-sub">教师 ${stats.teachers} · 学生 ${stats.students}</div></div>
-    <div class="metric-card"><div class="mc-label">在线率</div><div class="mc-value">${pct(stats.online,stats.terminals)}%</div>
-      <div class="mc-sub">在线 ${stats.online} · 离线 ${stats.offline}</div></div>
-    <div class="metric-card"><div class="mc-label">桌面</div><div class="mc-value">${totalDesktops}</div>
-      <div class="mc-sub">服务器存储 ${server?server.storage+'%':'--'}</div></div>
+    <div class="metric-card"><div class="mc-label">终端 / 在线</div><div class="mc-value">${stats.terminals} <span style="font-size:.7em;color:var(--c-text3)">/</span> ${stats.online}</div>
+      <div class="mc-sub">在线率 ${pct(stats.online,stats.terminals)}% · 离线 ${stats.offline}</div></div>
+    <div class="metric-card"><div class="mc-label">桌面资产</div><div class="mc-value">${totalDesktops}</div>
+      <div class="mc-sub">占用 ${totalDiskGB} GB</div></div>
+    <div class="metric-card"><div class="mc-label">服务器存储</div><div class="mc-value" style="color:${stoColor}">${server?server.storage+'%':'--'}</div>
+      <div class="mc-sub">授权 ${server?.license||'--'} 终端</div></div>
     <div class="metric-card"><div class="mc-label">活跃告警</div><div class="mc-value${campusAlerts.length?' text-err':''}">${campusAlerts.length}</div>
       <div class="mc-sub">${campusAlerts.length?'需关注':'无告警'}</div></div>
   </div>
 
   ${server?`<div class="section">
     <div class="section-head"><h3>服务器监控</h3></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;max-width:900px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;max-width:960px">
       <div class="sparkline-wrap">
         <div class="spark-label"><span class="spark-title">CPU</span><span class="spark-value" style="color:${cpuColor}">${server.cpu}%</span></div>
-        ${sparklineSvg(cpuHist, cpuColor, 240, 48)}
+        ${sparklineSvg(cpuHist, cpuColor, 200, 48)}
       </div>
       <div class="sparkline-wrap">
         <div class="spark-label"><span class="spark-title">内存</span><span class="spark-value" style="color:${memColor}">${server.memory}%</span></div>
-        ${sparklineSvg(memHist, memColor, 240, 48)}
+        ${sparklineSvg(memHist, memColor, 200, 48)}
+      </div>
+      <div class="sparkline-wrap">
+        <div class="spark-label"><span class="spark-title">存储</span><span class="spark-value" style="color:${stoColor}">${server.storage}%</span></div>
+        <div style="height:8px;background:var(--c-border);border-radius:4px;overflow:hidden;margin-top:8px">
+          <div style="height:100%;width:${server.storage}%;background:${stoColor};border-radius:4px"></div>
+        </div>
       </div>
       <div class="sparkline-wrap">
         <div class="spark-label"><span class="spark-title">以太网</span><span class="spark-value" style="color:#6366f1">${netHist.length?netHist[netHist.length-1].toFixed(1):'--'} MB/s</span></div>
-        ${sparklineSvg(netHist, '#6366f1', 240, 48)}
+        ${sparklineSvg(netHist, '#6366f1', 200, 48)}
       </div>
     </div>
   </div>`:''}
@@ -263,11 +299,12 @@ function dashboardPage(){
     <div class="section-head"><h3>教室健康度</h3></div>
     ${(()=>{
       const deployed=crsInCampus.filter(c=>c.stage==='deployed');
-      const healthy=deployed.filter(c=>healthScore(state,c.id)>=80).length;
-      const warning=deployed.filter(c=>{const h=healthScore(state,c.id);return h>=50&&h<80;}).length;
-      const critical=deployed.filter(c=>healthScore(state,c.id)<50).length;
+      /* Sort by health ascending — worst first */
+      const scored=deployed.map(c=>({c,hs:healthScore(state,c.id)})).sort((a,b)=>a.hs-b.hs);
+      const healthy=scored.filter(x=>x.hs>=80).length;
+      const warning=scored.filter(x=>x.hs>=50&&x.hs<80).length;
+      const critical=scored.filter(x=>x.hs<50).length;
       const total=deployed.length||1;
-      /* SVG donut pie chart */
       const hPct=Math.round(healthy/total*100), wPct=Math.round(warning/total*100), cPct=100-hPct-wPct;
       const hDash=hPct*1.005, wDash=wPct*1.005, cDash=cPct*1.005;
       return `<div style="display:flex;gap:24px;align-items:center;margin-bottom:16px">
@@ -285,23 +322,22 @@ function dashboardPage(){
           <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f59e0b;margin-right:6px;vertical-align:middle"></span>警告（50-79） ${warning} 间</div>
           <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ef4444;margin-right:6px;vertical-align:middle"></span>异常（<50） ${critical} 间</div>
         </div>
-      </div>`;
+      </div>
+      <table class="data-table">
+        <thead><tr><th>教室</th><th>位置</th><th>健康度</th><th>终端</th><th>在线</th><th>告警</th></tr></thead>
+        <tbody>${scored.map(({c,hs})=>{
+          const rt=crRuntime(state,c.id); const als=alertsInCr(state,c.id);
+          const hsColor=hs>=80?'var(--c-ok)':hs>=50?'var(--c-warn)':'var(--c-err)';
+          return `<tr>
+            <td class="clickable" data-nav-cr="${c.id}">${esc(c.name)}</td>
+            <td>${esc(c.building)} ${esc(c.floor)}</td>
+            <td><span style="font-weight:700;color:${hsColor}">${hs}</span><span style="font-size:.75rem;color:var(--c-text3)">/100</span></td>
+            <td>${rt.total}</td><td>${rt.online}/${rt.total}</td>
+            <td>${als.length?`<span class="text-err">${als.length}</span>`:'-'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
     })()}
-    <table class="data-table">
-      <thead><tr><th>教室</th><th>位置</th><th>健康度</th><th>终端</th><th>在线</th><th>告警</th></tr></thead>
-      <tbody>${crsInCampus.filter(c=>c.stage==='deployed').map(c=>{
-        const rt=crRuntime(state,c.id); const als=alertsInCr(state,c.id);
-        const hs=healthScore(state,c.id);
-        const hsColor=hs>=80?'var(--c-ok)':hs>=50?'var(--c-warn)':'var(--c-err)';
-        return `<tr>
-          <td class="clickable" data-nav-cr="${c.id}">${esc(c.name)}</td>
-          <td>${esc(c.building)} ${esc(c.floor)}</td>
-          <td><span style="font-weight:700;color:${hsColor}">${hs}</span><span style="font-size:.75rem;color:var(--c-text3)">/100</span></td>
-          <td>${rt.total}</td><td>${rt.online}/${rt.total}</td>
-          <td>${als.length?`<span class="text-err">${als.length}</span>`:'-'}</td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table>
   </div>
   `;
 }
@@ -374,13 +410,16 @@ function classroomListPage(){
     </div>
   </div>
   <table class="data-table">
-    <thead><tr><th>教室名称</th><th>位置</th><th>备注</th><th>终端数</th><th>在线率</th></tr></thead>
-    <tbody>${crs.filter(c=>c.stage==='deployed').map(c=>{
-      const rt=crRuntime(state,c.id);
+    <thead><tr><th>教室名称</th><th>位置</th><th>健康度</th><th>终端</th><th>在线率</th><th>告警</th></tr></thead>
+    <tbody>${crs.filter(c=>c.stage==='deployed').map(c=>({c,hs:healthScore(state,c.id)})).sort((a,b)=>a.hs-b.hs).map(({c,hs})=>{
+      const rt=crRuntime(state,c.id); const als=alertsInCr(state,c.id);
+      const hsColor=hs>=80?'var(--c-ok)':hs>=50?'var(--c-warn)':'var(--c-err)';
       return `<tr>
         <td class="clickable" data-nav-cr="${c.id}">${esc(c.name)}</td>
-        <td>${esc(c.building)} ${esc(c.floor)}</td><td>${esc(c.remark||'')}</td>
+        <td>${esc(c.building)} ${esc(c.floor)}</td>
+        <td><span style="font-weight:700;color:${hsColor}">${hs}</span><span style="font-size:.75rem;color:var(--c-text3)">/100</span></td>
         <td>${rt.total}</td><td>${pct(rt.online,rt.total)}%</td>
+        <td>${als.length?`<span class="text-err">${als.length}</span>`:'-'}</td>
       </tr>`;
     }).join('')}</tbody>
   </table>`;
@@ -466,44 +505,45 @@ function crTerminalsTab(c,terms){
   /* Unique purposes in this classroom */
   const uses = [...new Set(terms.map(t=>t.use).filter(Boolean))];
 
-  /* 4 action groups */
+  /* 4 action groups — segmented button groups */
   const groups = [
-    {label:'教室控制', actions:[
+    {label:'控制', icon:'⚡', actions:[
       {k:'shutdown', l:'关机', color:'var(--c-warn)', needSel:true},
       {k:'restart', l:'重启', color:'var(--c-info)', needSel:true},
-      {k:'block-usb', l:'禁止USB', color:'var(--c-warn)', needSel:true},
-      {k:'block-internet', l:'禁止外网', color:'var(--c-warn)', needSel:true},
+      {k:'block-usb', l:'禁USB', color:'var(--c-warn)', needSel:true},
+      {k:'block-internet', l:'禁外网', color:'var(--c-warn)', needSel:true},
     ]},
-    {label:'教室部署', actions:[
-      {k:'distribute', l:'部署桌面', color:'var(--c-brand)', needSel:true},
+    {label:'部署', icon:'📦', actions:[
+      {k:'distribute', l:'桌面部署', color:'var(--c-brand)', needSel:true},
       {k:'ip-mod', l:'修改IP', color:'var(--c-info)', needSel:true},
     ]},
-    {label:'教室测试', actions:[
-      {k:'remote-test', l:'网络测试', color:'var(--c-ok)', needSel:true},
-      {k:'hw-test', l:'硬件测试', color:'var(--c-info)', needSel:true},
-    ]},
-    {label:'跨教室测试', actions:[
-      {k:'broadcast-test', l:'广播隔离测试', color:'var(--c-warn)', needSel:false},
+    {label:'测试', icon:'🔍', actions:[
+      {k:'remote-test', l:'网络', color:'var(--c-ok)', needSel:true},
+      {k:'hw-test', l:'硬件', color:'var(--c-info)', needSel:true},
+      {k:'broadcast-test', l:'广播隔离', color:'var(--c-warn)', needSel:false},
     ]},
   ];
 
   return `
   <div class="batch-toolbar">
-    <div class="batch-actions" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-      ${groups.map(g=>`<span style="font-size:.75rem;color:var(--c-text3);margin-right:2px;white-space:nowrap">${g.label}:</span>${g.actions.map(a=>{
-        const active = pa === a.k;
-        const disabled = a.needSel && selOnline.length === 0 && !active;
-        return `<button class="batch-btn${active?' active':''}" data-plat-action="${a.k}" style="--accent:${a.color}"${disabled?' disabled':''}>${a.l}${a.needSel && selOnline.length>0 ? ' ('+selOnline.length+')' : ''}</button>`;
-      }).join('')}<span class="batch-sep"></span>`).join('')}
+    <div class="batch-groups">
+      ${groups.map(g=>`<div class="batch-group">
+        <div class="batch-group-label">${g.icon} ${g.label}</div>
+        <div class="batch-group-btns">${g.actions.map(a=>{
+          const active = pa === a.k;
+          const disabled = a.needSel && selOnline.length === 0 && !active;
+          return `<button class="batch-btn${active?' active':''}" data-plat-action="${a.k}" style="--accent:${a.color}"${disabled?' disabled':''}>${a.l}${a.needSel && selOnline.length>0 ? ' ('+selOnline.length+')' : ''}</button>`;
+        }).join('')}</div>
+      </div>`).join('')}
     </div>
     <div class="batch-sel-summary">
       ${sel.length > 0
         ? `已选 <strong>${sel.length}</strong> 台${selOnline.length!==sel.length ? `（在线 ${selOnline.length}）` : ''}`
         : `<span style="color:var(--c-text3)">点击下方终端进行选择</span>`}
       <a class="batch-sel-link" data-sel-all-online>全选在线</a>
-      ${uses.length>1?`<span style="position:relative;display:inline-block"><a class="batch-sel-link" data-sel-use-toggle>按用途选择 ▾</a>${view.showUseDropdown?`<div style="position:absolute;left:0;top:100%;background:#fff;border:1px solid var(--c-border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:100;min-width:130px;padding:4px 0;margin-top:2px">${uses.map(u=>`<div class="batch-sel-link" data-sel-use="${esc(u)}" style="display:block;padding:6px 14px;cursor:pointer;font-size:.82rem;white-space:nowrap">${esc(u)}</div>`).join('')}</div>`:''}</span>`
+      ${uses.length>1?`<span style="position:relative;display:inline-block"><a class="batch-sel-link" data-sel-use-toggle>按用途 ▾</a>${view.showUseDropdown?`<div style="position:absolute;left:0;top:100%;background:#fff;border:1px solid var(--c-border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:100;min-width:130px;padding:4px 0;margin-top:2px">${uses.map(u=>`<div class="batch-sel-link" data-sel-use="${esc(u)}" style="display:block;padding:6px 14px;cursor:pointer;font-size:.82rem;white-space:nowrap">${esc(u)}</div>`).join('')}</div>`:''}</span>`
       :(uses.length===1?`<a class="batch-sel-link" data-sel-use="${esc(uses[0])}">选${esc(uses[0])}</a>`:'')}
-      ${sel.length > 0 ? `<a class="batch-sel-link" data-sel-clear>清除选择</a>` : ''}
+      ${sel.length > 0 ? `<a class="batch-sel-link" data-sel-clear>清除</a>` : ''}
     </div>
   </div>
 
@@ -526,15 +566,15 @@ function crTerminalsTab(c,terms){
   </div>` : ''}
   ${viewMode==='layout' ? crLayoutInline(c,terms) : `
   <table class="data-table">
-    <thead><tr><th style="width:32px"><input type="checkbox" data-sel-toggle-all${sel.length===terms.length&&terms.length?' checked':''}></th><th>座位号</th><th>机器名</th><th>用途</th><th>IP</th><th>在线</th></tr></thead>
+    <thead><tr><th style="width:32px"><input type="checkbox" data-sel-toggle-all${sel.length===terms.length&&terms.length?' checked':''}></th><th>机器名</th><th>座位号</th><th>IP</th><th>用途</th><th>在线</th></tr></thead>
     <tbody>${terms.map((t,i)=>{
       const checked = sel.includes(t.id);
       return `<tr style="${checked?'background:rgba(59,130,246,.06)':''}">
       <td><input type="checkbox" data-term-chk="${t.id}"${checked?' checked':''}></td>
-      <td class="clickable" data-nav-term="${t.id}">${esc(t.seat||'--')}</td>
-      <td>${esc(t.name||'未命名')}</td>
-      <td>${pill(termUse(t), t.use==='教师终端'?'warn':'muted')}</td>
+      <td class="clickable" data-nav-term="${t.id}">${esc(t.name||'未命名')}</td>
+      <td>${esc(t.seat||'--')}</td>
       <td class="mono">${esc(t.ip||'未分配')}</td>
+      <td>${pill(termUse(t), t.use==='教师终端'?'warn':'muted')}</td>
       <td>${pill(t.online?'在线':'离线',tone(t.online?'on':'offline'))}</td>
     </tr>`;}).join('')}</tbody>
   </table>`}`;
@@ -1161,15 +1201,23 @@ function alertsPage(){
   const low=campusAlerts.filter(a=>a.level==='low').length;
   const arrow = sortAsc ? '↑' : '↓';
 
+  /* per-classroom alert counts for top-affected list */
+  const crAlertMap = {};
+  campusAlerts.forEach(a=>{ crAlertMap[a.classroomId]=(crAlertMap[a.classroomId]||0)+1; });
+  const topCrs = Object.entries(crAlertMap).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([id,cnt])=>{
+    const cr=state.classrooms.find(c=>c.id===id);
+    return cr ? esc(cr.name)+' ('+cnt+')' : '';
+  }).filter(Boolean).join(' · ');
+
   return `
-  <div class="section-sub">${esc(campus?.name||'')} — ${campusAlerts.length} 条活跃告警</div>
+  <div class="metric-grid" style="margin-bottom:16px">
+    <div class="metric-card"><div class="mc-label">活跃告警</div><div class="mc-value${campusAlerts.length?' text-err':''}">${campusAlerts.length}</div></div>
+    <div class="metric-card"><div class="mc-label" style="color:var(--c-err)">高严重度</div><div class="mc-value" style="color:var(--c-err)">${high}</div></div>
+    <div class="metric-card"><div class="mc-label" style="color:var(--c-warn)">中严重度</div><div class="mc-value" style="color:var(--c-warn)">${medium}</div></div>
+    <div class="metric-card"><div class="mc-label">低严重度</div><div class="mc-value">${low}</div></div>
+  </div>
+  ${topCrs?`<div style="font-size:.82rem;color:var(--c-text2);margin-bottom:12px">告警集中教室：${topCrs}</div>`:''}
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
-    <div style="display:flex;gap:16px;font-size:.88rem">
-      ${high?`<span style="color:var(--c-err);font-weight:600">高 ${high}</span>`:''}
-      ${medium?`<span style="color:var(--c-warn);font-weight:600">中 ${medium}</span>`:''}
-      ${low?`<span style="color:var(--c-text3)">低 ${low}</span>`:''}
-    </div>
-    <div style="display:flex;gap:6px">
       <button class="btn btn-sm${sortMode==='time'?' btn-primary':' btn-ghost'}" data-alert-sort="time">按时间 ${sortMode==='time'?arrow:''}</button>
       <button class="btn btn-sm${sortMode==='severity'?' btn-primary':' btn-ghost'}" data-alert-sort="severity">按严重度 ${sortMode==='severity'?arrow:''}</button>
     </div>
