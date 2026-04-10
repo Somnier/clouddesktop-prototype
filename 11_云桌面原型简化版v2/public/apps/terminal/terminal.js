@@ -52,23 +52,17 @@ function showTermAlert(msg){
 }
 
 function showExportDoneDialog(){
-  /* Use Electron save dialog if available, otherwise simulate */
-  if(window.electronAPI?.isElectron){
-    window.electronAPI.showSaveDialog({
-      title: '导出桌面包',
-      defaultPath: 'E:\\CloudDesktop\\desktop-export.cdpkg',
-      filters: [{ name: '桌面包', extensions: ['cdpkg'] }]
-    }).then(result => {
-      if(!result.canceled && result.filePath){
-        showTermAlert('桌面包已导出到: '+result.filePath);
-      }
-    });
-  } else {
-    const defaultPath = 'E:\\CloudDesktop\\desktop-export.cdpkg';
-    showTermConfirm('导出桌面包','将通过系统"保存文件"对话框导出桌面包。<br>默认保存路径：<span style="font-family:monospace;font-size:.85rem;color:var(--t-accent)">'+esc(defaultPath)+'</span><br><br>点击确认模拟导出。',()=>{
-      showTermAlert('桌面包已导出到: '+defaultPath+'（原型模拟 — 实际产品使用系统保存对话框）');
-    },{danger:false});
-  }
+  const m=mt();
+  const dts=(m?.desktops||[]).filter(d=>d.visibility!=='hidden');
+  const dtList=dts.map(d=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:.82rem"><span>${esc(d.name)}</span><span style="color:var(--t-text2)">${d.diskSize||25} GB</span></div>`).join('');
+  const totalSize=dts.reduce((s,d)=>s+(d.diskSize||25),0);
+  const body=`<div style="margin-bottom:10px;font-size:.82rem;color:var(--t-text2)">以下桌面将导出到 U 盘：</div>
+${dtList}
+<div style="border-top:1px solid var(--t-border);margin-top:8px;padding-top:6px;font-size:.82rem;display:flex;justify-content:space-between"><strong>合计</strong><span>${dts.length} 个桌面 · ${totalSize} GB</span></div>
+<div style="margin-top:10px;padding:8px 12px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--t-accent)">E:\\CloudDesktop\\desktop-export-${new Date().toISOString().slice(0,10)}.cdpkg</div>`;
+  showTermConfirm('导出桌面',body,()=>{
+    showTermAlert(`已导出 ${dts.length} 个桌面到 U 盘（共 ${totalSize} GB）`);
+  },{danger:false});
 }
 
 function showImportDialog(){
@@ -290,7 +284,7 @@ function seatLabel(row, col, rules){
   let letter, num;
   if(flow==='col'){ letter=String.fromCharCode(start+col); num=row+1; }
   else { letter=String.fromCharCode(start+row); num=col+1; }
-  return letter+'-'+String(num).padStart(2,'0');
+  return letter+String(num).padStart(2,'0');
 }
 
 
@@ -324,7 +318,7 @@ function localInfoScreen(){
   <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 设置本机</div>
   <div class="card" style="width:100%">
     <div class="prep-field"><label>机器名</label><input type="text" id="li-name" value="${esc(m.name||'')}" placeholder="输入机器名"></div>
-    <div class="prep-field"><label>座位号</label><input type="text" id="li-seat" value="${esc(m.seat||'')}" placeholder="A-01"></div>
+    <div class="prep-field"><label>座位号</label><input type="text" id="li-seat" value="${esc(m.seat||'')}" placeholder="A01"></div>
     <div style="border-top:1px solid var(--t-border);margin:16px 0 12px;padding-top:12px">
       <div style="font-size:.82rem;color:var(--t-text3);margin-bottom:8px">网络配置</div>
     </div>
@@ -383,26 +377,69 @@ function localDesktopScreen(){
   });
   const returnAct = demo()._desktopReturnScreen ? 'desktop-return-flow' : (m.controlState==='mother'?'return-workbench':'go-home');
   const bid = m.bios?.defaultBootId;
+
+  /* disk statistics */
   const diskTotal = m.metrics?.diskTotal || 512;
   const systemUsed = 35;
   const desktopUsed = desktops.reduce((s,d)=>s+(d.diskSize||25),0);
   const diskUsed = desktopUsed + systemUsed;
   const diskFree = Math.max(0, diskTotal - diskUsed);
   const diskPct = Math.round(diskUsed/diskTotal*100);
-  const diskColor = diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-text3)';
+  const diskColor = diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-accent)';
+
+  /* per-desktop breakdown for pie chart legend */
+  const dtSegments = desktops.map((d,i)=>{
+    const colors = ['#3b82f6','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#06b6d4','#f97316'];
+    return { name:d.name, size:d.diskSize||25, color:colors[i%colors.length] };
+  });
+  dtSegments.push({ name:'系统占用', size:systemUsed, color:'#64748b' });
+  if(diskFree>0) dtSegments.push({ name:'可用空间', size:diskFree, color:'#1e293b' });
+
+  /* SVG pie chart */
+  const total = dtSegments.reduce((s,seg)=>s+seg.size,0);
+  let cumAngle = -90;
+  const pieR = 60, pieCx = 70, pieCy = 70;
+  const pieSlices = dtSegments.map(seg=>{
+    const angle = (seg.size/total)*360;
+    const startAngle = cumAngle;
+    cumAngle += angle;
+    const endAngle = cumAngle;
+    const startRad = startAngle*Math.PI/180;
+    const endRad = endAngle*Math.PI/180;
+    const x1 = pieCx + pieR*Math.cos(startRad);
+    const y1 = pieCy + pieR*Math.sin(startRad);
+    const x2 = pieCx + pieR*Math.cos(endRad);
+    const y2 = pieCy + pieR*Math.sin(endRad);
+    const largeArc = angle>180?1:0;
+    if(angle>=359.9) return `<circle cx="${pieCx}" cy="${pieCy}" r="${pieR}" fill="${seg.color}"/>`;
+    return `<path d="M${pieCx},${pieCy} L${x1},${y1} A${pieR},${pieR} 0 ${largeArc},1 ${x2},${y2} Z" fill="${seg.color}"/>`;
+  }).join('');
+  const pieLegend = dtSegments.map(seg=>`<div style="display:flex;align-items:center;gap:6px;font-size:.75rem"><span style="width:10px;height:10px;border-radius:2px;background:${seg.color};flex-shrink:0"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(seg.name)}</span><span style="color:var(--t-text2);flex-shrink:0">${seg.size}G</span></div>`).join('');
+
   return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
-  <div style="width:100%;max-width:720px;display:flex;flex-direction:column;flex:1;min-height:0">
+  <div style="width:100%;max-width:800px;display:flex;flex-direction:column;flex:1;min-height:0">
   <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
     <div><button class="btn btn-ghost" data-act="${returnAct}">←</button> 桌面管理</div>
-    <span style="font-size:.75rem;color:${diskColor};font-weight:400">磁盘 ${diskUsed}/${diskTotal} GB (${diskPct}%)</span>
   </div>
 
   <div class="page-scroll" style="padding-bottom:12px">
+
+  <!-- Disk pie chart -->
+  <div class="card" style="display:flex;align-items:center;gap:20px;padding:16px;margin-bottom:16px">
+    <svg width="140" height="140" viewBox="0 0 140 140" style="flex-shrink:0">${pieSlices}
+      <circle cx="${pieCx}" cy="${pieCy}" r="32" fill="var(--t-bg)"/>
+      <text x="${pieCx}" y="${pieCy-6}" text-anchor="middle" fill="${diskColor}" font-size="16" font-weight="700">${diskPct}%</text>
+      <text x="${pieCx}" y="${pieCy+10}" text-anchor="middle" fill="var(--t-text3)" font-size="9">${diskUsed}/${diskTotal} GB</text>
+    </svg>
+    <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">${pieLegend}</div>
+  </div>
+
+  <!-- Desktop cards -->
   <div class="dt-grid">
     <div class="dt-card dt-add-card" data-desktop-action="import">
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:110px;height:100%">
-        <div style="font-size:2rem;line-height:1;color:var(--t-text3)">+</div>
-        <div style="font-size:.78rem;color:var(--t-text3);margin-top:6px">导入桌面</div>
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:140px">
+        <div style="font-size:2.5rem;line-height:1;color:var(--t-text3)">+</div>
+        <div style="font-size:.82rem;color:var(--t-text3);margin-top:8px">导入桌面</div>
       </div>
     </div>
     ${desktops.map(d=>{
@@ -414,25 +451,25 @@ function localDesktopScreen(){
     <div class="dt-card ${isDefault?'selected':''} ${!uploaded?'dt-unsync':''}" data-dt-id="${d.id}" style="position:relative;overflow:hidden">
       <span class="dt-card-fill"></span>
       <div style="position:relative;z-index:1">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div class="dt-name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name)}</div>
-          <button class="btn btn-ghost dt-overflow-btn" data-dt-overflow="${d.id}" title="更多操作" style="padding:2px 6px;font-size:1rem;line-height:1;flex-shrink:0;margin:-2px -4px 0 4px">⋯</button>
-        </div>
-        <div class="dt-meta">${esc(d.baseImageName||d.os)} · ${dtSize} GB</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:6px">
+        <div class="dt-name">${esc(d.name)}</div>
+        <div class="dt-meta">${esc(d.baseImageName||d.os)} · ${dtSize} GB${d.dataDisks?.length?` · 数据盘 ${d.dataDisks.map(dd=>dd.size).join('+')}`:''}${d.restoreMode?` · ${d.restoreMode}`:''}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:8px">
           ${uploaded?`<span class="pill ok pill-sm">已同步</span>`:`<span class="pill err pill-sm">未同步</span>`}
           ${isDefault?`<span class="pill info pill-sm">默认启动</span>`:''}
           ${isHidden?`<span class="pill muted pill-sm">已隐藏</span>`:''}
         </div>
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-primary" data-dt-edit="${d.id}">编辑桌面</button>
+          ${!uploaded?`<button class="btn btn-sm btn-ghost" data-dt-upload="${d.id}">同步到服务器</button>`:''}
+          <button class="btn btn-sm btn-ghost dt-overflow-btn" data-dt-overflow="${d.id}" style="margin-left:auto;padding:2px 8px">⋯</button>
+        </div>
       </div>
       <div class="dt-overflow-menu" data-dt-menu="${d.id}">
-        <button data-dt-edit="${d.id}">编辑桌面</button>
-        ${!isDefault?`<button data-dt-default="${d.id}">设为默认</button>`:''}
-        <button data-dt-visibility="${d.id}">${isHidden?'取消隐藏':'隐藏'}</button>
         <button data-dt-copy="${d.id}">复制桌面</button>
-        ${!uploaded?`<button data-dt-upload="${d.id}">同步到服务器</button>`:''}
+        <button data-dt-delete="${d.id}" style="color:var(--t-err)">删除桌面</button>
         <div class="dt-menu-divider"></div>
-        <button data-dt-delete="${d.id}" style="color:var(--t-err)">删除</button>
+        ${!isDefault?`<button data-dt-default="${d.id}">设为默认启动</button>`:''}
+        <button data-dt-visibility="${d.id}">${isHidden?'取消隐藏':'隐藏桌面'}</button>
       </div>
     </div>`;
     }).join('')}
@@ -440,8 +477,10 @@ function localDesktopScreen(){
   ${!desktops.length ? empty('暂无本机桌面','请点击 + 导入桌面镜像或桌面包') : ''}
   </div>
 
-  <div style="display:flex;justify-content:flex-end;padding:8px 0;border-top:1px solid var(--t-border)">
-    <button class="btn btn-ghost" style="font-size:.78rem" data-desktop-action="export-pkg">导出桌面包 →</button>
+  <div class="dt-export-bar">
+    <button class="btn btn-ghost dt-export-btn" data-desktop-action="export-pkg">
+      <span style="font-size:1.1rem">📦</span> 导出桌面
+    </button>
   </div>
   </div>
   </div>`;
@@ -528,8 +567,9 @@ function wbLayoutContent(terms, rt, c, m, d){
   /* Terminal discovery: map online terminals to grid blocks sequentially */
   const onlineTerms = terms.filter(t=>t.id!==m.id&&t.online);
   const discoveredCount = onlineTerms.length;
+  const totalTermCount = discoveredCount + 1; /* +1 for mother (self) */
   const scanning = !isTakenOver || (demo().flags?.layoutRescan);
-  const hasNewTermsBeyondGrid = discoveredCount > activeCount && scanning;
+  const hasNewTermsBeyondGrid = totalTermCount > activeCount && scanning;
 
   /* Map discovered terminals to active blocks for MAC display */
   const activeBlocksSorted = grid.blocks.filter(b=>b.state==='active').sort((a,b)=>{
@@ -537,11 +577,17 @@ function wbLayoutContent(terms, rt, c, m, d){
     return sa.localeCompare(sb);
   });
   const termBlockMap = {};
-  onlineTerms.forEach((t,i)=>{
-    if(i < activeBlocksSorted.length) termBlockMap[activeBlocksSorted[i].idx] = t;
+  /* Pin mother terminal to first active block */
+  const motherBlockIdx = activeBlocksSorted.length > 0 ? activeBlocksSorted[0].idx : -1;
+  if(motherBlockIdx >= 0) termBlockMap[motherBlockIdx] = { ...m, _isSelf: true };
+  /* Map discovered terminals to remaining active blocks */
+  let mapIdx = 1; /* skip first block (mother) */
+  onlineTerms.forEach((t)=>{
+    if(mapIdx < activeBlocksSorted.length) termBlockMap[activeBlocksSorted[mapIdx].idx] = t;
+    mapIdx++;
   });
 
-  /* Example seat and machine name for preview (like v10) */
+  /* Example seat and machine name for preview */
   const exSeat = seatLabel(0, 0, r);
   const exName = prefix ? prefix + '-' + exSeat : '(前缀)-(座位号)';
 
@@ -551,10 +597,9 @@ function wbLayoutContent(terms, rt, c, m, d){
         <div class="card-header">❶ 教室信息</div>
         ${scanning?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;background:var(--t-accent-bg);border:1px solid rgba(88,166,255,.3);border-radius:4px">
           <span class="conn-spinner"></span>
-          <span style="font-size:.82rem;color:var(--t-accent)">正在扫描网络终端… 已发现 ${discoveredCount} 台</span>
+          <span style="font-size:.82rem;color:var(--t-accent)">正在扫描… 已发现 ${discoveredCount} 台终端</span>
         </div>`:''}
         <div class="prep-field"><label>教室名称</label><input type="text" id="tk-name" value="${esc(demo().takeover?.classroomName||c.name||'')}" placeholder="输入教室名称"></div>
-        <div class="prep-field"><label>发现终端</label><span style="font-weight:600;color:var(--t-accent)">${discoveredCount} 台在线</span></div>
         ${isTakenOver?`<div style="font-size:.75rem;color:var(--t-ok);margin-top:4px">已完成布局 · ${rt.online}/${rt.total} 在线</div>`:''}
       </div>
       <div class="card">
@@ -569,35 +614,35 @@ function wbLayoutContent(terms, rt, c, m, d){
       <div class="card">
         <div class="card-header">❸ 机器名 / 座位号</div>
         <div class="prep-field"><label>机器名前缀</label><input type="text" data-rule="namePrefix" value="${esc(r.namePrefix||'')}" placeholder="D301"></div>
-        <div class="prep-field"><label>起始字母</label><input type="text" data-rule="startLetter" value="${esc(r.startLetter||'A')}" maxlength="1" style="width:50px;text-transform:uppercase"></div>
+        <div class="prep-field"><label>座位号起始字母</label><input type="text" data-rule="startLetter" value="${esc(r.startLetter||'A')}" maxlength="1" style="width:50px;text-transform:uppercase"></div>
         <div style="padding:6px 10px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;color:var(--t-text);margin-top:4px;font-family:monospace">
-          机器名预览: <strong>${esc(exName)}</strong> · 座位号: <strong>${esc(exSeat)}</strong>
+          机器名预览: <strong>${esc(exName)}</strong> · 座位号预览: <strong>${esc(exSeat)}</strong>
         </div>
         <div style="font-size:.7rem;color:var(--t-text3);margin-top:2px">机器名 = 前缀 + "-" + 座位号，座位号 = 起始字母 + 序号</div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
       <div style="padding:10px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:8px;font-size:.82rem;flex-shrink:0">
+        <div style="font-size:.78rem;color:var(--t-text2);font-weight:600;margin-bottom:6px">布局设置</div>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
           <div class="prep-field" style="padding:0;font-size:.78rem;gap:6px"><label style="width:auto;flex-shrink:0;color:var(--t-text2)">每列</label><input type="number" data-grid="rows" value="${grid.rows}" min="1" max="20" style="width:56px"></div>
           <div class="prep-field" style="padding:0;font-size:.78rem;gap:6px"><label style="width:auto;flex-shrink:0;color:var(--t-text2)">列数</label><input type="number" data-grid="cols" value="${grid.cols}" min="1" max="15" style="width:56px"></div>
-          <span style="font-size:.75rem;color:var(--t-text2)">${pill('可用 '+activeCount,'ok')}${hasNewTermsBeyondGrid?` <span style="color:var(--t-err);font-weight:600">终端 ${discoveredCount} 超出容量 ${activeCount}</span>`:''}</span>
+          <span style="font-size:.75rem;color:var(--t-text2)">${pill('可用 '+activeCount,'ok')}${hasNewTermsBeyondGrid?` <span style="color:var(--t-err);font-weight:600">终端 ${totalTermCount} 超出容量 ${activeCount}</span>`:''}</span>
         </div>
-        <div style="display:flex;gap:4px;margin-bottom:6px">
+        <div style="display:flex;gap:4px;margin-bottom:6px;align-items:center">
+          <span style="font-size:.72rem;color:var(--t-text3);margin-right:4px">编号方向</span>
           ${[['tl','↘ 左上'],['tr','↙ 右上'],['bl','↗ 左下'],['br','↖ 右下']].map(([v,l])=>
             `<button class="btn ${dir===v?'btn-primary':'btn-secondary'}" style="padding:3px 8px;font-size:.72rem;justify-content:center" data-rule-dir="${v}">${l}</button>`
           ).join('')}
         </div>
-        ${!isTakenOver?`<div style="color:var(--t-accent);font-size:.75rem">操作指南: 左侧配置规则 → 右侧方块点击切换（可用/禁用） → 完成布局</div>
-          <div style="color:var(--t-text3);font-size:.72rem;margin-top:2px">终端上线后自动出现在网格中（显示MAC地址），完成布局后分配IP和座位号</div>`
-          :`<div style="color:var(--t-ok);font-size:.75rem;font-weight:600">已完成布局 · 点击方块可切换状态（可用 ↔ 禁用）· 修改后可重新完成布局</div>`}
+        <div style="color:var(--t-text3);font-size:.72rem">局域网内终端上线后自动出现在网格中</div>
       </div>
       <div class="page-scroll" style="flex:1;min-height:0">
-        ${renderSeatGridLayout(grid, r, dir, previewMap, termBlockMap, isTakenOver)}
+        ${renderSeatGridLayout(grid, r, dir, previewMap, termBlockMap, isTakenOver, hasRules)}
       </div>
       <div style="display:flex;gap:8px;padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0;align-items:center;min-height:44px">
-        <button class="btn btn-primary" ${activeCount>0&&discoveredCount>0&&hasRules&&!hasNewTermsBeyondGrid?'':'disabled'} data-act="complete-layout">完成布局</button>
-        <span style="font-size:.75rem;color:var(--t-text3)">${hasNewTermsBeyondGrid?'终端数超出容量，请调整布局':!hasRules?'请先设置IP前缀和机器名前缀':activeCount<=0?'请先设置网格布局':discoveredCount<=0?'等待终端上线…':''}</span>
+        <button class="btn btn-primary" ${activeCount>0&&totalTermCount>0&&hasRules&&!hasNewTermsBeyondGrid?'':'disabled'} data-act="complete-layout">完成布局</button>
+        <span style="font-size:.75rem;color:var(--t-text3)">${hasNewTermsBeyondGrid?'终端数超出容量，请调整布局':!hasRules?'请先设置IP前缀和机器名前缀':activeCount<=0?'请先设置网格布局':totalTermCount<=0?'等待终端上线…':''}</span>
       </div>
     </div>
   </div>`;
@@ -609,7 +654,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
   const grid=d.grid||{rows:c.rows||7,cols:c.cols||6,blocks:[]};
   const dir = r.gridDirection || 'tl';
   const bindings = d.bindings||{};
-  const boundCount = Object.keys(bindings).length;
+  const boundCount = Object.values(bindings).filter(b=>b.terminalId!==m.id).length;
   const activeBlocks = grid.blocks.filter(b=>b.state==='active');
   const done = tk?.phase==='completed';
 
@@ -619,28 +664,35 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
   /* Maint IP draft */
   const md = demo().maintDraft||{};
 
+  /* Last task result (persisted until user leaves the feature) */
+  const lastResult = demo().flags?.lastTaskResult;
+  const viewingLastResult = demo().flags?.viewLastResult;
+
   return `<div style="display:grid;grid-template-columns:280px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden;align-items:stretch">
     <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px">
       <div class="card">
         <div class="card-header">功能</div>
         <div style="display:flex;gap:0;border:1px solid var(--t-border);border-radius:var(--radius);overflow:hidden">
-          <button class="maint-tab-btn ${opsMode==='deploy'?'active':''}" ${isRunning?'disabled':''} data-act="ops-mode-deploy" style="flex:1">部署传输</button>
+          <button class="maint-tab-btn ${opsMode==='deploy'?'active':''}" ${isRunning?'disabled':''} data-act="ops-mode-deploy" style="flex:1">部署桌面</button>
           <button class="maint-tab-btn ${opsMode==='maint-ip'?'active':''}" ${isRunning?'disabled':''} data-act="ops-mode-maint-ip" style="flex:1">修改 IP / 服务器地址</button>
         </div>
       </div>
       ${opsMode==='deploy'||tk?`<div class="card">
-        <div class="card-header">部署控制</div>
+        <div class="card-header">设置部署参数</div>
         <div class="prep-field"><label>部署模式</label><select id="deploy-mode-sel" ${isRunning?'disabled':''}>
           <option value="incremental" ${(d.deployMode||'incremental')==='incremental'?'selected':''}>增量更新</option>
           <option value="full" ${d.deployMode==='full'?'selected':''}>全量部署</option>
         </select></div>
         <div style="padding:6px 0;font-size:.82rem">
-          已分配 <strong style="color:var(--t-accent)">${boundCount}</strong> / ${activeBlocks.length} 台
+          已部署 <strong style="color:var(--t-accent)">${boundCount}</strong> / ${activeBlocks.length} 台
         </div>
-        ${tk?`<div style="margin-top:8px;padding:8px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.82rem">
+        ${lastResult&&!isRunning?`<div style="margin-top:8px;padding:8px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.82rem">
+          <div style="color:var(--t-ok)">上次部署: 成功 ${lastResult.completed||0} · 失败 ${lastResult.failed||0} / ${lastResult.total||0}</div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:4px" data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看上次结果'}</button>
+        </div>`:''}
+        ${tk&&isRunning?`<div style="margin-top:8px;padding:8px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.82rem">
           <div>${done?'✓ 部署完成':'⏳ 部署进行中'}</div>
           <div>成功 ${tk.counts.completed||0} · 失败 ${tk.counts.failed||0} / ${tk.counts.total||0}</div>
-          ${done?'<button class="btn btn-ghost" style="margin-top:6px" data-act="ops-clear-task">关闭任务</button>':''}
         </div>`:''}
       </div>`:''}
       ${opsMode==='maint-ip'?`<div class="card">
@@ -661,22 +713,24 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
       ${isRunning?`<div style="padding:10px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.82rem">
         <div style="font-weight:600;color:${done?'var(--t-ok)':'var(--t-accent)'}">${done?'✓ 任务完成':'⏳ 任务执行中 — 功能切换已锁定'}</div>
         <div style="margin-top:4px">成功 ${tk.counts.completed||0} · 失败 ${tk.counts.failed||0} · 排队 ${tk.counts.queued||0} / 共 ${tk.counts.total||0}</div>
-        ${done?'<button class="btn btn-ghost" style="margin-top:6px" data-act="ops-clear-task">关闭任务</button>':''}
       </div>`:`<div style="padding:8px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.78rem;color:var(--t-text2)">
-        ${opsMode==='deploy'?'点击网格方块可切换分配/取消 · 右侧显示当前分配状态':
-          opsMode==='maint-ip'?'点击方块选择/取消选择终端 · 修改左侧规则后自动刷新预览':
+        ${opsMode==='deploy'?'点击网格方块选择/取消选择终端':
+          opsMode==='maint-ip'?'点击方块选择/取消选择终端 · 修改左侧参数后自动刷新预览':
           '请从左侧选择功能'}
       </div>`}
       <div class="page-scroll" style="flex:1;min-height:0">
         ${isRunning ? renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, m) :
+          viewingLastResult&&lastResult ? renderSeatGridProgress(grid, r, dir, bindings, lastResult._task, stateLabels, terms, m) :
           opsMode==='maint-ip' ? renderSeatGridMaint(terms, m, c, d, md) :
-          renderSeatGridOps(grid, r, dir, bindings, terms)}
+          renderSeatGridOps(grid, r, dir, bindings, terms, m)}
       </div>
-      <div style="display:flex;gap:8px;padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0;align-items:center;min-height:44px;justify-content:space-between">
+      <div class="dt-export-bar" style="border-top:1px solid var(--t-border);padding-top:10px;justify-content:space-between">
         <div style="display:flex;gap:8px;align-items:center">
           ${opsMode==='deploy'&&!isRunning?`<button class="btn btn-primary" ${boundCount>=1?'':'disabled'} data-act="start-deployment">开始部署（${boundCount} 台）</button>`:''}
         </div>
-        <button class="btn btn-ghost" style="font-size:.78rem" ${isRunning?'disabled':''} data-act="open-export">导出教室终端清单 →</button>
+        <button class="btn btn-ghost dt-export-btn" ${isRunning?'disabled':''} data-act="open-export">
+          <span style="font-size:1rem">📋</span> 导出教室终端清单
+        </button>
       </div>
     </div>
   </div>`;
@@ -713,9 +767,8 @@ function renderSeatGrid(grid, r, dir, previewMap, terms, mode, blankNoRules){
   return `<div class="deploy-grid" style="display:grid;grid-template-columns:repeat(${grid.cols},1fr);gap:6px">${html}</div>`;
 }
 
-/* Layout-specific grid renderer: shows discovered terminal MAC addresses */
-function renderSeatGridLayout(grid, r, dir, previewMap, termBlockMap, isTakenOver){
-  const hasRules = !!(r.ipBase && r.namePrefix);
+/* Layout-specific grid renderer: tri-state blocks (active/disabled/deleted), conditional MAC display */
+function renderSeatGridLayout(grid, r, dir, previewMap, termBlockMap, isTakenOver, hasRules){
   let html='';
   for(let ri=0;ri<grid.rows;ri++){
     for(let ci=0;ci<grid.cols;ci++){
@@ -725,30 +778,32 @@ function renderSeatGridLayout(grid, r, dir, previewMap, termBlockMap, isTakenOve
       if(!b){ html+='<div class="gb gb-empty"></div>'; continue; }
       const seat = hasRules ? seatLabel(row, col, r) : '#'+(b.idx+1);
       if(b.state==='deleted'){
-        html+=`<div class="gb gb-deleted" data-block-idx="${b.idx}" title="已删除 (${seat})"><span class="gb-x">×</span></div>`;
+        html+=`<div class="gb gb-deleted" data-block-idx="${b.idx}" title="已删除 — 点击恢复"><span class="gb-x">×</span></div>`;
         continue;
       }
       const isDisabled = b.state==='disabled';
       const pv=previewMap[b.idx];
       const term=termBlockMap[b.idx];
       if(isDisabled){
-        html+=`<div class="gb gb-disabled" data-block-idx="${b.idx}" title="${seat} · 已禁用">
+        html+=`<div class="gb gb-disabled" data-block-idx="${b.idx}" title="${seat} · 已禁用 — 点击恢复">
           <div class="gb-seat">${esc(seat)}</div><div class="gb-tag">禁用</div></div>`;
         continue;
       }
       if(term){
-        /* Discovered terminal: if it already has IP+seat assigned, show seat/IP only (no MAC); else show MAC */
-        const hasAssigned = term.ip && term.seat;
-        html+=`<div class="gb ${isTakenOver?'gb-bound':'gb-active'}" data-block-idx="${b.idx}" title="${seat}${hasAssigned?'':' · '+esc(term.mac)}">
+        const isSelf = term._isSelf;
+        /* When rules are set, show rule preview (seat+IP) and hide MAC.
+           When no rules, show MAC (terminal raw identity). */
+        html+=`<div class="gb ${isSelf?'':''}${isTakenOver?'gb-bound':'gb-active'}" data-block-idx="${b.idx}" title="${seat}${isSelf?' (本机)':''}" style="${isSelf?'border-color:var(--t-warn);background:var(--t-warn-bg)':''}">
           <div class="gb-seat">${esc(seat)}</div>
-          ${!hasAssigned?`<div class="gb-mac">${esc(term.mac)}</div>`:''}
-          ${pv?`<div class="gb-ip">${esc(pv.ip)}</div>`:''}
+          ${isSelf?'<div class="gb-tag" style="color:var(--t-warn)">本机</div>':''}
+          ${!isSelf&&!hasRules?`<div class="gb-mac">${esc(term.mac)}</div>`:''}
+          ${!isSelf&&pv?`<div class="gb-ip">${esc(pv.ip)}</div>`:''}
         </div>`;
       } else {
-        /* Empty predefined cell — grey out seat number */
-        html+=`<div class="gb gb-waiting" data-block-idx="${b.idx}" title="${seat} · 空位">
+        /* Empty cell — show seat preview if rules set, otherwise just a bare block */
+        html+=`<div class="gb gb-waiting" data-block-idx="${b.idx}" title="${seat} · 空闲">
           <div class="gb-seat" style="color:var(--t-text3)">${esc(seat)}</div>
-          ${pv?`<div class="gb-ip" style="opacity:.3">${esc(pv.ip)}</div>`:''}
+          ${hasRules&&pv?`<div class="gb-ip" style="opacity:.3">${esc(pv.ip)}</div>`:''}
         </div>`;
       }
     }
@@ -756,7 +811,7 @@ function renderSeatGridLayout(grid, r, dir, previewMap, termBlockMap, isTakenOve
   return `<div class="deploy-grid" style="display:grid;grid-template-columns:repeat(${grid.cols},1fr);gap:6px">${html}</div>`;
 }
 
-function renderSeatGridOps(grid, r, dir, bindings, terms){
+function renderSeatGridOps(grid, r, dir, bindings, terms, m){
   let html='';
   for(let ri=0;ri<grid.rows;ri++){
     for(let ci=0;ci<grid.cols;ci++){
@@ -770,11 +825,20 @@ function renderSeatGridOps(grid, r, dir, bindings, terms){
         html+=`<div class="gb gb-disabled"><div class="gb-seat">${esc(seat)}</div><div class="gb-tag">禁用</div></div>`;
         continue;
       }
-      /* Plain layout block — selectable for deploy/IP operations */
+      /* Mother block — show as non-selectable 本机 */
       const binding=bindings[b.idx];
-      const isBound = !!binding;
-      html+=`<div class="gb ${isBound?'gb-bound':'gb-active'}" data-deploy-toggle-bind="${b.idx}" style="cursor:pointer">
+      if(binding && m && binding.terminalId===m.id){
+        html+=`<div class="gb" style="opacity:.5;border-color:var(--t-warn)">
+          <div class="gb-seat">${esc(seat)}</div>
+          <div class="gb-tag" style="color:var(--t-warn)">本机</div>
+        </div>`;
+        continue;
+      }
+      /* Selectable block — selected=bound, unselected=waiting */
+      const isSelected = !!binding;
+      html+=`<div class="gb ${isSelected?'gb-bound':'gb-waiting'}" data-deploy-toggle-bind="${b.idx}" style="cursor:pointer">
         <div class="gb-seat">${esc(seat)}</div>
+        ${isSelected?'<div class="gb-tag" style="color:var(--t-ok)">已选</div>':''}
       </div>`;
     }
   }
@@ -785,17 +849,17 @@ function renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, 
   /* Maintenance tasks don't use grid blocks — they use terminal-based layout */
   if(tk?.type==='maintenance' && terms){
     const crRows = grid.rows||7; const crCols = grid.cols||6;
-    const sorted = [...terms].sort((a,b)=>(a.seat||'').localeCompare(b.seat||''));
+    const sorted = [...terms].filter(t=>t.seat).sort((a,b)=>(a.seat||'').localeCompare(b.seat||''));
     return `<div style="display:grid;grid-template-columns:repeat(${Math.min(crCols,8)},1fr);gap:6px">
       ${sorted.map(t=>{
         const isMother = t.id===m.id;
         if(isMother) return `<div class="gb" style="opacity:.5;border-color:var(--t-warn)">
-          <div class="gb-seat">${esc(t.seat||'--')}</div>
-          <div class="gb-tag" style="color:var(--t-warn)">母机</div>
+          <div class="gb-seat">${esc(t.seat)}</div>
+          <div class="gb-tag" style="color:var(--t-warn)">本机</div>
         </div>`;
         const item = tk.items?.find(i=>i.terminalId===t.id);
         if(!item) return `<div class="gb gb-waiting">
-          <div class="gb-seat">${esc(t.seat||'--')}</div>
+          <div class="gb-seat">${esc(t.seat)}</div>
           <div class="gb-tag">未参与</div>
         </div>`;
         const itemState = item.state||'queued';
@@ -804,7 +868,7 @@ function renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, 
         return `<div class="gb gb-transfer" style="position:relative;overflow:hidden">
           <div style="position:absolute;top:0;left:0;bottom:0;width:${pctVal}%;background:${fillColor};opacity:.2;transition:width .5s ease"></div>
           <div style="position:relative;z-index:1">
-            <div class="gb-seat">${esc(t.seat||'--')}</div>
+            <div class="gb-seat">${esc(t.seat)}</div>
             <div class="gb-ip">${esc(t.ip||'--')}${item.newIp?' → '+esc(item.newIp):''}</div>
             <div class="gb-status" style="color:${itemState==='completed'?'var(--t-ok)':itemState==='failed'?'var(--t-err)':'var(--t-text2)'}">${stateLabels[itemState]||itemState}</div>
           </div>
@@ -827,6 +891,14 @@ function renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, 
         continue;
       }
       const binding=bindings[b.idx];
+      /* Mother block — non-participant */
+      if(binding && m && binding.terminalId===m.id){
+        html+=`<div class="gb" style="opacity:.5;border-color:var(--t-warn)">
+          <div class="gb-seat">${esc(seat)}</div>
+          <div class="gb-tag" style="color:var(--t-warn)">本机</div>
+        </div>`;
+        continue;
+      }
       if(!binding){
         html+=`<div class="gb gb-waiting"><div class="gb-seat">${esc(seat)}</div><div class="gb-tag">未分配</div></div>`;
         continue;
@@ -849,22 +921,22 @@ function renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, 
 
 function renderSeatGridMaint(terms, m, c, d, md){
   const crRows = c.rows||7; const crCols = c.cols||6;
-  const sorted = [...terms].sort((a,b)=>(a.seat||'').localeCompare(b.seat||''));
+  const sorted = [...terms].filter(t=>t.seat).sort((a,b)=>(a.seat||'').localeCompare(b.seat||''));
   const scope = md.scope || [];
   const ipPreview = md.ipPreview || [];
   return `<div style="display:grid;grid-template-columns:repeat(${Math.min(crCols,8)},1fr);gap:6px">
     ${sorted.map(t=>{
       const isMother = t.id===m.id;
       if(isMother) return `<div class="gb" style="opacity:.5;border-color:var(--t-warn)">
-        <div class="gb-seat">${esc(t.seat||'--')}</div>
-        <div class="gb-tag" style="color:var(--t-warn)">母机</div>
+        <div class="gb-seat">${esc(t.seat)}</div>
+        <div class="gb-tag" style="color:var(--t-warn)">本机</div>
       </div>`;
       const checked=scope.includes(t.id);
       const pv = ipPreview.find(x=>x.terminalId===t.id);
-      return `<div class="gb ${checked?'gb-active':'gb-waiting'}" style="cursor:pointer;${checked?'border-color:var(--t-accent);background:var(--t-accent-bg)':''}" data-maint-toggle="${t.id}">
-        <div class="gb-seat">${esc(t.seat||'--')}</div>
+      return `<div class="gb ${checked?'gb-bound':'gb-waiting'}" style="cursor:pointer" data-maint-toggle="${t.id}">
+        <div class="gb-seat">${esc(t.seat)}</div>
         <div class="gb-ip">${esc(t.ip||'--')}${checked&&pv?' → <span style="color:var(--t-ok)">'+esc(pv.newIp)+'</span>':''}</div>
-        ${!checked?`<div class="gb-tag">${t.online?'在线':'离线'}</div>`:''}
+        ${checked?'<div class="gb-tag" style="color:var(--t-ok)">已选</div>':`<div class="gb-tag">${t.online?'在线':'离线'}</div>`}
       </div>`;
     }).join('')}
   </div>`;
@@ -1388,36 +1460,35 @@ function faultReplaceScreen(){
   }
 
   return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
-  <div style="width:100%;max-width:860px">
+  <div style="width:100%;max-width:920px">
   <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 替换故障终端</div>
   <div class="section-sub">选择教室和要替换的终端座位，本机将继承该终端的配置与桌面。</div>
 
   ${!serverOk?`<div class="card mb-16" style="border-color:var(--t-warn);max-width:720px">
     <div style="font-size:.85rem;color:var(--t-warn)">⚠ 无法连接服务器，请检查网络配置后重试。</div>
   </div>`:`
-  <div style="display:grid;grid-template-columns:240px 1fr;gap:16px;align-items:start">
+  <div style="display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start">
     <div>
       <div class="card">
         <div class="card-header">❶ 选择教室</div>
         ${allCrs.length?allCrs.map(cr=>`
-          <div class="dt-card mb-4 ${cr.id===selectedCrId?'selected':''}" style="cursor:pointer;padding:8px 12px;font-size:.85rem" data-fault-cr="${cr.id}">
+          <div class="dt-card mb-4 ${cr.id===selectedCrId?'selected':''}" style="cursor:pointer;padding:8px 12px;font-size:.88rem" data-fault-cr="${cr.id}">
             <span>${esc(cr.name)}</span>
           </div>
-        `).join(''):'<div style="font-size:.85rem;color:var(--t-text3);padding:8px 0">无已注册教室</div>'}
+        `).join(''):'<div style="font-size:.88rem;color:var(--t-text3);padding:8px 0">无已注册教室</div>'}
       </div>
     </div>
     <div class="card">
       <div class="card-header">❷ 选择终端座位 ${selectedCr?'— '+esc(selectedCr.name):''}</div>
-      ${!selectedCr?'<div style="font-size:.85rem;color:var(--t-text3);padding:16px 0;text-align:center">← 请先选择教室</div>'
-        :crTerms.length?`<div style="display:grid;grid-template-rows:repeat(${selectedCr.rows||7},auto);grid-template-columns:repeat(${Math.min(selectedCr.cols||8, 10)},minmax(0,1fr));grid-auto-flow:column;gap:6px;max-width:100%">
+      ${!selectedCr?'<div style="font-size:.88rem;color:var(--t-text3);padding:16px 0;text-align:center">← 请先选择教室</div>'
+        :crTerms.length?`<div style="display:grid;grid-template-rows:repeat(${selectedCr.rows||7},auto);grid-template-columns:repeat(${Math.min(selectedCr.cols||8, 10)},minmax(0,1fr));grid-auto-flow:column;gap:8px;max-width:100%">
           ${crTerms.map(t=>`
-            <div class="gb ${t.online?'gb-active':'gb-disabled'}" style="cursor:${t.online?'pointer':'default'};display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:40px;max-width:80px" ${t.online?`data-fault-select="${t.id}"`:'title="离线"'}>
-              <div class="gb-seat">${esc(t.seat||'--')}</div>
-              <div class="gb-ip">${esc(t.ip||'--')}</div>
-              ${!t.online?'<div class="gb-tag" style="color:var(--t-err)">离线</div>':''}
+            <div class="gb ${t.online?'gb-active':'gb-disabled'}" style="cursor:${t.online?'pointer':'default'};display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:48px;padding:6px" ${t.online?`data-fault-select="${t.id}"`:'title="离线"'}>
+              <div class="gb-seat" style="font-size:.88rem">${esc(t.seat||'--')}</div>
+              ${!t.online?'<div class="gb-tag" style="color:var(--t-err);font-size:.75rem">离线</div>':''}
             </div>
           `).join('')}
-        </div>`:'<div style="font-size:.85rem;color:var(--t-text3);padding:16px 0;text-align:center">该教室无其他终端</div>'}
+        </div>`:'<div style="font-size:.88rem;color:var(--t-text3);padding:16px 0;text-align:center">该教室无其他终端</div>'}
     </div>
   </div>`}
   </div>
@@ -1586,6 +1657,14 @@ function bindAll(){
         showTermAlert('终端清单已生成（原型模拟）——实际产品将下载 Excel 文件。\n导出教室名称: '+crName+(crRemark?'\n备注: '+crRemark:''));
       } else if(a==='open-fault-replace-direct'){
         act('open-fault-replace');
+      } else if(a==='open-takeover'){
+        /* Pre-check: mother terminal must have basic setup done */
+        const _m = mt();
+        if(!_m.seat || !_m.name){
+          showTermAlert('请先完成本机设置（设置本机 → 填写机器名和座位号）后再进入网络同传。');
+          return;
+        }
+        act('open-takeover');
       } else if(a==='open-fault-reset-direct'){
         act('open-fault-reset');
       } else if(a==='fault-reset-confirm-with-dialog'){
@@ -1641,6 +1720,8 @@ function bindAll(){
         /* Clear completed task and reset opsMode */
         act('clear-completed-task');
         act('set-flag',{opsMode:'idle'});
+      } else if(a==='toggle-view-last-result'){
+        act('set-flag',{viewLastResult:!(demo().flags?.viewLastResult)});
       } else { act(a); }
     });
   });
@@ -1856,7 +1937,11 @@ function bindAll(){
     el.addEventListener('click',()=>act('enter-desktop-edit',{desktopId:el.dataset.dtEdit}));
   });
   root.querySelectorAll('[data-dt-copy]').forEach(el=>{
-    el.addEventListener('click',()=>act('copy-desktop',{sourceId:el.dataset.dtCopy}));
+    el.addEventListener('click',()=>{
+      const dtId=el.dataset.dtCopy;
+      const dt=(mt()?.desktops||[]).find(d=>d.id===dtId);
+      showTermConfirm('复制桌面',`确定要复制桌面「${esc(dt?.name||'')}」？将创建一份副本。`,()=>act('copy-desktop',{sourceId:dtId}),{danger:false});
+    });
   });
   root.querySelectorAll('[data-dt-default]').forEach(el=>{
     el.addEventListener('click',()=>act('set-default-desktop',{desktopId:el.dataset.dtDefault}));

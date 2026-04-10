@@ -2,9 +2,11 @@
 
 function parseSeat(s) {
   if (!s) return { r: 999, c: 999 };
-  if (s.startsWith('T-')) return { r: -1, c: +s.split('-')[1] || 1 };
-  const [row, col] = s.split('-');
-  return { r: row.charCodeAt(0) - 65, c: +col || 0 };
+  if (s.startsWith('T-') || s.startsWith('T0')) return { r: -1, c: parseInt(s.replace(/\D/g,''),10) || 1 };
+  /* Handle both A01 and A-01 formats */
+  const m = s.match(/^([A-Z])[-]?(\d+)$/i);
+  if (m) return { r: m[1].toUpperCase().charCodeAt(0) - 65, c: +m[2] || 0 };
+  return { r: 999, c: 999 };
 }
 
 export function cmpSeat(a, b) {

@@ -214,6 +214,58 @@ function buildState(s){
   const motherTerm = terminals.find(t=>t.id===motherId);
   if(motherTerm){ motherTerm.online=true; motherTerm.power='on'; motherTerm.heartbeat=now(); }
 
+  /* ── Pre-fill demo data for mother terminal (blank classroom) ── */
+  const focusSeedCr = s.classrooms.find(x=>x.id===focusCr);
+  if(motherTerm && focusSeedCr && focusSeedCr.stage==='blank'){
+    /* 1) 本机设置 — simulate user having done "设置本机" */
+    motherTerm.name = 'D301-T01';
+    motherTerm.seat = 'T-01';
+    motherTerm.use  = '教师终端';
+    motherTerm.ip   = focusSeedCr.networkBase+'.20';
+    motherTerm.subnetMask = '255.255.255.0';
+    motherTerm.gateway = focusSeedCr.gateway;
+    motherTerm.dns = [...focusSeedCr.dns];
+    /* 2) 服务器连接 — simulate user having done "设置服务器" */
+    motherTerm.serverAddr = '10.21.0.18';
+    /* 3) 桌面 — simulate user having created desktops via "管理桌面" */
+    const demoDts = [
+      { id:'dt-demo-teach', name:'公共教学桌面', version:'v1', os:'Windows 11 23H2', type:'教学',
+        visibility:'default', remark:'已装 Office 全家桶 + Python 3.12 + VS Code', syncStatus:'local',
+        diskSize:65, dataDisk:'D: 40GB VHD', createdAt:now(), editedAt:now(), snapshotId:null,
+        restoreMode:'还原系统盘，保留数据盘', uploaded:false, physicalDeploy:false, baseImageName:'Windows 11 23H2',
+        dataDisks:[{id:'dd-demo-teach',name:'数据盘',drive:'D:',size:'40GB',sharedWith:[]}] },
+      { id:'dt-demo-exam', name:'期末考试桌面', version:'v1', os:'Windows 11 23H2', type:'考试',
+        visibility:'default', remark:'考试专用，已锁定 USB 和网络', syncStatus:'local',
+        diskSize:45, dataDisk:'D: 20GB VHD', createdAt:now(), editedAt:now(), snapshotId:null,
+        restoreMode:'还原系统盘和数据盘', uploaded:false, physicalDeploy:false, baseImageName:'Windows 11 23H2',
+        dataDisks:[{id:'dd-demo-exam',name:'数据盘',drive:'D:',size:'20GB',sharedWith:[]}] },
+      { id:'dt-demo-base', name:'Win11 纯净桌面', version:'v1', os:'Windows 11 23H2', type:'原始',
+        visibility:'default', remark:'基础系统镜像，仅含驱动', syncStatus:'local',
+        diskSize:18, dataDisk:'', createdAt:now(), editedAt:now(), snapshotId:null,
+        restoreMode:'还原系统盘，保留数据盘', uploaded:false, physicalDeploy:false, baseImageName:'Windows 11 23H2',
+        dataDisks:[] },
+      { id:'dt-demo-teacher', name:'教师桌面', version:'v1', os:'Windows 11 23H2', type:'教学',
+        visibility:'default', remark:'教师授课专用，含课件管理工具', syncStatus:'local',
+        diskSize:52, dataDisk:'D: 30GB VHD', createdAt:now(), editedAt:now(), snapshotId:null,
+        restoreMode:'还原系统盘，保留数据盘', uploaded:false, physicalDeploy:false, baseImageName:'Windows 11 23H2',
+        dataDisks:[{id:'dd-demo-teacher',name:'数据盘',drive:'D:',size:'30GB',sharedWith:[]}] },
+      { id:'dt-demo-dev', name:'软件开发实训桌面', version:'v1', os:'Windows 11 23H2', type:'教学',
+        visibility:'hidden', remark:'Java + IDEA + MySQL 环境', syncStatus:'local',
+        diskSize:78, dataDisk:'D: 50GB VHD', createdAt:now(), editedAt:now(), snapshotId:null,
+        restoreMode:'还原系统盘，保留数据盘', uploaded:false, physicalDeploy:false, baseImageName:'Windows 11 23H2',
+        dataDisks:[{id:'dd-demo-dev',name:'数据盘',drive:'D:',size:'50GB',sharedWith:[]}] }
+    ];
+    motherTerm.desktops = demoDts;
+    motherTerm.defaultDesktopId = 'dt-demo-teach';
+    motherTerm.bios = {
+      bootEntries: demoDts.map(d=>d.id),
+      defaultBootId: 'dt-demo-teach',
+      restoreMode: '还原系统盘，保留数据盘'
+    };
+    motherTerm.metrics.diskUsed = demoDts.reduce((s,d)=>s+d.diskSize,0)+35;
+    motherTerm.metrics.diskTotal = 512;
+  }
+
   return {
     meta: { version: 3, updatedAt: now() },
     school: s.school, campuses: [...s.campuses], servers: s.servers.map(sv=>{
@@ -233,11 +285,12 @@ function buildState(s){
       deployDraft: {
         step: 0, /* 0=prep, 1=grid, 2=bind, 3=transfer */
         deployMode: 'incremental', /* 'incremental' | 'full' */
-        grid: { rows:7, cols:6, blocks:[] },
+        grid: { rows:7, cols:7, blocks:[] },
         scope: [], /* terminal IDs in order (populated from bindings on start) */
         rules: {
-          ipBase: '', ipStart: 20,
-          namePrefix: '',
+          ipBase: focusSeedCr?.networkBase||'', ipStart: 20,
+          namePrefix: focusCr.split('-')[1]?.toUpperCase()||'',
+          startLetter: 'A', seatFlow: 'col',
           defaultUse: '学生终端'
         },
         bindings: {}, /* blockIdx -> { terminalId, mac } */
@@ -245,7 +298,7 @@ function buildState(s){
         assignments: [],
         validation: { valid:true, errors:[] }
       },
-      maintDraft: { step:0, scope:[], keepIds:[], desktopId:null, desktopIds:[], defaultDesktopId:null, restoreMode:'还原系统盘，保留数据盘', category:'桌面更新', ipPreview:[], newServerAddr:'', newIpBase:'', newIpStart:20, newSubnetMask:'255.255.255.0', newGateway:'', newDns:'' },
+      maintDraft: { step:0, scope:[], keepIds:[], desktopId:null, desktopIds:[], defaultDesktopId:null, restoreMode:'还原系统盘，保留数据盘', category:'桌面更新', ipPreview:[], newServerAddr:focusSeedCr?.serverAddress||'10.21.0.18', newIpBase:focusSeedCr?.networkBase||'', newIpStart:20, newSubnetMask:'255.255.255.0', newGateway:focusSeedCr?.gateway||'', newDns:(focusSeedCr?.dns||[]).join(',') },
       examDraft: { step:0, scope:[], keepIds:[], desktopId:null, desktopIds:[], hideEntries:true, restoreMode:'还原系统盘和数据盘' },
       desktopEdit: { active:false, returnScreen:null },
       _desktopReturnScreen: null,
@@ -1055,10 +1108,12 @@ function act(action, payload={}){
   case 'deploy-toggle-block':{
     const block = demo.deployDraft.grid.blocks.find(b=>b.idx===payload.idx);
     if(!block) return {ok:false,reason:'块不存在'};
-    /* toggle: active ↔ disabled */
-    block.state = block.state==='active' ? 'disabled' : 'active';
-    /* remove binding if disabled */
-    if(block.state==='disabled') delete demo.deployDraft.bindings[block.idx];
+    /* tri-state toggle: active → disabled → deleted → active */
+    if(block.state==='active') block.state='disabled';
+    else if(block.state==='disabled') block.state='deleted';
+    else block.state='active';
+    /* remove binding if not active */
+    if(block.state!=='active') delete demo.deployDraft.bindings[block.idx];
     return {ok:true};
   }
   case 'deploy-bind-skip':{
@@ -1626,10 +1681,13 @@ function tickTasks(){
       task.phase='completed';task.completedAt=now();
       if(task.type==='deployment'){
         cr.stage='deployed'; cr.memberMacs=termsInCr(cr.id).map(t=>t.mac);
+        /* Save last task result for viewing history */
+        state.demo.flags.lastTaskResult = { completed:task.counts.completed, failed:task.counts.failed, total:task.counts.total, type:task.type, label:task.label, at:now(), _task:task };
+        state.demo.flags.viewLastResult = false;
         if(state.demo.motherScreen==='workbench'){
           /* Auto-switch to maint tab after deployment completes */
           state.demo.flags.wbTab='maint';
-          state.demo.flags.opsMode='idle';
+          state.demo.flags.opsMode='deploy';
         } else {
           state.demo.motherScreen='deploy-result'; termById(state.demo.motherId).screen='deploy-result';
         }
