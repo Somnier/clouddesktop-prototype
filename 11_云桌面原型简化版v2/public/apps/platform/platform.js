@@ -9,9 +9,10 @@ client.connect();
 
 let view = { page: 'dashboard', campusId: null, classroomId: null, terminalId: null, tab: 'overview' };
 let _isRendering = false;
+let _lastStateJson = null; /* skip re-render when state unchanged */
 
 function s(){ return client.get(); }
-function nav(page, opts={}){ Object.assign(view, {page,...opts}); render(s()); }
+function nav(page, opts={}){ Object.assign(view, {page,...opts}); _lastStateJson=null; render(s()); }
 
 /* ── Focus & input preservation across innerHTML renders ── */
 function _saveFocus(){
@@ -41,6 +42,10 @@ function _restoreFocus(saved){
 function render(state){
   if(!state) return;
   if(_isRendering) return;
+  /* Skip re-render if state is unchanged (SSE pushes identical data) */
+  const stateJson = JSON.stringify(state);
+  if(stateJson === _lastStateJson) return;
+  _lastStateJson = stateJson;
   view.campusId = view.campusId || state.demo.focusCampusId;
   const saved = _saveFocus();
   _isRendering = true;

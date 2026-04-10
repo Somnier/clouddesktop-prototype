@@ -459,6 +459,7 @@ function act(action, payload={}){
     if(payload.serverAddr) mt.serverAddr=payload.serverAddr;
     if(payload.subnetMask) mt.subnetMask=payload.subnetMask;
     if(payload.gateway) mt.gateway=payload.gateway;
+    if(payload.dns) mt.dns=payload.dns.split(',').map(s=>s.trim()).filter(Boolean);
     return {ok:true};
 
   /* ── LOCAL DESKTOP MANAGEMENT ── */
@@ -480,6 +481,9 @@ function act(action, payload={}){
       dataDisks.push({id:'dd-'+dtId, name:'数据盘', drive:payload.dataDiskDrive||'D:', size:payload.dataDiskSize, sharedWith:[]});
     }
     if(isPackage && payload.dataDisks){ dataDisks.push(...payload.dataDisks); }
+    /* Compute total diskSize = system(25GB) + all data disks */
+    const dataDiskTotalGb = dataDisks.reduce((s,dd)=>s+parseInt((dd.size||'0').replace(/\D/g,''),10),0);
+    const diskSize = dataDiskTotalGb > 0 ? dataDiskTotalGb + 25 : 25;
     const dt = {id:dtId, name:payload.name||'新建桌面',
       os:payload.os||'Windows 11 23H2',
       visibility:'default',
@@ -487,12 +491,17 @@ function act(action, payload={}){
       physicalDeploy: payload.physicalDeploy||false,
       uploaded: false,
       baseImageName: imgEntry.name,
+      diskSize,
       remark:payload.remark||'', syncStatus:'local', snapshotId:snapId,
       dataDisks,
       createdAt:now(), editedAt:now()};
     mt.desktops.push(dt);
     cr.desktopCatalog.push({...dt});
     if(!mt.defaultDesktopId){ mt.defaultDesktopId=dt.id; cr.defaultDesktopId=dt.id; }
+    /* Ensure bios has defaultBootId for first desktop */
+    if(!mt.bios) mt.bios={bootEntries:[],defaultBootId:null,restoreMode:dt.restoreMode};
+    mt.bios.bootEntries.push(dt.id);
+    if(!mt.bios.defaultBootId) mt.bios.defaultBootId=dt.id;
     addLog('info','终端','导入桌面: '+dt.name, isPackage?'从桌面包导入':'从镜像新建');
     return {ok:true, desktopId: dtId};
   }

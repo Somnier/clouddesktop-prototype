@@ -70,8 +70,8 @@
 .btn-exit { background: transparent; color: var(--t-err); border: 1px solid var(--t-err);
   padding: 4px 10px; font-size: .78rem; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
   transition: all .2s; cursor: pointer; line-height: 1; }
-.btn-exit:hover { background: var(--t-err-bg); }
-.btn-exit:active { background: rgba(248,81,73,.2); }
+.btn-exit:hover { background: var(--t-err); color: #fff; }
+.btn-exit:active { background: #d32f2f; color: #fff; }
 
 /* ── unsync desktop card (red warning) ── */
 .dt-card.dt-unsync { border-color: var(--t-err) !important; background: var(--t-err-bg) !important; }
