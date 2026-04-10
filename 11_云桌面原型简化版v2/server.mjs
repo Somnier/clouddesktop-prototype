@@ -545,7 +545,8 @@ function act(action, payload={}){
   case 'set-default-desktop':
     if(payload.desktopId){
       mt.defaultDesktopId=payload.desktopId; cr.defaultDesktopId=payload.desktopId;
-      if(mt.bios) mt.bios.defaultBootId=payload.desktopId;
+      if(!mt.bios) mt.bios={bootEntries:(mt.desktops||[]).map(d=>d.id),defaultBootId:payload.desktopId,restoreMode:'还原系统盘，保留数据盘'};
+      else mt.bios.defaultBootId=payload.desktopId;
     }
     return {ok:true};
   case 'set-restore-mode':{
@@ -609,12 +610,11 @@ function act(action, payload={}){
 
   /* ── TAKEOVER ── */
   case 'open-takeover':{
-    /* If already mother, go to workbench directly */
+    /* Always go to workbench — takeover is integrated into layout tab */
     if(mt.controlState==='mother'){
       if(!demo.deployDraft.grid.blocks.length) demo.deployDraft.grid=initGridBlocks(cr.id,cr);
-      demo.motherScreen='workbench'; mt.screen='workbench'; return {ok:true};
     }
-    demo.motherScreen='takeover'; mt.screen='takeover';
+    demo.motherScreen='workbench'; mt.screen='workbench';
     const allTerms=termsInCr(cr.id).filter(t=>t.id!==mt.id&&t.online);
     const main=[],unbound=[],other=[];
     /* Build per-terminal scan info including bound classroom name */
@@ -1206,8 +1206,11 @@ function act(action, payload={}){
   /* ── FAULT HANDLING (TERM-06) ── */
   case 'open-fault-replace':{
     demo.motherScreen='fault-replace'; mt.screen='fault-replace';
-    const defaultCrId=mt.boundClassroom||mt.classroomId;
-    const faultyCr=crById(defaultCrId);
+    /* Only pre-select a classroom that is registered on the server (deployed) */
+    const candidateCrId=mt.boundClassroom||mt.classroomId;
+    const candidateCr=crById(candidateCrId);
+    const defaultCrId=(candidateCr && candidateCr.stage==='deployed' && candidateCr.registeredOnServer) ? candidateCrId : null;
+    const faultyCr=defaultCrId?crById(defaultCrId):null;
     const faultyTerms=faultyCr?termsInCr(faultyCr.id).filter(t=>!t.online&&t.id!==mt.id):[];
     demo.faultReplace={
       serverReachable: !!(mt.serverAddr),

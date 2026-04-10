@@ -153,6 +153,7 @@ function showCreateDesktopDialog(defaultName){
 /* ── Local input cache to survive SSE re-renders ── */
 const _inputCache = {};
 let _lastScreen = null;
+let _isRendering = false; /* guard: prevents blur handlers firing during innerHTML replacement */
 
 function _cacheAllInputs(){
   root.querySelectorAll('input, textarea, select').forEach(el=>{
@@ -203,6 +204,7 @@ function render(state){
   }
   /* Save scroll positions */
   const scrollPos = _cacheScrollPositions();
+  _isRendering = true;
   root.innerHTML = shellHtml();
   bindAll();
   /* Restore ALL cached input values */
@@ -219,6 +221,7 @@ function render(state){
       }
     }
   }
+  _isRendering = false;
 }
 
 
@@ -327,8 +330,8 @@ function localInfoScreen(){
     </div>
     <div class="prep-field"><label>IP 地址</label><input type="text" id="li-ip" value="${esc(m.ip||'')}" placeholder="如 10.21.31.20"></div>
     <div class="prep-field"><label>子网掩码</label><input type="text" id="li-mask" value="${esc(m.subnetMask||'')}" placeholder="255.255.255.0"></div>
-    <div class="prep-field"><label>网关</label><input type="text" id="li-gw" value="${esc(m.gateway||'')}" placeholder="网关地址"></div>
-    <div class="prep-field"><label>DNS</label><input type="text" id="li-dns" value="${esc((m.dns||[]).join(','))}" placeholder="DNS 地址"></div>
+    <div class="prep-field"><label>网关</label><input type="text" id="li-gw" value="${esc(m.gateway||'')}" placeholder="如 10.21.31.1"></div>
+    <div class="prep-field"><label>DNS</label><input type="text" id="li-dns" value="${esc((m.dns||[]).join(','))}" placeholder="如 8.8.8.8, 114.114.114.114"></div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn btn-ghost" data-act="go-home">取消</button>
       <button class="btn btn-primary" data-save="local-info">保存</button>
@@ -351,7 +354,7 @@ function localNetworkScreen(){
   <div style="max-width:520px;width:100%">
   <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 设置服务器</div>
   <div class="card" style="width:100%">
-    <div class="prep-field"><label>服务器地址</label><input type="text" id="ln-srv" value="${esc(m.serverAddr||'')}" placeholder="管理服务器 IP 或域名"></div>
+    <div class="prep-field"><label>服务器地址</label><input type="text" id="ln-srv" value="${esc(m.serverAddr||'')}" placeholder="如 server.edu.cn"></div>
     <div style="margin-top:12px;padding:10px 14px;background:${connStatus==='ok'?'var(--t-ok-bg)':connStatus==='fail'?'var(--t-err-bg)':'var(--t-panel)'};border:1px solid ${connStatus==='ok'?'var(--t-ok)':connStatus==='fail'?'var(--t-err)':'var(--t-border)'};border-radius:var(--radius)">
       <div style="display:flex;align-items:center;gap:8px">
         ${isChecking?'<span class="conn-spinner"></span>':
@@ -510,8 +513,8 @@ function workbenchScreen(){
   <div style="display:flex;gap:6px;margin-bottom:14px;align-items:center">
     <button class="btn ${activeTab==='layout'?'btn-primary':'btn-secondary'}" ${isRunning?'disabled':''} data-act="wb-tab-layout">设置布局</button>
     <button class="btn ${activeTab==='maint'?'btn-primary':'btn-secondary'}" ${(isBlank&&!isTakenOver)||isRunning?'disabled':''} data-act="wb-tab-maint">教室维护</button>
-    <span style="flex:1"></span>
-    <button class="btn btn-danger" style="margin-left:16px" ${isRunning?'disabled':''} data-act="end-management">结束管理</button>
+    <span style="width:1px;height:20px;background:var(--t-border);margin:0 8px"></span>
+    <button class="btn btn-danger" ${isRunning?'disabled':''} data-act="end-management">结束管理</button>
   </div>
   <div style="min-height:24px;margin-bottom:8px;font-size:.72rem;color:var(--t-text3)">${isBlank&&!isTakenOver?'请先确认接管教室后使用教室维护':''}</div>
   ${activeTab==='maint' ? wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning) : wbLayoutContent(terms, rt, c, m, d)}
@@ -578,11 +581,11 @@ function wbLayoutContent(terms, rt, c, m, d){
       </div>
       <div class="card">
         <div class="card-header">❸ 网络配置</div>
-        <div class="prep-field"><label>服务器地址</label><input type="text" id="layout-srv" value="${esc(m.serverAddr||'')}" placeholder="管理服务器 IP 或域名"></div>
+        <div class="prep-field"><label>服务器地址</label><input type="text" id="layout-srv" value="${esc(m.serverAddr||'')}" placeholder="如 server.edu.cn"></div>
         <div class="prep-field"><label>IP 前缀</label><input type="text" data-rule="ipBase" value="${esc(r.ipBase||'')}" placeholder="如 10.21.31"></div>
         <div class="prep-field"><label>起始编号</label><input type="number" data-rule="ipStart" value="${r.ipStart||20}" min="1" max="254"></div>
         <div class="prep-field"><label>子网掩码</label><input type="text" id="layout-mask" value="${esc(m.subnetMask||'')}" placeholder="255.255.255.0"></div>
-        <div class="prep-field"><label>网关</label><input type="text" id="layout-gw" value="${esc(m.gateway||'')}" placeholder="网关地址"></div>
+        <div class="prep-field"><label>网关</label><input type="text" id="layout-gw" value="${esc(m.gateway||'')}" placeholder="如 10.21.31.1"></div>
       </div>
       <div class="card">
         <div class="card-header">❹ 机器名 / 座位号</div>
@@ -674,9 +677,9 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(md.newServerAddr||c.serverAddress||m.serverAddr||'')}" placeholder="如 server.edu.cn"></div>
         <div class="prep-field"><label>IP 前缀</label><input type="text" id="mip-base" value="${esc(md.newIpBase||c.networkBase||'')}" placeholder="如 10.21.31"></div>
         <div class="prep-field"><label>起始编号</label><input type="number" id="mip-start" value="${md.newIpStart||20}" min="1" max="254"></div>
-        <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(md.newSubnetMask||m.subnetMask||'255.255.255.0')}"></div>
-        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(md.newGateway||m.gateway||c.gateway||'')}"></div>
-        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(md.newDns||(m.dns||c.dns||[]).join(','))}"></div>
+        <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(md.newSubnetMask||m.subnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
+        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(md.newGateway||m.gateway||c.gateway||'')}" placeholder="如 10.21.31.1"></div>
+        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(md.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="如 8.8.8.8, 114.114.114.114"></div>
         <div style="display:flex;gap:6px;margin-top:8px">
           <button class="btn btn-ghost" data-act="ops-mode-idle">取消</button>
           <button class="btn btn-primary" data-act="start-maint-ip">开始执行</button>
@@ -688,7 +691,6 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         ${defRow('已部署', rt.deployed+' / '+rt.total)}
         ${defRow('阶段', stageLabel(c.stage))}
       </div>
-      <button class="btn btn-danger" style="width:100%;justify-content:center;margin-top:auto" ${isRunning?'disabled':''} data-act="end-management">结束管理</button>
     </div>
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
       ${isRunning?`<div style="padding:10px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.82rem">
@@ -1258,8 +1260,8 @@ function maintIpScreen(){
         <div class="prep-field"><label>新 IP 前缀</label><input type="text" id="mip-base" value="${esc(d.newIpBase||c.networkBase||'')}" placeholder="如 10.21.31"></div>
         <div class="prep-field"><label>IP 起始编号</label><input type="number" id="mip-start" value="${d.newIpStart||20}" min="1" max="254"></div>
         <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(d.newSubnetMask||m.subnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
-        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(d.newGateway||m.gateway||c.gateway||'')}" placeholder="网关地址"></div>
-        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(d.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="DNS 地址"></div>
+        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(d.newGateway||m.gateway||c.gateway||'')}" placeholder="如 10.21.31.1"></div>
+        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(d.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="如 8.8.8.8, 114.114.114.114"></div>
       </div>
       <div style="font-size:.75rem;color:var(--t-ok);margin-top:4px">修改规则或拖动终端后自动刷新预览</div>
     </div>
@@ -1841,18 +1843,18 @@ function bindAll(){
   /* ── server address auto-detect on blur ── */
   const srvInput = root.querySelector('#ln-srv');
   if(srvInput){
-    /* Prevent re-render from overwriting user input: store local edit flag */
-    srvInput._userEdited = false;
-    srvInput.addEventListener('input', () => { srvInput._userEdited = true; });
     srvInput.addEventListener('blur',()=>{
+      if(_isRendering) return; /* guard: don't fire during innerHTML replacement */
       const addr = srvInput.value.trim();
       if(!addr) return;
-      /* Immediately save to state so re-render uses user's value */
+      /* Save value to state so re-render uses it */
       act('save-local-network',{serverAddr:addr});
-      /* Show checking animation, then connected */
+      /* Show checking animation, then connected (one-shot, debounced) */
+      if(srvInput._checkPending) return;
+      srvInput._checkPending = true;
       setTimeout(()=>{
         act('set-flag',{serverConnStatus:'checking'});
-        setTimeout(()=>act('set-flag',{serverConnStatus:'ok'}), 1800);
+        setTimeout(()=>{ act('set-flag',{serverConnStatus:'ok'}); srvInput._checkPending=false; }, 1800);
       }, 100);
     });
   }
