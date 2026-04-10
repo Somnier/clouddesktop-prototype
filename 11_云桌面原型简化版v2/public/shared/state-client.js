@@ -1,6 +1,7 @@
 export function createStateClient(onState) {
   let state = null;
   let es = null;
+  let _rafPending = false;
 
   async function load() {
     const r = await fetch('/api/state');
@@ -9,10 +10,16 @@ export function createStateClient(onState) {
     return state;
   }
 
+  function _scheduleRender() {
+    if (_rafPending) return;
+    _rafPending = true;
+    requestAnimationFrame(() => { _rafPending = false; onState?.(state); });
+  }
+
   function connect() {
     es?.close();
     es = new EventSource('/api/stream');
-    es.onmessage = e => { state = JSON.parse(e.data); onState?.(state); };
+    es.onmessage = e => { state = JSON.parse(e.data); _scheduleRender(); };
   }
 
   async function send(action, payload = {}) {

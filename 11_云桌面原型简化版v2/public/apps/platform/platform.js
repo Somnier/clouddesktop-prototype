@@ -8,15 +8,46 @@ const client = createStateClient(render);
 client.connect();
 
 let view = { page: 'dashboard', campusId: null, classroomId: null, terminalId: null, tab: 'overview' };
+let _isRendering = false;
 
 function s(){ return client.get(); }
 function nav(page, opts={}){ Object.assign(view, {page,...opts}); render(s()); }
 
+/* ── Focus & input preservation across innerHTML renders ── */
+function _saveFocus(){
+  const ae = document.activeElement;
+  if(!ae || ae===document.body || ae===root) return null;
+  const sel = ae.getAttribute('data-import-target') !== null ? '[data-import-target]'
+    : ae.getAttribute('data-import-cr-name') !== null ? '[data-import-cr-name]'
+    : ae.getAttribute('data-import-cr-building') !== null ? '[data-import-cr-building]'
+    : ae.getAttribute('data-import-cr-remark') !== null ? '[data-import-cr-remark]'
+    : ae.getAttribute('data-server-new-addr') !== null ? '[data-server-new-addr]'
+    : ae.getAttribute('data-ip-base') !== null ? '[data-ip-base]'
+    : ae.getAttribute('data-ip-start') !== null ? '[data-ip-start]'
+    : ae.getAttribute('data-ip-gw') !== null ? '[data-ip-gw]'
+    : ae.getAttribute('data-dist-src') !== null ? '[data-dist-src]'
+    : null;
+  if(!sel) return null;
+  return { selector: sel, value: ae.value, selStart: ae.selectionStart, selEnd: ae.selectionEnd, tag: ae.tagName };
+}
+function _restoreFocus(saved){
+  if(!saved) return;
+  const el = root.querySelector(saved.selector);
+  if(!el) return;
+  if(el.value !== saved.value) el.value = saved.value;
+  try { el.focus(); if(saved.selStart != null && el.setSelectionRange) el.setSelectionRange(saved.selStart, saved.selEnd); } catch(e){}
+}
+
 function render(state){
   if(!state) return;
+  if(_isRendering) return;
   view.campusId = view.campusId || state.demo.focusCampusId;
+  const saved = _saveFocus();
+  _isRendering = true;
   root.innerHTML = shellHtml();
   bindEvents();
+  _restoreFocus(saved);
+  _isRendering = false;
 }
 
 function shellHtml(){
@@ -280,7 +311,10 @@ function classroomListPage(){
   const state=s(); const crs=state.classrooms.filter(c=>c.campusId===view.campusId);
   const ir = view.importResult || null;
   const showImport = view.showImportPanel;
-  const isNew = !view.importTarget || view.importTarget==='_new';
+
+  /* Auto-match: simulate reading classroom name from Excel */
+  const importName = view.importCrName || '';
+  const matchedCr = importName ? crs.find(c=>c.name===importName) : null;
 
   /* If import wizard is active, show full-page wizard */
   if(showImport) return `
@@ -291,41 +325,39 @@ function classroomListPage(){
     <div class="card" style="border-left:3px solid var(--c-brand);margin-bottom:20px">
       <div class="card-header" style="font-size:1.05rem">导入终端清单</div>
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:16px">
-        选择母机导出的 Excel 终端清单文件，系统将自动读取其中的教室信息和终端列表。<br>
-        可以<strong>创建新教室</strong>或<strong>追加到已有教室</strong>。
+        选择母机导出的 Excel 终端清单文件，系统将根据文件中的<strong>教室名称自动匹配</strong>。<br>
+        名称匹配到已有教室时追加终端，名称不存在时自动新建教室。
       </div>
 
-      <div style="margin-bottom:16px;padding:16px;background:var(--c-bg2);border-radius:8px;border:2px dashed var(--c-border);text-align:center">
-        <div style="font-size:.9rem;font-weight:600;margin-bottom:4px">选择 Excel 文件</div>
+      <div style="margin-bottom:16px;padding:16px;background:var(--c-bg2);border-radius:8px;border:2px dashed var(--c-border);text-align:center;cursor:pointer" data-import-file-area>
+        <div style="font-size:.9rem;font-weight:600;margin-bottom:4px">${view.importFileReady?'✓ 已读取 Excel 文件':'点击选择 Excel 文件'}</div>
         <div style="font-size:.82rem;color:var(--c-text3)">支持 .xlsx 格式，由终端侧「导出清单」功能生成</div>
       </div>
 
-      <div class="prep-field" style="margin-bottom:12px"><label style="width:100px;font-weight:600;font-size:.85rem">导入目标</label>
-        <select data-import-target style="width:280px">
-          <option value="_new"${isNew?' selected':''}>创建新教室</option>
-          ${crs.map(c=>`<option value="${c.id}"${view.importTarget===c.id?' selected':''}>${esc(c.name)}（追加终端）</option>`).join('')}
-        </select>
-      </div>
-
-      ${isNew?`
-      <div style="border-top:1px solid var(--c-border);padding-top:12px;margin-top:8px">
-        <div style="font-size:.85rem;font-weight:600;color:var(--c-text2);margin-bottom:8px">新教室信息（可修改 Excel 中自动填入的内容）</div>
+      ${view.importFileReady?`
+      <div style="border:1px solid var(--c-border);border-radius:8px;padding:14px 18px;margin-bottom:16px;background:#fff">
+        <div style="font-size:.85rem;font-weight:600;color:var(--c-text2);margin-bottom:10px">Excel 读取结果</div>
         <div class="prep-field" style="margin-bottom:8px"><label style="width:100px;font-size:.85rem">教室名称</label>
-          <input type="text" data-import-cr-name value="${esc(view.importCrName||'')}" placeholder="从 Excel 自动读取" style="width:280px"></div>
+          <input type="text" data-import-cr-name value="${esc(importName)}" placeholder="Excel 中的教室名称" style="width:280px"></div>
         <div class="prep-field" style="margin-bottom:8px"><label style="width:100px;font-size:.85rem">位置</label>
           <input type="text" data-import-cr-building value="${esc(view.importCrBuilding||'')}" placeholder="如：创意楼B座 3F" style="width:280px"></div>
         <div class="prep-field" style="margin-bottom:8px"><label style="width:100px;font-size:.85rem">备注</label>
           <input type="text" data-import-cr-remark value="${esc(view.importCrRemark||'')}" placeholder="可选" style="width:380px"></div>
+        <div style="margin-top:10px;padding:8px 12px;border-radius:6px;font-size:.85rem;${matchedCr
+          ?'background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2)'
+          :'background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2)'}">
+          ${matchedCr
+            ?`匹配到已有教室 <strong>${esc(matchedCr.name)}</strong>（${esc(matchedCr.building||'')} ${esc(matchedCr.floor||'')}），终端将追加到该教室。`
+            :(importName
+              ?`未找到名为「${esc(importName)}」的教室，将<strong>自动新建</strong>。`
+              :'请输入教室名称以进行匹配。')}
+        </div>
       </div>
-      `:`
-      <div style="border-top:1px solid var(--c-border);padding-top:12px;margin-top:8px;font-size:.85rem;color:var(--c-text2)">
-        终端将追加到 <strong>${esc(crs.find(c=>c.id===view.importTarget)?.name||'--')}</strong>，已有终端不受影响。
-      </div>
-      `}
+      `:''}
 
       ${ir?.done?`<div style="color:var(--c-ok);font-size:.85rem;margin:12px 0;padding:8px 12px;background:rgba(34,197,94,.08);border-radius:6px">✓ 已成功导入终端清单${ir.count?' — '+ir.count+' 台终端':''}</div>`:''}
       <div style="display:flex;gap:8px;margin-top:16px">
-        <button class="btn btn-primary" data-plat-confirm="import-list"${ir?.done?' disabled':''}>确认导入</button>
+        <button class="btn btn-primary" data-plat-confirm="import-list"${ir?.done||!view.importFileReady||!importName?' disabled':''}>确认导入</button>
         <button class="btn btn-ghost" data-toggle-import>取消</button>
       </div>
     </div>
@@ -358,7 +390,7 @@ function classroomListPage(){
 function classroomDetailPage(){
   const state=s(); const c=getClassroom(state,view.classroomId); if(!c) return empty('教室不存在');
   const rt=crRuntime(state,c.id); const terms=termsInCr(state,c.id); const alerts=alertsInCr(state,c.id); const tk=taskForCr(state,c.id);
-  const tabs=[{l:'总览',k:'overview'},{l:'终端列表',k:'terminals'},{l:'告警',k:'alerts'}];
+  const tabs=[{l:'总览',k:'overview'},{l:'终端列表',k:'terminals'}];
   const tab=view.tab||'overview';
 
   return `
@@ -376,12 +408,27 @@ function classroomDetailPage(){
   <div class="tab-bar">${tabs.map(t=>`<div class="tab-item${t.k===tab?' active':''}" data-tab="${t.k}">${t.l}</div>`).join('')}</div>
   ${tab==='overview'?crOverviewTab(c,rt,terms,alerts,tk):''}
   ${tab==='terminals'?crTerminalsTab(c,terms):''}
-  ${tab==='alerts'?crAlertsTab(c,alerts):''}
   `;
 }
 
 
 function crOverviewTab(c,rt,terms,alerts,tk){
+  const sortMode = view.crAlertSort || 'severity';
+  const sortAsc = view.crAlertSortAsc ?? false;
+  const dir = sortAsc ? 1 : -1;
+  const levelOrder = {high:0,medium:1,low:2};
+  const sorted = [...alerts].sort((a,b)=>{
+    if(sortMode==='severity'){
+      const cmp = (levelOrder[a.level]??9)-(levelOrder[b.level]??9);
+      return cmp!==0 ? (sortAsc ? -cmp : cmp) : (new Date(b.at)-new Date(a.at));
+    }
+    return (new Date(a.at)-new Date(b.at))*dir;
+  });
+  const arrow = sortAsc ? '↑' : '↓';
+  const high=alerts.filter(a=>a.level==='high').length;
+  const medium=alerts.filter(a=>a.level==='medium').length;
+  const low=alerts.filter(a=>a.level==='low').length;
+
   return `
   <div class="metric-grid">
     <div class="metric-card"><div class="mc-label">终端总数</div><div class="mc-value">${rt.total}</div></div>
@@ -389,7 +436,21 @@ function crOverviewTab(c,rt,terms,alerts,tk){
     <div class="metric-card"><div class="mc-label">离线</div><div class="mc-value${rt.offline?' text-err':''}">${rt.offline}</div></div>
     <div class="metric-card"><div class="mc-label">告警</div><div class="mc-value${alerts.length?' text-err':''}">${alerts.length}</div></div>
   </div>
-  ${alerts.length?`<div class="section-head"><h3>活跃告警</h3></div>${alerts.slice(0,8).map(a=>alertHtml(a)).join('')}${alerts.length>8?`<div style="font-size:.82rem;text-align:center;padding:8px;color:var(--c-text2)">共 ${alerts.length} 条告警</div>`:''}`:''}
+  <div class="section-head" style="margin-top:8px"><h3>告警中心</h3></div>
+  ${alerts.length?`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;gap:16px;font-size:.88rem">
+      ${high?`<span style="color:var(--c-err);font-weight:600">高 ${high}</span>`:''}
+      ${medium?`<span style="color:var(--c-warn);font-weight:600">中 ${medium}</span>`:''}
+      ${low?`<span style="color:var(--c-text3)">低 ${low}</span>`:''}
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-sm${sortMode==='time'?' btn-primary':' btn-ghost'}" data-cr-alert-sort="time">按时间 ${sortMode==='time'?arrow:''}</button>
+      <button class="btn btn-sm${sortMode==='severity'?' btn-primary':' btn-ghost'}" data-cr-alert-sort="severity">按严重度 ${sortMode==='severity'?arrow:''}</button>
+    </div>
+  </div>
+  ${sorted.map(a=>alertHtml(a,false)).join('')}`
+  :`<div style="font-size:.85rem;color:var(--c-text3);padding:12px 0">当前无活跃告警</div>`}
   `;
 }
 
@@ -402,35 +463,46 @@ function crTerminalsTab(c,terms){
   const sel = view.platSelectedTerms || [];
   const selOnline = sel.filter(id => onlineTerms.some(t=>t.id===id));
 
-  const actions = [
-    {k:'shutdown', l:'执行关机', color:'var(--c-warn)', needSel:true},
-    {k:'restart', l:'执行重启', color:'var(--c-info)', needSel:true},
-    {k:'distribute', l:'部署桌面到教室', color:'var(--c-brand)', needSel:true},
-    {k:'ip-mod', l:'修改终端IP', color:'var(--c-info)', needSel:true},
-    {k:'block-internet', l:'禁止外网', color:'var(--c-warn)', needSel:true},
-    {k:'block-usb', l:'禁止USB', color:'var(--c-warn)', needSel:true},
+  /* Unique purposes in this classroom */
+  const uses = [...new Set(terms.map(t=>t.use).filter(Boolean))];
+
+  /* 4 action groups */
+  const groups = [
+    {label:'教室控制', actions:[
+      {k:'shutdown', l:'关机', color:'var(--c-warn)', needSel:true},
+      {k:'restart', l:'重启', color:'var(--c-info)', needSel:true},
+      {k:'block-usb', l:'禁止USB', color:'var(--c-warn)', needSel:true},
+      {k:'block-internet', l:'禁止外网', color:'var(--c-warn)', needSel:true},
+    ]},
+    {label:'教室部署', actions:[
+      {k:'distribute', l:'部署桌面', color:'var(--c-brand)', needSel:true},
+      {k:'ip-mod', l:'修改IP', color:'var(--c-info)', needSel:true},
+    ]},
+    {label:'教室测试', actions:[
+      {k:'remote-test', l:'网络测试', color:'var(--c-ok)', needSel:true},
+      {k:'hw-test', l:'硬件测试', color:'var(--c-info)', needSel:true},
+    ]},
+    {label:'跨教室测试', actions:[
+      {k:'broadcast-test', l:'广播隔离测试', color:'var(--c-warn)', needSel:false},
+    ]},
   ];
 
   return `
   <div class="batch-toolbar">
-    <div class="batch-actions">
-      ${actions.map(a=>{
+    <div class="batch-actions" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      ${groups.map(g=>`<span style="font-size:.75rem;color:var(--c-text3);margin-right:2px;white-space:nowrap">${g.label}:</span>${g.actions.map(a=>{
         const active = pa === a.k;
         const disabled = a.needSel && selOnline.length === 0 && !active;
         return `<button class="batch-btn${active?' active':''}" data-plat-action="${a.k}" style="--accent:${a.color}"${disabled?' disabled':''}>${a.l}${a.needSel && selOnline.length>0 ? ' ('+selOnline.length+')' : ''}</button>`;
-      }).join('')}
-      <span class="batch-sep"></span>
-      <button class="batch-btn${pa==='remote-test'?' active':''}" data-plat-action="remote-test" style="--accent:var(--c-ok)">执行网络测试</button>
-      <button class="batch-btn${pa==='hw-test'?' active':''}" data-plat-action="hw-test" style="--accent:var(--c-info)">执行硬件测试</button>
-      <button class="batch-btn${pa==='broadcast-test'?' active':''}" data-plat-action="broadcast-test" style="--accent:var(--c-warn)">执行跨教室广播隔离测试</button>
+      }).join('')}<span class="batch-sep"></span>`).join('')}
     </div>
     <div class="batch-sel-summary">
       ${sel.length > 0
         ? `已选 <strong>${sel.length}</strong> 台${selOnline.length!==sel.length ? `（在线 ${selOnline.length}）` : ''}`
         : `<span style="color:var(--c-text3)">点击下方终端进行选择</span>`}
       <a class="batch-sel-link" data-sel-all-online>全选在线</a>
-      <a class="batch-sel-link" data-sel-group="teacher">选教师终端</a>
-      <a class="batch-sel-link" data-sel-group="student">选学生终端</a>
+      ${uses.length>1?`<span style="position:relative;display:inline-block"><a class="batch-sel-link" data-sel-use-toggle>按用途选择 ▾</a>${view.showUseDropdown?`<div style="position:absolute;left:0;top:100%;background:#fff;border:1px solid var(--c-border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:100;min-width:130px;padding:4px 0;margin-top:2px">${uses.map(u=>`<div class="batch-sel-link" data-sel-use="${esc(u)}" style="display:block;padding:6px 14px;cursor:pointer;font-size:.82rem;white-space:nowrap">${esc(u)}</div>`).join('')}</div>`:''}</span>`
+      :(uses.length===1?`<a class="batch-sel-link" data-sel-use="${esc(uses[0])}">选${esc(uses[0])}</a>`:'')}
       ${sel.length > 0 ? `<a class="batch-sel-link" data-sel-clear>清除选择</a>` : ''}
     </div>
   </div>
@@ -941,7 +1013,7 @@ function crDesktopsTab(c){
     </div>
     <div style="padding:12px 20px">
       <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:.85rem;max-width:600px">
-        ${d.dataDisk?`<span style="color:var(--c-text3)">数据盘</span><span style="color:var(--c-info);font-weight:500">${esc(d.dataDisk)}</span>`:''}
+        ${d.dataDisk?`<span style="color:var(--c-text3)">数据盘</span><span style="font-weight:500">${esc(d.dataDisk)}</span>`:''}
         <span style="color:var(--c-text3)">备注</span><span>${esc(d.remark||'--')}</span>
         <span style="color:var(--c-text3)">创建时间</span><span>${fmtTime(d.createdAt)}</span>
         <span style="color:var(--c-text3)">更新时间</span><span>${fmtTime(d.editedAt)}</span>
@@ -1113,7 +1185,7 @@ function terminalDetailPage(){
           </div>
           <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.82rem;color:var(--c-text3);margin-top:4px">
             ${d.restoreMode?`<span>还原模式：${esc(d.restoreMode)}</span>`:''}
-            ${d.dataDisk?`<span style="color:var(--c-info)">数据盘：${esc(d.dataDisk)}</span>`:''}
+            ${d.dataDisk?`<span>数据盘：${esc(d.dataDisk)}</span>`:''}
             ${isPhysical?'<span>仅本机安装，服务器无此桌面</span>':''}
           </div>
         </div>
@@ -1145,9 +1217,8 @@ function assetsPage(){
   crsWithDesktops.forEach(c=>{
     (c.desktopCatalog||[]).forEach(d=>{
       const tUsing = termsInCr(state,c.id).filter(t=>(t.desktops||[]).some(td=>td.id===d.id));
-      /* find other classrooms that also reference this desktop by name */
       const otherCrs = crsWithDesktops.filter(oc=>oc.id!==c.id&&(oc.desktopCatalog||[]).some(od=>od.name===d.name));
-      allDesktops.push({...d, classroomId:c.id, classroomName:c.name, termCount:tUsing.length, otherCrs});
+      allDesktops.push({...d, classroomId:c.id, classroomName:c.name, termCount:tUsing.length, termsUsing:tUsing, otherCrs});
     });
   });
 
@@ -1179,6 +1250,7 @@ function assetsPage(){
   function sortBtn(key,label){ return `<button class="btn btn-sm${sortKey===key?' btn-primary':' btn-ghost'}" data-asset-sort="${key}">${label}${sortKey===key?' '+sortArrow:''}</button>`; }
 
   const dar = view.deleteAssetResult || null;
+  const expanded = view.expandedAssets || {};
 
   return `
   <div class="metric-grid" style="margin-bottom:16px">
@@ -1192,35 +1264,58 @@ function assetsPage(){
       <div class="mc-sub">服务器存储占 ${server?server.storage+'%':'--'}</div></div>
   </div>
 
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
     <div style="display:flex;gap:6px;align-items:center">
       <span style="font-size:.85rem;font-weight:600;color:var(--c-text2)">排序：</span>
       ${sortBtn('name','名称')} ${sortBtn('classroom','教室')} ${sortBtn('terminals','终端数')} ${sortBtn('created','创建时间')}
     </div>
-    <div style="display:flex;gap:6px">
-      <button class="btn btn-secondary btn-sm" data-asset-action="import">导入桌面</button>
-      <button class="btn btn-secondary btn-sm" data-asset-action="export">导出清单</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary btn-sm" data-asset-action="import">导入桌面</button>
+      <button class="btn btn-primary btn-sm" style="background:var(--c-ok);border-color:var(--c-ok)" data-asset-action="export">导出清单</button>
     </div>
   </div>
 
   ${dar?.done?`<div style="color:var(--c-ok);font-size:.85rem;margin-bottom:12px;padding:8px 12px;background:rgba(34,197,94,.08);border-radius:6px">✓ ${esc(dar.message)}</div>`:''}
 
   ${allDesktops.length?`
-  <table class="data-table">
-    <thead><tr><th>桌面名称</th><th>操作系统</th><th>教室</th><th>数据盘</th><th>终端引用</th><th>创建时间</th><th>操作</th></tr></thead>
-    <tbody>${allDesktops.map(d=>{
+  <div style="display:flex;flex-direction:column;gap:12px">
+    ${allDesktops.map(d=>{
       const unreferenced = d.termCount===0;
-      return `<tr${unreferenced?' style="opacity:.7"':''}>
-        <td style="font-weight:600">${esc(d.name)}</td>
-        <td>${esc(d.os||'--')}</td>
-        <td><a class="clickable" data-nav-cr="${d.classroomId}" style="cursor:pointer">${esc(d.classroomName)}</a>${d.otherCrs.length?`<span style="font-size:.75rem;color:var(--c-text3)"> +${d.otherCrs.length}</span>`:''}</td>
-        <td>${d.dataDisk?`<span style="color:var(--c-info)">${esc(d.dataDisk)}</span>`:'--'}</td>
-        <td>${d.termCount} 台${unreferenced?' <span style="color:var(--c-warn);font-size:.78rem">无引用</span>':''}</td>
-        <td style="font-size:.82rem;color:var(--c-text3)">${fmtTime(d.createdAt)}</td>
-        <td>${unreferenced?`<button class="btn btn-ghost btn-sm" style="color:var(--c-err);font-size:.78rem" data-delete-asset="${d.id}" data-delete-cr="${d.classroomId}">删除</button>`:'<span style="font-size:.78rem;color:var(--c-text3)">使用中</span>'}</td>
-      </tr>`;
-    }).join('')}</tbody>
-  </table>`
+      const isExpanded = expanded[d.classroomId+'::'+d.id];
+      return `<div class="card" style="padding:0;overflow:hidden${unreferenced?';border-left:3px solid var(--c-warn)':''}">
+        <div style="padding:14px 20px;display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+              <strong style="font-size:1rem">${esc(d.name)}</strong>
+              <span style="font-size:.82rem;color:var(--c-text3)">${esc(d.os||'')}</span>
+              ${unreferenced?`<span style="font-size:.78rem;color:var(--c-warn);font-weight:500">空闲</span>`:''}
+            </div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:.85rem;color:var(--c-text2)">
+              <span>教室：<a class="clickable" data-nav-cr="${d.classroomId}" style="cursor:pointer;color:var(--c-brand)">${esc(d.classroomName)}</a>${d.otherCrs.length?`<span style="font-size:.75rem;color:var(--c-text3)"> +${d.otherCrs.length} 教室</span>`:''}</span>
+              <span>终端引用：<strong>${d.termCount}</strong> 台</span>
+              ${d.dataDisk?`<span>数据盘：${esc(d.dataDisk)}</span>`:''}
+            </div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.78rem;color:var(--c-text3);margin-top:4px">
+              ${d.createdAt?`<span>创建 ${fmtTime(d.createdAt)}</span>`:''}
+              ${d.editedAt?`<span>更新 ${fmtTime(d.editedAt)}</span>`:''}
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:flex-start;flex-shrink:0">
+            ${d.termCount>0?`<button class="btn btn-ghost btn-sm" data-expand-asset="${d.classroomId}::${d.id}" style="font-size:.78rem">${isExpanded?'收起':'展开'} ${d.termCount} 终端</button>`:''}
+            ${unreferenced?`<button class="btn btn-ghost btn-sm" style="color:var(--c-err);font-size:.78rem" data-delete-asset="${d.id}" data-delete-cr="${d.classroomId}">删除</button>`:''}
+          </div>
+        </div>
+        ${isExpanded&&d.termsUsing.length?`<div style="border-top:1px solid var(--c-border);padding:10px 20px;background:var(--c-bg2)">
+          <div style="display:flex;flex-wrap:wrap;gap:6px">${d.termsUsing.map(t=>`<div style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;background:#fff;border:1px solid var(--c-border);border-radius:4px;font-size:.8rem">
+            <a class="clickable" data-nav-term="${t.id}" style="cursor:pointer;color:var(--c-brand);text-decoration:underline">${esc(t.seat||'--')}</a>
+            <span>${esc(t.name||'')}</span>
+            <span class="mono" style="color:var(--c-text3);font-size:.75rem">${esc(t.ip||'')}</span>
+            ${pill(t.online?'在线':'离线',tone(t.online?'on':'offline'))}
+          </div>`).join('')}</div>
+        </div>`:''}
+      </div>`;
+    }).join('')}
+  </div>`
   :empty('当前校区无桌面资产','需从终端侧上传桌面后可见')}
   `;
 }
@@ -1459,9 +1554,11 @@ function bindEvents(){
         } else if(act==='export-test-report'){
           /* simulated export */
         } else if(act==='import-list'){
-          const target=view.importTarget||'_new';
-          const tgtCrId = target==='_new' ? null : target;
-          const r=await client.send('plat-import-terminal-list',{classroomId:tgtCrId,campusId:view.campusId,crName:view.importCrName,crRemark:view.importCrRemark});
+          const crs=state.classrooms.filter(c=>c.campusId===view.campusId);
+          const importName=view.importCrName||'';
+          const matchedCr=importName?crs.find(c=>c.name===importName):null;
+          const tgtCrId = matchedCr ? matchedCr.id : null;
+          const r=await client.send('plat-import-terminal-list',{classroomId:tgtCrId,campusId:view.campusId,crName:view.importCrName,crBuilding:view.importCrBuilding,crRemark:view.importCrRemark});
           view.importResult={done:true,count:r.count||0};
         }
       }catch(e){console.error(e);}
@@ -1559,13 +1656,20 @@ function bindEvents(){
   });
 
   /* ── Terminal group selection ── */
-  root.querySelectorAll('[data-sel-group]').forEach(el=>{
+  root.querySelectorAll('[data-sel-use-toggle]').forEach(el=>{
+    el.addEventListener('click',(e)=>{
+      e.stopPropagation();
+      view.showUseDropdown=!view.showUseDropdown;
+      render(s());
+    });
+  });
+  root.querySelectorAll('[data-sel-use]').forEach(el=>{
     el.addEventListener('click',()=>{
-      const group=el.dataset.selGroup;
+      const use=el.dataset.selUse;
       const c=getClassroom(s(),view.classroomId);
-      const terms=termsInCr(s(),c?.id).filter(t=>t.online);
-      if(group==='teacher') view.platSelectedTerms=terms.filter(t=>t.use==='教师终端').map(t=>t.id);
-      else if(group==='student') view.platSelectedTerms=terms.filter(t=>t.use!=='教师终端').map(t=>t.id);
+      const terms=termsInCr(s(),c?.id).filter(t=>t.online&&t.use===use);
+      view.platSelectedTerms=terms.map(t=>t.id);
+      view.showUseDropdown=false;
       render(s());
     });
   });
@@ -1656,27 +1760,38 @@ function bindEvents(){
     });
   });
 
-  /* ── Import panel toggle ── */
-  root.querySelectorAll('[data-toggle-import]').forEach(el=>{
+  /* ── Expand/collapse asset card terminal list ── */
+  root.querySelectorAll('[data-expand-asset]').forEach(el=>{
     el.addEventListener('click',()=>{
-      view.showImportPanel=!view.showImportPanel;
-      view.platActionResult=null;
+      if(!view.expandedAssets) view.expandedAssets={};
+      const key=el.dataset.expandAsset;
+      view.expandedAssets[key]=!view.expandedAssets[key];
       render(s());
     });
   });
 
-  /* ── Import target selector ── */
-  const impTargetEl=root.querySelector('[data-import-target]');
-  if(impTargetEl){
-    impTargetEl.addEventListener('change',()=>{
-      view.importTarget=impTargetEl.value;
+  /* ── Import panel toggle ── */
+  root.querySelectorAll('[data-toggle-import]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      view.showImportPanel=!view.showImportPanel;
+      view.platActionResult=null; view.importResult=null; view.importFileReady=false;
+      view.importCrName=''; view.importCrBuilding=''; view.importCrRemark='';
       render(s());
     });
-  }
+  });
+
+  /* ── Import file area (simulate file pick) ── */
+  root.querySelectorAll('[data-import-file-area]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      view.importFileReady=true;
+      view.importCrName=view.importCrName||'演示教室 A301';
+      render(s());
+    });
+  });
 
   /* ── Import terminal list inputs ── */
   const impNameEl=root.querySelector('[data-import-cr-name]');
-  if(impNameEl){ impNameEl.addEventListener('input',()=>{view.importCrName=impNameEl.value;}); }
+  if(impNameEl){ impNameEl.addEventListener('input',()=>{view.importCrName=impNameEl.value;}); impNameEl.addEventListener('change',()=>{render(s());}); }
   const impBuildingEl=root.querySelector('[data-import-cr-building]');
   if(impBuildingEl){ impBuildingEl.addEventListener('input',()=>{view.importCrBuilding=impBuildingEl.value;}); }
   const impRemarkEl=root.querySelector('[data-import-cr-remark]');
