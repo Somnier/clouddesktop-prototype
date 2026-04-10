@@ -104,9 +104,3 @@ export function createStateClient(onState) {
 
   return { connect, dispose, get, load, send };
 }
-
-  function get() { return state; }
-  function dispose() { es?.close(); }
-
-  return { connect, dispose, get, load, send };
-}

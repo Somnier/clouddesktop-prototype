@@ -1,4 +1,4 @@
-import { createStateClient } from '/shared/state-client.js';
+﻿import { createStateClient } from '/shared/state-client.js';
 import { getClassroom, getTerm, termsInCr, taskForCr, crRuntime, alertsInCr, termLabel, termSeat, termIp, termUse, stageLabel } from '/shared/model.js';
 import { esc, fmtTime, relTime, pct, tone, pill, chip, defRow, meter, empty, syncLabel, phaseLabel } from '/shared/ui.js';
 
@@ -116,7 +116,7 @@ function showCreateDesktopDialog(defaultName){
         <option value="50GB" selected>50 GB</option>
         <option value="100GB">100 GB</option>
       </select></div>
-      <div class="prep-field"><label>数据盘盘符</label><input type="text" id="cd-disk-drive" value="D:" placeholder="如 D:"></div>
+      <div class="prep-field"><label>数据盘盘符</label><input type="text" id="cd-disk-drive" value="D:" placeholder="D:"></div>
     </div>
     <div class="prep-field"><label>备注</label><input type="text" id="cd-remark" value="" placeholder="可选"></div>
     <div class="t-modal-actions">
@@ -290,7 +290,7 @@ function seatLabel(row, col, rules){
   let letter, num;
   if(flow==='col'){ letter=String.fromCharCode(start+col); num=row+1; }
   else { letter=String.fromCharCode(start+row); num=col+1; }
-  return letter+String(num).padStart(2,'0');
+  return letter+'-'+String(num).padStart(2,'0');
 }
 
 
@@ -324,14 +324,14 @@ function localInfoScreen(){
   <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 设置本机</div>
   <div class="card" style="width:100%">
     <div class="prep-field"><label>机器名</label><input type="text" id="li-name" value="${esc(m.name||'')}" placeholder="输入机器名"></div>
-    <div class="prep-field"><label>座位号</label><input type="text" id="li-seat" value="${esc(m.seat||'')}" placeholder="如 A01"></div>
+    <div class="prep-field"><label>座位号</label><input type="text" id="li-seat" value="${esc(m.seat||'')}" placeholder="A-01"></div>
     <div style="border-top:1px solid var(--t-border);margin:16px 0 12px;padding-top:12px">
       <div style="font-size:.82rem;color:var(--t-text3);margin-bottom:8px">网络配置</div>
     </div>
-    <div class="prep-field"><label>IP 地址</label><input type="text" id="li-ip" value="${esc(m.ip||'')}" placeholder="如 10.21.31.20"></div>
-    <div class="prep-field"><label>子网掩码</label><input type="text" id="li-mask" value="${esc(m.subnetMask||'')}" placeholder="如 255.255.255.0"></div>
-    <div class="prep-field"><label>网关</label><input type="text" id="li-gw" value="${esc(m.gateway||'')}" placeholder="如 10.21.31.1"></div>
-    <div class="prep-field"><label>DNS</label><input type="text" id="li-dns" value="${esc((m.dns||[]).join(','))}" placeholder="如 8.8.8.8, 114.114.114.114"></div>
+    <div class="prep-field"><label>IP 地址</label><input type="text" id="li-ip" value="${esc(m.ip||'')}" placeholder="10.21.31.20"></div>
+    <div class="prep-field"><label>子网掩码</label><input type="text" id="li-mask" value="${esc(m.subnetMask||'')}" placeholder="255.255.255.0"></div>
+    <div class="prep-field"><label>网关</label><input type="text" id="li-gw" value="${esc(m.gateway||'')}" placeholder="10.x.x.1"></div>
+    <div class="prep-field"><label>DNS</label><input type="text" id="li-dns" value="${esc((m.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn btn-ghost" data-act="go-home">取消</button>
       <button class="btn btn-primary" data-save="local-info">保存</button>
@@ -354,7 +354,7 @@ function localNetworkScreen(){
   <div style="max-width:520px;width:100%">
   <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 设置服务器</div>
   <div class="card" style="width:100%">
-    <div class="prep-field"><label>服务器地址</label><input type="text" id="ln-srv" value="${esc(m.serverAddr||'')}" placeholder="如 server.edu.cn"></div>
+    <div class="prep-field"><label>服务器地址</label><input type="text" id="ln-srv" value="${esc(m.serverAddr||'')}" placeholder="server.edu.cn"></div>
     <div style="margin-top:12px;padding:10px 14px;background:${connStatus==='ok'?'var(--t-ok-bg)':connStatus==='fail'?'var(--t-err-bg)':'var(--t-panel)'};border:1px solid ${connStatus==='ok'?'var(--t-ok)':connStatus==='fail'?'var(--t-err)':'var(--t-border)'};border-radius:var(--radius)">
       <div style="display:flex;align-items:center;gap:8px">
         ${isChecking?'<span class="conn-spinner"></span>':
@@ -559,16 +559,16 @@ function wbLayoutContent(terms, rt, c, m, d){
       </div>
       <div class="card">
         <div class="card-header">❷ 网络配置</div>
-        <div class="prep-field"><label>服务器地址</label><input type="text" id="layout-srv" value="${esc(m.serverAddr||'')}" placeholder="如 server.edu.cn"></div>
-        <div class="prep-field"><label>IP 前缀</label><input type="text" data-rule="ipBase" value="${esc(r.ipBase||'')}" placeholder="如 10.21.31"></div>
+        <div class="prep-field"><label>服务器地址</label><input type="text" id="layout-srv" value="${esc(m.serverAddr||'')}" placeholder="server.edu.cn"></div>
+        <div class="prep-field"><label>IP 前缀</label><input type="text" data-rule="ipBase" value="${esc(r.ipBase||'')}" placeholder="10.21.31"></div>
         <div class="prep-field"><label>起始编号</label><input type="number" data-rule="ipStart" value="${r.ipStart||20}" min="1" max="254"></div>
-        <div class="prep-field"><label>子网掩码</label><input type="text" id="layout-mask" value="${esc(m.subnetMask||'')}" placeholder="如 255.255.255.0"></div>
-        <div class="prep-field"><label>网关</label><input type="text" id="layout-gw" value="${esc(m.gateway||'')}" placeholder="如 10.21.31.1"></div>
-        <div class="prep-field"><label>DNS</label><input type="text" id="layout-dns" value="${esc((m.dns||[]).join(','))}" placeholder="如 8.8.8.8, 114.114.114.114"></div>
+        <div class="prep-field"><label>子网掩码</label><input type="text" id="layout-mask" value="${esc(m.subnetMask||'')}" placeholder="255.255.255.0"></div>
+        <div class="prep-field"><label>网关</label><input type="text" id="layout-gw" value="${esc(m.gateway||'')}" placeholder="10.x.x.1"></div>
+        <div class="prep-field"><label>DNS</label><input type="text" id="layout-dns" value="${esc((m.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
       </div>
       <div class="card">
         <div class="card-header">❸ 机器名 / 座位号</div>
-        <div class="prep-field"><label>机器名前缀</label><input type="text" data-rule="namePrefix" value="${esc(r.namePrefix||'')}" placeholder="如 D301"></div>
+        <div class="prep-field"><label>机器名前缀</label><input type="text" data-rule="namePrefix" value="${esc(r.namePrefix||'')}" placeholder="D301"></div>
         <div class="prep-field"><label>起始字母</label><input type="text" data-rule="startLetter" value="${esc(r.startLetter||'A')}" maxlength="1" style="width:50px;text-transform:uppercase"></div>
         <div style="padding:6px 10px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;color:var(--t-text);margin-top:4px;font-family:monospace">
           机器名预览: <strong>${esc(exName)}</strong> · 座位号: <strong>${esc(exSeat)}</strong>
@@ -645,12 +645,12 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
       </div>`:''}
       ${opsMode==='maint-ip'?`<div class="card">
         <div class="card-header">修改 IP / 服务器地址</div>
-        <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(md.newServerAddr||c.serverAddress||m.serverAddr||'')}" placeholder="如 server.edu.cn"></div>
-        <div class="prep-field"><label>IP 前缀</label><input type="text" id="mip-base" value="${esc(md.newIpBase||c.networkBase||'')}" placeholder="如 10.21.31"></div>
+        <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(md.newServerAddr||c.serverAddress||m.serverAddr||'')}" placeholder="server.edu.cn"></div>
+        <div class="prep-field"><label>IP 前缀</label><input type="text" id="mip-base" value="${esc(md.newIpBase||c.networkBase||'')}" placeholder="10.21.31"></div>
         <div class="prep-field"><label>起始编号</label><input type="number" id="mip-start" value="${md.newIpStart||20}" min="1" max="254"></div>
         <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(md.newSubnetMask||m.subnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
-        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(md.newGateway||m.gateway||c.gateway||'')}" placeholder="如 10.21.31.1"></div>
-        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(md.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="如 8.8.8.8, 114.114.114.114"></div>
+        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(md.newGateway||m.gateway||c.gateway||'')}" placeholder="10.x.x.1"></div>
+        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(md.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
         <div style="display:flex;gap:6px;margin-top:8px">
           <button class="btn btn-ghost" data-act="ops-mode-idle">取消</button>
           <button class="btn btn-primary" data-act="start-maint-ip">开始执行</button>
@@ -992,7 +992,7 @@ function deployGridScreen(){
       <div class="section-title" style="font-size:1rem">批量规则</div>
       <div class="prep-group mb-8">
         <h4>IP 分配</h4>
-        <div class="prep-field"><label>IP 前缀</label><input type="text" data-rule="ipBase" value="${esc(r.ipBase||'')}" placeholder="如 10.21.31"></div>
+        <div class="prep-field"><label>IP 前缀</label><input type="text" data-rule="ipBase" value="${esc(r.ipBase||'')}" placeholder="10.21.31"></div>
         <div class="prep-field"><label>起始编号</label><input type="number" data-rule="ipStart" value="${r.ipStart||20}" min="1" max="254"></div>
       </div>
       <div class="prep-group mb-8">
@@ -1003,7 +1003,7 @@ function deployGridScreen(){
       </div>
       <div class="prep-group mb-8">
         <h4>机器名 / 座位号</h4>
-        <div class="prep-field"><label>机器名前缀</label><input type="text" data-rule="namePrefix" value="${esc(r.namePrefix||'')}" placeholder="如 D301"></div>
+        <div class="prep-field"><label>机器名前缀</label><input type="text" data-rule="namePrefix" value="${esc(r.namePrefix||'')}" placeholder="D301"></div>
         <div class="prep-field"><label>座位起始字母</label><input type="text" data-rule="startLetter" value="${esc(r.startLetter||'A')}" maxlength="1" style="width:50px;text-transform:uppercase"></div>
         <div style="padding:6px 10px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;color:var(--t-text);margin-top:4px;font-family:monospace">
           机器名预览: <strong>${esc(exName)}</strong> · 座位号: <strong>${esc(exSeat)}</strong>
@@ -1268,12 +1268,12 @@ function maintIpScreen(){
     <div>
       <div class="section-title" style="font-size:.9rem">批量规则</div>
       <div class="card mb-16" style="max-width:480px">
-        <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(d.newServerAddr||c.serverAddress||m.serverAddr||'')}" placeholder="如 server.edu.cn"></div>
-        <div class="prep-field"><label>新 IP 前缀</label><input type="text" id="mip-base" value="${esc(d.newIpBase||c.networkBase||'')}" placeholder="如 10.21.31"></div>
+        <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(d.newServerAddr||c.serverAddress||m.serverAddr||'')}" placeholder="server.edu.cn"></div>
+        <div class="prep-field"><label>新 IP 前缀</label><input type="text" id="mip-base" value="${esc(d.newIpBase||c.networkBase||'')}" placeholder="10.21.31"></div>
         <div class="prep-field"><label>IP 起始编号</label><input type="number" id="mip-start" value="${d.newIpStart||20}" min="1" max="254"></div>
         <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(d.newSubnetMask||m.subnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
-        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(d.newGateway||m.gateway||c.gateway||'')}" placeholder="如 10.21.31.1"></div>
-        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(d.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="如 8.8.8.8, 114.114.114.114"></div>
+        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(d.newGateway||m.gateway||c.gateway||'')}" placeholder="10.x.x.1"></div>
+        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(d.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
       </div>
       <div style="font-size:.75rem;color:var(--t-ok);margin-top:4px">修改规则或拖动终端后自动刷新预览</div>
     </div>

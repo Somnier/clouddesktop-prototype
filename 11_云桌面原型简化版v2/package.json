@@ -12,5 +12,8 @@
   "dependencies": {
     "electron": "^37.2.1",
     "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "acorn": "^8.16.0"
   }
 }
