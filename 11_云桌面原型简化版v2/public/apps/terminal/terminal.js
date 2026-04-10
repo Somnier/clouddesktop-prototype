@@ -1603,20 +1603,16 @@ function exportScreen(){
   return `<div class="page">
   <div class="section-title"><button class="btn btn-ghost" data-act="return-workbench">←</button> 导出教室终端清单</div>
   <div class="page-scroll">
-  <div class="section-sub">导出 Excel 文件，可导入管理服务器完成建档。</div>
+  <div class="section-sub">导出 Excel 文件，包含教室内所有终端的座位、机器名、IP 等信息。</div>
   ${incomplete.length?`<div class="card mb-16" style="border-color:var(--t-warn)">
     <div style="font-size:.85rem;color:var(--t-warn)">提示：有 ${incomplete.length} 台终端信息不完整（缺少机器名或 IP），导出内容可能不全。</div>
   </div>`:''}
   <div class="card mb-16" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
     <div class="prep-field" style="flex:1;min-width:200px"><label style="white-space:nowrap">教室名称（导出用）</label><input type="text" id="export-cr-name" value="${esc(exportName)}" placeholder="导出时使用的教室名称"></div>
     <div class="prep-field" style="flex:1;min-width:200px"><label style="white-space:nowrap">教室备注（可选）</label><input type="text" id="export-cr-remark" value="${esc(exportRemark)}" placeholder="填写备注信息"></div>
-    <div style="display:flex;gap:16px;font-size:.82rem;color:var(--t-text2);align-items:center;flex-shrink:0">
-      <span>终端数 <strong>${terms.length}</strong></span>
-      <span>完整 <strong>${terms.length-incomplete.length}/${terms.length}</strong></span>
-    </div>
   </div>
   <table class="data-table" style="font-size:.8rem;white-space:nowrap">
-    <thead><tr><th>#</th><th data-sort>座位</th><th data-sort>机器名</th><th data-sort>IP</th><th>MAC</th><th>硬盘序列号</th></tr></thead>
+    <thead><tr><th>#</th><th>座位</th><th>机器名</th><th>IP</th><th>MAC</th><th>硬盘序列号</th></tr></thead>
     <tbody>${terms.map((t,i)=>`<tr class="${(!t.name||!t.ip)?'conflict':''}">
       <td>${i+1}</td>
       <td>${esc(t.seat||'--')}</td><td>${esc(t.name||'--')}</td>
@@ -1625,9 +1621,9 @@ function exportScreen(){
       <td class="mono">${esc(t.hw?.diskSn||'--')}</td></tr>`).join('')}</tbody>
   </table>
   </div>
-  <div style="margin-top:16px">
-    <button class="btn btn-primary" data-act="export-simulated">导出 Excel</button>
-    <span style="font-size:.75rem;color:var(--t-text3);margin-left:8px">修改教室名称仅影响导出文件，不影响系统内信息</span>
+  <div style="margin-top:16px;display:flex;align-items:center;gap:12px">
+    <button class="btn btn-primary" data-act="export-select-folder">选择目录并导出</button>
+    <span style="font-size:.75rem;color:var(--t-text3)">修改教室名称仅影响导出文件，不影响系统内信息</span>
   </div>
 </div>`;
 }
@@ -1684,11 +1680,28 @@ function bindAll(){
         const rs=demo()._desktopReturnScreen;
         if(rs) act('navigate',{screen:rs});
         else act('return-workbench');
-      } else if(a==='export-simulated'){
+      } else if(a==='export-select-folder'){
         const crName = root.querySelector('#export-cr-name')?.value||'';
         const crRemark = root.querySelector('#export-cr-remark')?.value||'';
         act('set-flag',{exportCrName:crName, exportCrRemark:crRemark});
-        showTermAlert('终端清单已生成（原型模拟）——实际产品将下载 Excel 文件。\n导出教室名称: '+crName+(crRemark?'\n备注: '+crRemark:''));
+        const fileName = (crName||'教室终端清单')+'_'+new Date().toISOString().slice(0,10)+'.xlsx';
+        if(window.electronAPI?.isElectron){
+          window.electronAPI.showSaveDialog({
+            title:'选择导出目录',
+            defaultPath:'D:\\CloudDesktop\\'+fileName,
+            filters:[{name:'Excel 文件',extensions:['xlsx']},{name:'所有文件',extensions:['*']}]
+          }).then(result=>{
+            if(!result.canceled && result.filePath){
+              showTermAlert('终端清单已导出到：\n'+result.filePath);
+            }
+          });
+        } else {
+          const defaultPath='D:\\\\CloudDesktop\\\\'+fileName;
+          showTermConfirm('选择导出目录',
+            '将通过系统"另存为"对话框选择导出目录。<br>默认路径：<span style="font-family:monospace;font-size:.85rem;color:var(--t-accent)">'+esc(defaultPath)+'</span><br><br>点击确认模拟导出。',
+            ()=>{ showTermAlert('终端清单已导出到：\n'+defaultPath); },
+            {danger:false});
+        }
       } else if(a==='open-fault-replace-direct'){
         act('open-fault-replace');
       } else if(a==='open-takeover'){
