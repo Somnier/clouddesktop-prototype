@@ -500,20 +500,22 @@ function crTerminalsTab(c,terms){
 
   /* 4 action groups — segmented button groups */
   const groups = [
-    {label:'控制', icon:'', actions:[
+    {label:'教室控制', icon:'', actions:[
       {k:'shutdown', l:'关机', color:'var(--c-warn)', needSel:true},
       {k:'restart', l:'重启', color:'var(--c-info)', needSel:true},
-      {k:'block-usb', l:'禁USB', color:'var(--c-warn)', needSel:true},
-      {k:'block-internet', l:'禁外网', color:'var(--c-warn)', needSel:true},
+      {k:'block-usb', l:'禁止USB', color:'var(--c-warn)', needSel:true},
+      {k:'block-internet', l:'禁止外网', color:'var(--c-warn)', needSel:true},
     ]},
     {label:'部署', icon:'', actions:[
-      {k:'distribute', l:'桌面部署', color:'var(--c-brand)', needSel:true},
+      {k:'distribute', l:'部署桌面', color:'var(--c-brand)', needSel:true},
       {k:'ip-mod', l:'修改IP', color:'var(--c-info)', needSel:true},
     ]},
     {label:'测试', icon:'', actions:[
-      {k:'remote-test', l:'网络', color:'var(--c-ok)', needSel:true},
-      {k:'hw-test', l:'硬件', color:'var(--c-info)', needSel:true},
-      {k:'broadcast-test', l:'广播隔离', color:'var(--c-warn)', needSel:false},
+      {k:'remote-test', l:'网络测试', color:'var(--c-ok)', needSel:true},
+      {k:'hw-test', l:'硬件测试', color:'var(--c-info)', needSel:true},
+    ]},
+    {label:'跨教室', icon:'', actions:[
+      {k:'broadcast-test', l:'广播隔离测试', color:'var(--c-warn)', needSel:false},
     ]},
   ];
 
@@ -559,11 +561,12 @@ function crTerminalsTab(c,terms){
   </div>` : ''}
   ${viewMode==='layout' ? crLayoutInline(c,terms) : `
   <table class="data-table">
-    <thead><tr><th style="width:32px"><input type="checkbox" data-sel-toggle-all${sel.length===terms.length&&terms.length?' checked':''}></th><th>机器名</th><th>座位号</th><th>IP</th><th>用途</th><th>在线</th></tr></thead>
+    <thead><tr><th style="width:32px"><input type="checkbox" data-sel-toggle-all${sel.length===terms.length&&terms.length?' checked':''}></th><th>#</th><th>机器名</th><th>座位号</th><th>IP</th><th>用途</th><th>在线</th></tr></thead>
     <tbody>${terms.map((t,i)=>{
       const checked = sel.includes(t.id);
       return `<tr style="${checked?'background:rgba(59,130,246,.06)':''}">
       <td><input type="checkbox" data-term-chk="${t.id}"${checked?' checked':''}></td>
+      <td style="font-size:.75rem;color:var(--c-text3)">${i+1}</td>
       <td class="clickable" data-nav-term="${t.id}">${esc(t.name||'未命名')}</td>
       <td>${esc(t.seat||'--')}</td>
       <td class="mono">${esc(t.ip||'未分配')}</td>
