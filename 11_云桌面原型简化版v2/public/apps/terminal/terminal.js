@@ -522,8 +522,8 @@ function workbenchScreen(){
   /* Default tab: if not takeover yet → layout, else → maint */
   const defaultTab = (m.controlState!=='mother' || isBlank) ? 'layout' : 'maint';
   const wbTab = demo().flags?.wbTab || defaultTab;
-  /* If a task is running, force maint tab */
-  const activeTab = tk ? 'maint' : wbTab;
+  /* If a task is actively running (not completed), force maint tab */
+  const activeTab = (tk && tk.phase!=='completed') ? 'maint' : wbTab;
   const opsMode = demo().flags?.opsMode || 'idle';
   const isRunning = tk && tk.phase!=='completed';
 
