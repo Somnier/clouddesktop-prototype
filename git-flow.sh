@@ -8,6 +8,8 @@
 #   bash git-flow.sh                          # 交互式向导
 #   bash git-flow.sh commit                   # 交互式提交
 #   bash git-flow.sh commit -m "type: msg"    # 快速提交
+#   bash git-flow.sh commit -m "type: msg" -y # 快速提交（跳过确认）
+#   bash git-flow.sh push                     # 仅推送到远端
 #   bash git-flow.sh branch                   # 交互式创建分支
 #   bash git-flow.sh branch feature my-thing  # 快速创建分支
 #   bash git-flow.sh finish                   # 合并当前分支到主分支
@@ -30,6 +32,7 @@ GIT="git -c core.quotePath=false"
 MAIN_BRANCH="main"          # 主分支名称
 REMOTE="origin"             # 远端名称
 PUSH_AFTER_COMMIT=true      # 提交后是否自动推送
+AUTO_YES=false              # --yes / -y: 跳过所有交互确认（适用于 Agent / CI）
 
 # ── 提交类型 (Conventional Commits 1.0) ───────────────────────────────────
 # 仅用于 commit 消息的 <type> 字段。
@@ -185,17 +188,29 @@ cmd_commit() {
   # 快速模式
   if [ "${1:-}" = "-m" ] && [ -n "${2:-}" ]; then
     local msg="$2"
+    # 检查 -y / --yes 标志
+    if [ "${3:-}" = "-y" ] || [ "${3:-}" = "--yes" ]; then
+      AUTO_YES=true
+    fi
     if ! echo "$msg" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .+"; then
       _yellow "⚠ 消息不符合 Conventional Commits 格式"
-      read -rp "仍要继续？[y/N] " yn
-      [[ "$yn" =~ ^[yY]$ ]] || { echo "已取消。"; exit 0; }
+      if [ "$AUTO_YES" = true ]; then
+        _yellow "  (--yes 模式，继续执行)"
+      else
+        read -rp "仍要继续？[y/N] " yn
+        [[ "$yn" =~ ^[yY]$ ]] || { echo "已取消。"; exit 0; }
+      fi
     fi
-    sync_branch "$branch"
+    if [ "$AUTO_YES" != true ]; then
+      sync_branch "$branch"
+    fi
     $GIT add -A
     if ! has_staged; then _yellow "没有变更。"; exit 0; fi
     echo ""; echo "── 变更摘要 ──"; $GIT diff --cached --stat; echo ""
-    read -rp "确认提交到 ${branch}？[y/N] " yn
-    [[ "$yn" =~ ^[yY]$ ]] || { echo "已取消。"; exit 0; }
+    if [ "$AUTO_YES" != true ]; then
+      read -rp "确认提交到 ${branch}？[y/N] " yn
+      [[ "$yn" =~ ^[yY]$ ]] || { echo "已取消。"; exit 0; }
+    fi
     $GIT commit -m "$msg"
     push_branch "$branch"
     return
@@ -389,6 +404,8 @@ git-flow.sh — 通用 Git 工作流脚本
   (无参数)          交互式向导
   commit            交互式提交（选类型 → 填范围 → 写描述）
   commit -m "msg"   快速提交（需符合 Conventional Commits 格式）
+  commit -m "msg" -y  快速提交，跳过确认（Agent / CI 用）
+  push              仅推送当前分支到远端
   branch            交互式创建分支
   branch <type> <n> 快速创建，如 branch feature add-grid
   finish            合并当前分支回主分支并推送
@@ -465,6 +482,23 @@ cmd_wizard() {
   esac
 }
 
+# ── 子命令: push ──────────────────────────────────────────────────────────
+
+cmd_push() {
+  local branch; branch=$(current_branch)
+  echo ""
+  echo "── 推送 ${branch} 到 ${REMOTE}..."
+  if ! $GIT push "$REMOTE" "$branch" 2>/dev/null; then
+    _yellow "⚠ 推送失败，尝试 rebase 后重推..."
+    $GIT pull --rebase "$REMOTE" "$branch" || {
+      _red "rebase 冲突，请手动解决。"
+      exit 1
+    }
+    $GIT push "$REMOTE" "$branch" || die "推送失败"
+  fi
+  _green "✓ 已推送到 ${REMOTE}/${branch}"
+}
+
 # ── 入口 ──────────────────────────────────────────────────────────────────
 
 main() {
@@ -477,6 +511,7 @@ main() {
     commit)  cmd_commit "$@" ;;
     branch)  cmd_branch "$@" ;;
     finish)  cmd_finish ;;
+    push)    cmd_push ;;
     sync)    cmd_sync ;;
     status)  cmd_status ;;
     log)     cmd_log "$@" ;;
