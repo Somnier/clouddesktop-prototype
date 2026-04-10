@@ -56,12 +56,12 @@ function showExportDoneDialog(){
   const dts=(m?.desktops||[]).filter(d=>d.visibility!=='hidden');
   const dtList=dts.map(d=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:.82rem"><span>${esc(d.name)}</span><span style="color:var(--t-text2)">${d.diskSize||25} GB</span></div>`).join('');
   const totalSize=dts.reduce((s,d)=>s+(d.diskSize||25),0);
-  const body=`<div style="margin-bottom:10px;font-size:.82rem;color:var(--t-text2)">以下桌面将导出到 U 盘：</div>
+  const body=`<div style="margin-bottom:10px;font-size:.82rem;color:var(--t-text2)">以下桌面将导出到指定目录：</div>
 ${dtList}
 <div style="border-top:1px solid var(--t-border);margin-top:8px;padding-top:6px;font-size:.82rem;display:flex;justify-content:space-between"><strong>合计</strong><span>${dts.length} 个桌面 · ${totalSize} GB</span></div>
-<div style="margin-top:10px;padding:8px 12px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--t-accent)">E:\\CloudDesktop\\desktop-export-${new Date().toISOString().slice(0,10)}.cdpkg</div>`;
+<div style="margin-top:10px;padding:8px 12px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--t-accent)">D:\\CloudDesktop\\desktop-export-${new Date().toISOString().slice(0,10)}.cdpkg</div>`;
   showTermConfirm('导出桌面',body,()=>{
-    showTermAlert(`已导出 ${dts.length} 个桌面到 U 盘（共 ${totalSize} GB）`);
+    showTermAlert(`已导出 ${dts.length} 个桌面（共 ${totalSize} GB）`);
   },{danger:false});
 }
 
@@ -387,12 +387,13 @@ function localDesktopScreen(){
   const diskPct = Math.round(diskUsed/diskTotal*100);
   const diskColor = diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-accent)';
 
-  /* per-desktop breakdown for pie chart legend */
-  const dtSegments = desktops.map((d,i)=>{
-    const colors = ['#3b82f6','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#06b6d4','#f97316'];
-    return { name:d.name, size:d.diskSize||25, color:colors[i%colors.length] };
-  });
+  /* pie segments: system → desktops → free */
+  const dtSegments = [];
   dtSegments.push({ name:'系统占用', size:systemUsed, color:'#64748b' });
+  desktops.forEach((d,i)=>{
+    const colors = ['#3b82f6','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#06b6d4','#f97316'];
+    dtSegments.push({ name:d.name, size:d.diskSize||25, color:colors[i%colors.length] });
+  });
   if(diskFree>0) dtSegments.push({ name:'可用空间', size:diskFree, color:'#1e293b' });
 
   /* SVG pie chart */
@@ -416,71 +417,83 @@ function localDesktopScreen(){
   }).join('');
   const pieLegend = dtSegments.map(seg=>`<div style="display:flex;align-items:center;gap:6px;font-size:.75rem"><span style="width:10px;height:10px;border-radius:2px;background:${seg.color};flex-shrink:0"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(seg.name)}</span><span style="color:var(--t-text2);flex-shrink:0">${seg.size}G</span></div>`).join('');
 
+  /* has any unsync */
+  const hasUnsync = desktops.some(d=>!(d.uploaded||d.syncStatus==='synced'));
+
   return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
-  <div style="width:100%;max-width:800px;display:flex;flex-direction:column;flex:1;min-height:0">
+  <div style="width:100%;max-width:920px;display:flex;flex-direction:column;flex:1;min-height:0">
   <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
     <div><button class="btn btn-ghost" data-act="${returnAct}">←</button> 桌面管理</div>
   </div>
 
   <div class="page-scroll" style="padding-bottom:12px">
 
-  <!-- Disk pie chart -->
-  <div class="card" style="display:flex;align-items:center;gap:20px;padding:16px;margin-bottom:16px">
-    <svg width="140" height="140" viewBox="0 0 140 140" style="flex-shrink:0">${pieSlices}
-      <circle cx="${pieCx}" cy="${pieCy}" r="32" fill="var(--t-bg)"/>
-      <text x="${pieCx}" y="${pieCy-6}" text-anchor="middle" fill="${diskColor}" font-size="16" font-weight="700">${diskPct}%</text>
-      <text x="${pieCx}" y="${pieCy+10}" text-anchor="middle" fill="var(--t-text3)" font-size="9">${diskUsed}/${diskTotal} GB</text>
-    </svg>
-    <div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0">${pieLegend}</div>
+  <!-- Import bar (top, full-width) -->
+  <div class="dt-card dt-add-card" data-desktop-action="import" style="margin-bottom:16px;cursor:pointer">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 0">
+      <span style="font-size:1.5rem;color:var(--t-text3)">+</span>
+      <span style="font-size:.88rem;color:var(--t-text3)">导入桌面</span>
+    </div>
   </div>
 
-  <!-- Desktop cards -->
-  <div class="dt-grid">
-    <div class="dt-card dt-add-card" data-desktop-action="import">
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:140px">
-        <div style="font-size:2.5rem;line-height:1;color:var(--t-text3)">+</div>
-        <div style="font-size:.82rem;color:var(--t-text3);margin-top:8px">导入桌面</div>
+  <!-- Two-column: card grid (left) + pie chart (right) -->
+  <div style="display:flex;gap:20px;align-items:flex-start">
+    <!-- Desktop cards (left, two-column) -->
+    <div style="flex:1;min-width:0">
+      <div class="dt-grid">
+        ${desktops.map(d=>{
+        const isDefault = d.id===bid;
+        const isHidden = d.visibility==='hidden';
+        const uploaded = d.uploaded || d.syncStatus==='synced';
+        const isPhysical = d.physicalDeploy;
+        const dtSize = d.diskSize || 25;
+        return `
+        <div class="dt-card ${isDefault?'selected':''} ${!uploaded?'dt-unsync':''}" data-dt-id="${d.id}" style="position:relative">
+          <div>
+            <div class="dt-name">${esc(d.name)}</div>
+            <div class="dt-meta" style="display:flex;align-items:baseline;gap:6px;margin-top:6px">
+              <span>${esc(d.baseImageName||d.os)}</span>
+              <span style="display:inline-block;width:1px;height:12px;background:var(--t-border);margin:0 2px"></span>
+              <span style="font-weight:600;font-size:.88rem;letter-spacing:.02em">${dtSize} GB</span>
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:6px">
+              ${isPhysical?'<span class="pill info pill-sm" style="opacity:.65">物理部署</span>':''}
+              ${!uploaded?'<span class="pill err pill-sm" style="opacity:.65">未同步</span>':''}
+              ${isHidden?'<span class="pill muted pill-sm" style="opacity:.65">已隐藏</span>':''}
+              ${isDefault?'<span class="pill info pill-sm" style="opacity:.55;font-size:.7rem">默认启动</span>':''}
+            </div>
+            <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+              <button class="btn btn-sm btn-primary" data-dt-edit="${d.id}">编辑桌面</button>
+              ${!uploaded?`<button class="btn btn-sm" style="border-color:var(--t-warn);color:var(--t-warn);background:rgba(245,158,11,.08)" data-dt-upload="${d.id}">同步到服务器</button>`:''}
+              <button class="btn btn-sm btn-ghost dt-overflow-btn" data-dt-overflow="${d.id}" style="margin-left:auto;padding:2px 8px">···</button>
+            </div>
+          </div>
+          <div class="dt-overflow-menu" data-dt-menu="${d.id}">
+            <button data-dt-copy="${d.id}">复制桌面</button>
+            <button data-dt-delete="${d.id}" style="color:var(--t-err)">删除桌面</button>
+            <div class="dt-menu-divider"></div>
+            ${!isDefault?`<button data-dt-default="${d.id}">设为默认启动</button>`:''}
+            <button data-dt-visibility="${d.id}">${isHidden?'取消隐藏':'隐藏桌面'}</button>
+          </div>
+        </div>`;
+        }).join('')}
       </div>
+      ${!desktops.length ? empty('暂无本机桌面','请点击上方 + 导入桌面') : ''}
     </div>
-    ${desktops.map(d=>{
-    const isDefault = d.id===bid;
-    const isHidden = d.visibility==='hidden';
-    const uploaded = d.uploaded || d.syncStatus==='synced';
-    const dtSize = d.diskSize || 25;
-    return `
-    <div class="dt-card ${isDefault?'selected':''} ${!uploaded?'dt-unsync':''}" data-dt-id="${d.id}" style="position:relative;overflow:hidden">
-      <span class="dt-card-fill"></span>
-      <div style="position:relative;z-index:1">
-        <div class="dt-name">${esc(d.name)}</div>
-        <div class="dt-meta">${esc(d.baseImageName||d.os)} · ${dtSize} GB${d.dataDisks?.length?` · 数据盘 ${d.dataDisks.map(dd=>dd.size).join('+')}`:''}${d.restoreMode?` · ${d.restoreMode}`:''}</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:8px">
-          ${uploaded?`<span class="pill ok pill-sm">已同步</span>`:`<span class="pill err pill-sm">未同步</span>`}
-          ${isDefault?`<span class="pill info pill-sm">默认启动</span>`:''}
-          ${isHidden?`<span class="pill muted pill-sm">已隐藏</span>`:''}
-        </div>
-        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
-          <button class="btn btn-sm btn-primary" data-dt-edit="${d.id}">编辑桌面</button>
-          ${!uploaded?`<button class="btn btn-sm btn-ghost" data-dt-upload="${d.id}">同步到服务器</button>`:''}
-          <button class="btn btn-sm btn-ghost dt-overflow-btn" data-dt-overflow="${d.id}" style="margin-left:auto;padding:2px 8px">⋯</button>
-        </div>
-      </div>
-      <div class="dt-overflow-menu" data-dt-menu="${d.id}">
-        <button data-dt-copy="${d.id}">复制桌面</button>
-        <button data-dt-delete="${d.id}" style="color:var(--t-err)">删除桌面</button>
-        <div class="dt-menu-divider"></div>
-        ${!isDefault?`<button data-dt-default="${d.id}">设为默认启动</button>`:''}
-        <button data-dt-visibility="${d.id}">${isHidden?'取消隐藏':'隐藏桌面'}</button>
-      </div>
-    </div>`;
-    }).join('')}
+
+    <!-- Pie chart (right sidebar) -->
+    <div class="card" style="flex-shrink:0;width:220px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px">
+      <svg width="140" height="140" viewBox="0 0 140 140">${pieSlices}
+        <circle cx="${pieCx}" cy="${pieCy}" r="32" fill="var(--t-bg)"/>
+        <text x="${pieCx}" y="${pieCy+4}" text-anchor="middle" fill="${diskColor}" font-size="16" font-weight="700">${diskPct}%</text>
+      </svg>
+      <div style="width:100%;display:flex;flex-direction:column;gap:3px">${pieLegend}</div>
+    </div>
   </div>
-  ${!desktops.length ? empty('暂无本机桌面','请点击 + 导入桌面镜像或桌面包') : ''}
   </div>
 
   <div class="dt-export-bar">
-    <button class="btn btn-ghost dt-export-btn" data-desktop-action="export-pkg">
-      <span style="font-size:1.1rem">📦</span> 导出桌面
-    </button>
+    <button class="btn btn-ghost dt-export-btn" data-desktop-action="export-pkg">导出桌面</button>
   </div>
   </div>
   </div>`;
@@ -729,7 +742,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
           ${opsMode==='deploy'&&!isRunning?`<button class="btn btn-primary" ${boundCount>=1?'':'disabled'} data-act="start-deployment">开始部署（${boundCount} 台）</button>`:''}
         </div>
         <button class="btn btn-ghost dt-export-btn" ${isRunning?'disabled':''} data-act="open-export">
-          <span style="font-size:1rem">📋</span> 导出教室终端清单
+          导出教室终端清单
         </button>
       </div>
     </div>
@@ -1940,7 +1953,7 @@ function bindAll(){
     el.addEventListener('click',()=>{
       const dtId=el.dataset.dtCopy;
       const dt=(mt()?.desktops||[]).find(d=>d.id===dtId);
-      showTermConfirm('复制桌面',`确定要复制桌面「${esc(dt?.name||'')}」？将创建一份副本。`,()=>act('copy-desktop',{sourceId:dtId}),{danger:false});
+      showTermConfirm('复制桌面',`将基于「${esc(dt?.name||'')}」创建一个内容完全相同的新桌面。`,()=>act('copy-desktop',{sourceId:dtId}),{danger:false});
     });
   });
   root.querySelectorAll('[data-dt-default]').forEach(el=>{

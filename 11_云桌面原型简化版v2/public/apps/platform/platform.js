@@ -507,17 +507,17 @@ function crTerminalsTab(c,terms){
 
   /* 4 action groups — segmented button groups */
   const groups = [
-    {label:'控制', icon:'⚡', actions:[
+    {label:'控制', icon:'', actions:[
       {k:'shutdown', l:'关机', color:'var(--c-warn)', needSel:true},
       {k:'restart', l:'重启', color:'var(--c-info)', needSel:true},
       {k:'block-usb', l:'禁USB', color:'var(--c-warn)', needSel:true},
       {k:'block-internet', l:'禁外网', color:'var(--c-warn)', needSel:true},
     ]},
-    {label:'部署', icon:'📦', actions:[
+    {label:'部署', icon:'', actions:[
       {k:'distribute', l:'桌面部署', color:'var(--c-brand)', needSel:true},
       {k:'ip-mod', l:'修改IP', color:'var(--c-info)', needSel:true},
     ]},
-    {label:'测试', icon:'🔍', actions:[
+    {label:'测试', icon:'', actions:[
       {k:'remote-test', l:'网络', color:'var(--c-ok)', needSel:true},
       {k:'hw-test', l:'硬件', color:'var(--c-info)', needSel:true},
       {k:'broadcast-test', l:'广播隔离', color:'var(--c-warn)', needSel:false},

@@ -112,22 +112,22 @@
 .dt-add-card { border-style: dashed !important; }
 .dt-add-card:hover { border-color: var(--t-accent); background: var(--t-accent-bg); }
 .dt-card { padding: 14px 16px; border-radius: var(--radius); background: var(--t-panel); border: 1px solid var(--t-border);
-  cursor: pointer; transition: all .15s; }
+  cursor: pointer; transition: all .15s; overflow: visible; }
 .dt-card:hover { border-color: var(--t-accent); }
 .dt-card.selected { border-color: var(--t-accent); background: var(--t-accent-bg); }
 .dt-card .dt-name { font-weight: 600; font-size: .95rem; }
 .dt-card .dt-meta { font-size: .78rem; color: var(--t-text2); margin-top: 6px; line-height: 1.5; }
 .dt-card .dt-sw { font-size: .75rem; color: var(--t-text3); margin-top: 6px; }
-.dt-overflow-menu { display: none; position: absolute; right: 8px; top: 36px; z-index: 10;
+.dt-overflow-menu { display: none; position: absolute; right: 8px; bottom: 100%; z-index: 20;
   background: var(--t-panel); border: 1px solid var(--t-border); border-radius: var(--radius);
-  box-shadow: 0 4px 12px rgba(0,0,0,.4); min-width: 150px; padding: 4px 0; }
+  box-shadow: 0 4px 12px rgba(0,0,0,.4); min-width: 150px; padding: 4px 0; margin-bottom: 4px; }
 .dt-overflow-menu.open { display: block; }
 .dt-overflow-menu button { display: block; width: 100%; text-align: left; padding: 6px 14px;
   font-size: .78rem; background: none; border: none; color: var(--t-text); cursor: pointer; font-family: inherit; }
 .dt-overflow-menu button:hover { background: rgba(255,255,255,.06); }
 .dt-menu-divider { height: 1px; background: var(--t-border); margin: 4px 0; }
 /* ── export bar (shared) ── */
-.dt-export-bar { display:flex; justify-content:center; padding:10px 0; border-top:1px solid var(--t-border); }
+.dt-export-bar { display:flex; justify-content:flex-start; padding:10px 0; border-top:1px solid var(--t-border); }
 .dt-export-btn { display:inline-flex; align-items:center; gap:6px; padding:8px 24px; font-size:.88rem;
   border:1px dashed var(--t-accent); border-radius:var(--radius); color:var(--t-accent); background:transparent; transition:all .15s; }
 .dt-export-btn:hover { background:var(--t-accent-bg); border-style:solid; }
