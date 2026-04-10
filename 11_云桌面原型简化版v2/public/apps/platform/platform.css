@@ -20,7 +20,22 @@
 .plat-header .title { font-size: 1.05rem; font-weight: 600; }
 .plat-header .breadcrumb { display: flex; gap: 6px; font-size: .85rem; color: var(--c-text2); }
 .plat-header .breadcrumb a { color: var(--c-brand); cursor: pointer; text-decoration: none; }
+.plat-body { flex: 1; display: flex; overflow: hidden; }
 .plat-content { flex: 1; overflow-y: auto; padding: 20px 24px; font-size: .95rem; }
+.plat-aside { width: 280px; flex-shrink: 0; overflow-y: auto; padding: 16px; border-left: 1px solid var(--c-border); background: #fafbfc; }
+.plat-aside .aside-card { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 14px; margin-bottom: 12px; }
+.plat-aside .aside-card .aside-title { font-size: .82rem; font-weight: 600; color: var(--c-text2); margin-bottom: 8px; }
+.plat-aside .aside-card .aside-item { font-size: .82rem; padding: 4px 0; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; gap: 6px; }
+.plat-aside .aside-card .aside-item:last-child { border-bottom: none; }
+
+/* ── sparkline chart ── */
+.sparkline-wrap { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 12px; }
+.sparkline-wrap .spark-label { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.sparkline-wrap .spark-label .spark-title { font-size: .85rem; font-weight: 600; }
+.sparkline-wrap .spark-label .spark-value { font-size: 1.1rem; font-weight: 700; font-family: var(--mono); }
+.sparkline-wrap svg.sparkline { width: 100%; height: 48px; }
+.sparkline-wrap svg.sparkline polyline { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.sparkline-wrap svg.sparkline polygon { opacity: .12; }
 
 /* ── dashboard metrics ── */
 .metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }

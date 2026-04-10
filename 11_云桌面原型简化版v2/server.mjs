@@ -212,7 +212,14 @@ function buildState(s){
 
   return {
     meta: { version: 3, updatedAt: now() },
-    school: s.school, campuses: [...s.campuses], servers: s.servers.map(sv=>({...sv})),
+    school: s.school, campuses: [...s.campuses], servers: s.servers.map(sv=>{
+      /* generate initial monitor history: 60 points of synthetic data */
+      const hist=[];
+      for(let i=0;i<60;i++){
+        hist.push({cpu:Math.round(sv.cpu+Math.sin(i/4)*8+(Math.random()-0.5)*6), memory:Math.round(sv.memory+Math.cos(i/5)*5+(Math.random()-0.5)*4), net:Math.round((12+Math.sin(i/3)*6+(Math.random()-0.5)*3)*10)/10});
+      }
+      return {...sv, monitorHistory:hist};
+    }),
     classrooms, terminals, tasks, alerts, logs,
     demo: {
       focusCampusId: s.demo.focusCampusId, focusClassroomId: focusCr,
@@ -1454,6 +1461,24 @@ function act(action, payload={}){
     }
     return {ok:true};
   }
+  case 'plat-delete-desktop-asset':{
+    const crId=payload.classroomId; const dtId=payload.desktopId;
+    const cr=crById(crId);
+    if(cr&&cr.desktopCatalog){
+      const idx=cr.desktopCatalog.findIndex(d=>d.id===dtId);
+      if(idx>=0){
+        const dt=cr.desktopCatalog[idx];
+        cr.desktopCatalog.splice(idx,1);
+        /* Remove orphaned snapshots and images */
+        const usedSnaps=new Set(cr.desktopCatalog.map(d=>d.snapshotId).filter(Boolean));
+        if(cr.snapshotTree) cr.snapshotTree=cr.snapshotTree.filter(sn=>usedSnaps.has(sn.id));
+        const usedImages=new Set((cr.snapshotTree||[]).map(sn=>sn.imageId).filter(Boolean));
+        if(cr.imageStore) cr.imageStore=cr.imageStore.filter(img=>usedImages.has(img.id));
+        addLog('info','平台','桌面删除',`${cr.name}: 已删除桌面 ${dt.name}`);
+      }
+    }
+    return {ok:true};
+  }
 
   default: return {ok:false, reason:'未知操作: '+action};
   }
@@ -1467,6 +1492,15 @@ function tickHeartbeats(){
     t.metrics.cpu=clamp(t.metrics.cpu+((i%3)-1)*2,5,94);
     t.metrics.mem=clamp(t.metrics.mem+((i%5)-2),12,96);
     t.heartbeat=now();
+  });
+  /* update server metrics + history */
+  state.servers.forEach(sv=>{
+    sv.cpu=clamp(sv.cpu+Math.round((Math.random()-0.5)*4),5,95);
+    sv.memory=clamp(sv.memory+Math.round((Math.random()-0.5)*3),10,95);
+    const net=Math.round((12+Math.sin(Date.now()/8000)*6+(Math.random()-0.5)*3)*10)/10;
+    if(!sv.monitorHistory) sv.monitorHistory=[];
+    sv.monitorHistory.push({cpu:sv.cpu,memory:sv.memory,net});
+    if(sv.monitorHistory.length>80) sv.monitorHistory.shift();
   });
 }
 
@@ -1644,11 +1678,14 @@ async function main(){
   });
 
   // tick loop
+  let tickCount=0;
   setInterval(()=>{
     const r1=tickRecover();
     tickHeartbeats();
     const r2=tickTasks();
-    if(r1||r2){ state.meta.updatedAt=now(); broadcast(); save(); }
+    tickCount++;
+    /* broadcast every 5 ticks (~3s) for monitor data, or immediately if tasks/recovery changed */
+    if(r1||r2||tickCount%5===0){ state.meta.updatedAt=now(); broadcast(); save(); }
   }, 600);
 }
 

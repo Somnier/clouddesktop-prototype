@@ -21,7 +21,7 @@ function render(state){
 
 function shellHtml(){
   const state = s();
-  const pages = [{id:'dashboard',label:'平台总览'},{id:'classrooms',label:'教室管理'},{id:'assets',label:'桌面资产'},{id:'alerts',label:'告警中心'},{id:'settings',label:'系统运维'}];
+  const pages = [{id:'dashboard',label:'总览'},{id:'classrooms',label:'教室管理'},{id:'assets',label:'桌面资产'},{id:'alerts',label:'告警中心'},{id:'server-change',label:'服务器地址变更'}];
   return `<div class="plat-shell">
     <aside class="plat-side">
       <div class="logo">云桌面管理平台</div>
@@ -37,18 +37,21 @@ function shellHtml(){
         <div class="title">${pageTitle()}</div>
         <div class="breadcrumb">${breadcrumb()}</div>
       </div>
-      <div class="plat-content">${pageContent()}</div>
+      <div class="plat-body">
+        <div class="plat-content">${pageContent()}</div>
+        ${asideContent()}
+      </div>
     </div>
   </div>`;
 }
 
 function pageTitle(){
   switch(view.page){
-    case 'dashboard': return '平台总览';
+    case 'dashboard': return '总览';
     case 'classrooms': return view.classroomId?(view.terminalId?'终端详情':'教室详情'):'教室管理';
     case 'assets': return '桌面资产';
     case 'alerts': return '告警中心';
-    case 'settings': return '系统运维';
+    case 'server-change': return '服务器地址变更';
     default: return '';
   }
 }
@@ -73,11 +76,112 @@ function pageContent(){
       return classroomListPage();
     case 'assets': return assetsPage();
     case 'alerts': return alertsPage();
-    case 'settings': return settingsPage();
+    case 'server-change': return serverChangePage();
     default: return '';
   }
 }
 
+function asideContent(){
+  const state=s(); const cId=view.campusId;
+  const server=serverFor(state,cId);
+  const crIdsInCampus=new Set(state.classrooms.filter(c=>c.campusId===cId).map(c=>c.id));
+  const campusAlerts=state.alerts.filter(a=>a.status==='open'&&crIdsInCampus.has(a.classroomId));
+  const recentLogs=state.logs.slice(0,5);
+  const logLevelLabel={info:'信息',warn:'警告',error:'错误'};
+  const stats=campusStats(state,cId);
+
+  let cards='';
+  if(view.page==='dashboard'){
+    /* dashboard aside: recent logs + alerts */
+    cards+=`<div class="aside-card"><div class="aside-title">最近日志</div>
+      ${recentLogs.length?recentLogs.map(l=>`<div class="aside-item">
+        ${pill(logLevelLabel[l.level]||l.level,tone(l.level==='warn'?'warning':l.level==='info'?'ok':'offline'))}
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.title)}</span>
+        <span style="color:var(--c-text3);font-size:.72rem;white-space:nowrap">${relTime(l.at)}</span>
+      </div>`).join(''):'<div style="font-size:.8rem;color:var(--c-text3)">暂无日志</div>'}
+    </div>`;
+    cards+=`<div class="aside-card"><div class="aside-title">活跃告警 (${campusAlerts.length})</div>
+      ${campusAlerts.slice(0,5).map(a=>{
+        const t=getTerm(state,a.terminalId);
+        return `<div class="aside-item" style="flex-direction:column;align-items:flex-start;gap:2px">
+          <div>${pill(a.level==='high'?'高':a.level==='medium'?'中':'低',a.level==='high'?'err':a.level==='medium'?'warn':'muted')} <span style="font-weight:500">${esc(a.title)}</span></div>
+          <div style="font-size:.75rem;color:var(--c-text3)">${t?esc(t.seat||'--')+' · '+esc(t.name||''):''} ${relTime(a.at)}</div>
+        </div>`;
+      }).join('')}
+      ${campusAlerts.length>5?`<div style="font-size:.78rem;text-align:center;padding-top:4px"><a class="clickable" data-nav="alerts" style="cursor:pointer">查看全部 ${campusAlerts.length} 条</a></div>`:''}
+    </div>`;
+  } else if(view.page==='classrooms'){
+    /* classroom aside: alerts + tasks */
+    const activeTasks = state.tasks.filter(t=>t.phase==='running'&&crIdsInCampus.has(t.classroomId));
+    cards+=`<div class="aside-card"><div class="aside-title">告警 (${campusAlerts.length})</div>
+      ${campusAlerts.slice(0,4).map(a=>{
+        const t=getTerm(state,a.terminalId);
+        return `<div class="aside-item" style="flex-direction:column;align-items:flex-start;gap:2px">
+          <div>${pill(a.level==='high'?'高':'中',a.level==='high'?'err':'warn')} <span style="font-weight:500">${esc(a.title)}</span></div>
+          <div style="font-size:.75rem;color:var(--c-text3)">${t?esc(t.seat||''):''}${relTime(a.at)}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+    cards+=`<div class="aside-card"><div class="aside-title">执行中任务</div>
+      ${activeTasks.length?activeTasks.map(tk=>{
+        const cr=getClassroom(state,tk.classroomId);
+        return `<div class="aside-item" style="flex-direction:column;align-items:flex-start;gap:2px">
+          <div style="font-weight:500">${esc(tk.label)}</div>
+          <div style="font-size:.75rem;color:var(--c-text3)">${cr?esc(cr.name):''} · ${(tk.counts.completed+tk.counts.failed)}/${tk.counts.total}</div>
+        </div>`;
+      }).join(''):'<div style="font-size:.8rem;color:var(--c-text3)">无执行中任务</div>'}
+    </div>`;
+  } else if(view.page==='assets'){
+    /* assets aside: storage summary */
+    cards+=`<div class="aside-card"><div class="aside-title">存储概况</div>
+      <div class="aside-item" style="justify-content:space-between"><span>服务器存储</span><span style="font-weight:600">${server?server.storage+'%':'--'}</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span>注册终端</span><span style="font-weight:600">${stats.terminals}</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span>授权上限</span><span style="font-weight:600">${server?.license||'--'}</span></div>
+    </div>`;
+  } else if(view.page==='alerts'){
+    /* alerts aside: severity stats */
+    const high=campusAlerts.filter(a=>a.level==='high').length;
+    const medium=campusAlerts.filter(a=>a.level==='medium').length;
+    const low=campusAlerts.filter(a=>a.level==='low').length;
+    cards+=`<div class="aside-card"><div class="aside-title">告警统计</div>
+      <div class="aside-item" style="justify-content:space-between"><span style="color:var(--c-err)">高严重度</span><span style="font-weight:700;color:var(--c-err)">${high}</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span style="color:var(--c-warn)">中严重度</span><span style="font-weight:700;color:var(--c-warn)">${medium}</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span>低严重度</span><span style="font-weight:700">${low}</span></div>
+    </div>`;
+  } else if(view.page==='server-change'){
+    /* server change aside: server status */
+    if(server) cards+=`<div class="aside-card"><div class="aside-title">服务器状态</div>
+      <div class="aside-item" style="justify-content:space-between"><span>名称</span><span style="font-weight:500">${esc(server.name)}</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span>当前地址</span><span class="mono" style="font-size:.8rem">${esc(server.address||'--')}</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span>CPU</span><span>${server.cpu}%</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span>内存</span><span>${server.memory}%</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span>SSL</span><span>${server.ssl?'已启用':'未启用'}</span></div>
+    </div>`;
+  }
+  if(!cards) return '';
+  return `<aside class="plat-aside">${cards}</aside>`;
+}
+
+
+function sparklineSvg(data, color, w, h){
+  if(!data||data.length<2) return '';
+  const max=Math.max(...data,1); const min=Math.min(...data,0);
+  const range=max-min||1;
+  const pts=data.map((v,i)=>`${(i/(data.length-1)*w).toFixed(1)},${(h-(v-min)/range*h).toFixed(1)}`).join(' ');
+  const fillPts=pts+` ${w},${h} 0,${h}`;
+  return `<svg class="sparkline" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polygon points="${fillPts}" fill="${color}"/>
+    <polyline points="${pts}" stroke="${color}"/>
+  </svg>`;
+}
+
+function healthScore(state,crId){
+  const rt=crRuntime(state,crId);
+  const alerts=alertsInCr(state,crId);
+  const onlineRate=rt.total?rt.online/rt.total:1;
+  const alertPenalty=Math.min(alerts.length*10,40);
+  return Math.max(0,Math.round(onlineRate*100-alertPenalty));
+}
 
 function dashboardPage(){
   const state=s(); const cId=view.campusId;
@@ -85,13 +189,17 @@ function dashboardPage(){
   const allAlerts=state.alerts.filter(a=>a.status==='open');
   const crIdsInCampus=new Set(state.classrooms.filter(c=>c.campusId===cId).map(c=>c.id));
   const campusAlerts=allAlerts.filter(a=>crIdsInCampus.has(a.classroomId));
-  const recentLogs=state.logs.slice(0,8);
-  const logLevelLabel={info:'信息',warn:'警告',error:'错误'};
-
-  /* desktop & storage stats */
   const crsInCampus=state.classrooms.filter(c=>c.campusId===cId);
   const totalDesktops=crsInCampus.reduce((n,c)=>(c.desktopCatalog||[]).length+n,0);
-  const totalSnaps=crsInCampus.reduce((n,c)=>(c.snapshotTree||[]).length+n,0);
+
+  /* time-series data from server */
+  const hist=server?.monitorHistory||[];
+  const cpuHist=hist.map(h=>h.cpu);
+  const memHist=hist.map(h=>h.memory);
+  const netHist=hist.map(h=>h.net||0);
+
+  const cpuColor=(server?.cpu||0)>80?'#ef4444':(server?.cpu||0)>60?'#f59e0b':'#22c55e';
+  const memColor=(server?.memory||0)>80?'#ef4444':(server?.memory||0)>60?'#f59e0b':'#3b82f6';
 
   return `
   <div class="metric-grid">
@@ -101,37 +209,44 @@ function dashboardPage(){
       <div class="mc-sub">教师 ${stats.teachers} · 学生 ${stats.students}</div></div>
     <div class="metric-card"><div class="mc-label">在线率</div><div class="mc-value">${pct(stats.online,stats.terminals)}%</div>
       <div class="mc-sub">在线 ${stats.online} · 离线 ${stats.offline}</div></div>
-    <div class="metric-card"><div class="mc-label">活跃告警</div><div class="mc-value${campusAlerts.length?' text-err':''}">${campusAlerts.length}</div>
-      <div class="mc-sub">${campusAlerts.length?'需关注':'无告警'}</div></div>
     <div class="metric-card"><div class="mc-label">桌面</div><div class="mc-value">${totalDesktops}</div>
       <div class="mc-sub">服务器存储 ${server?server.storage+'%':'--'}</div></div>
+    <div class="metric-card"><div class="mc-label">活跃告警</div><div class="mc-value${campusAlerts.length?' text-err':''}">${campusAlerts.length}</div>
+      <div class="mc-sub">${campusAlerts.length?'需关注':'无告警'}</div></div>
     <div class="metric-card"><div class="mc-label">执行中任务</div><div class="mc-value">${stats.tasks}</div>
       <div class="mc-sub">${stats.tasks?'有任务正在进行':'无执行中任务'}</div></div>
   </div>
 
   ${server?`<div class="section">
-    <div class="section-head"><h3>服务器状态</h3></div>
-    <div class="card" style="max-width:700px">
-      ${defRow('服务器',server.name)} ${defRow('域名',server.domain||'--',{mono:true})}
-      ${defRow('内网 IP',server.internalIp||server.address||'--',{mono:true})} ${defRow('外网 IP',server.externalIp||'--',{mono:true})}
-      ${defRow('SSL',server.ssl?pill('已启用','ok'):pill('未启用','err'),{raw:true})}
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:12px">
-        ${meter('CPU',server.cpu,server.cpu>80?'err':server.cpu>60?'warn':'ok')}
-        ${meter('内存',server.memory,server.memory>80?'err':server.memory>60?'warn':'ok')}
-        ${meter('存储',server.storage,server.storage>80?'err':server.storage>60?'warn':'ok')}
+    <div class="section-head"><h3>服务器监控</h3></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;max-width:900px">
+      <div class="sparkline-wrap">
+        <div class="spark-label"><span class="spark-title">CPU</span><span class="spark-value" style="color:${cpuColor}">${server.cpu}%</span></div>
+        ${sparklineSvg(cpuHist, cpuColor, 240, 48)}
+      </div>
+      <div class="sparkline-wrap">
+        <div class="spark-label"><span class="spark-title">内存</span><span class="spark-value" style="color:${memColor}">${server.memory}%</span></div>
+        ${sparklineSvg(memHist, memColor, 240, 48)}
+      </div>
+      <div class="sparkline-wrap">
+        <div class="spark-label"><span class="spark-title">以太网</span><span class="spark-value" style="color:#6366f1">${netHist.length?netHist[netHist.length-1].toFixed(1):'--'} MB/s</span></div>
+        ${sparklineSvg(netHist, '#6366f1', 240, 48)}
       </div>
     </div>
   </div>`:''}
 
   <div class="section">
-    <div class="section-head"><h3>教室概况</h3></div>
+    <div class="section-head"><h3>教室健康度</h3></div>
     <table class="data-table">
-      <thead><tr><th>教室</th><th>位置</th><th>阶段</th><th>终端数</th><th>在线</th><th>告警</th><th>任务</th></tr></thead>
-      <tbody>${state.classrooms.filter(c=>c.campusId===cId).map(c=>{
+      <thead><tr><th>教室</th><th>位置</th><th>健康度</th><th>阶段</th><th>终端</th><th>在线</th><th>告警</th><th>任务</th></tr></thead>
+      <tbody>${crsInCampus.map(c=>{
         const rt=crRuntime(state,c.id); const tk=taskForCr(state,c.id); const als=alertsInCr(state,c.id);
+        const hs=healthScore(state,c.id);
+        const hsColor=hs>=80?'var(--c-ok)':hs>=50?'var(--c-warn)':'var(--c-err)';
         return `<tr>
           <td class="clickable" data-nav-cr="${c.id}">${esc(c.name)}</td>
           <td>${esc(c.building)} ${esc(c.floor)}</td>
+          <td><span style="font-weight:700;color:${hsColor}">${hs}</span><span style="font-size:.75rem;color:var(--c-text3)">/100</span></td>
           <td>${pill(stageLabel(c.stage), c.stage==='deployed'?'ok':c.stage==='blank'?'muted':'info')}</td>
           <td>${rt.total}</td><td>${rt.online}/${rt.total}</td>
           <td>${als.length?`<span class="text-err">${als.length}</span>`:'-'}</td>
@@ -140,17 +255,7 @@ function dashboardPage(){
       }).join('')}</tbody>
     </table>
   </div>
-
-  <div class="section">
-    <div class="section-head"><h3>最近日志</h3></div>
-    ${recentLogs.length?recentLogs.map(l=>`
-      <div style="display:flex;gap:8px;padding:6px 0;font-size:.85rem;border-bottom:1px solid #f1f5f9">
-        ${pill(logLevelLabel[l.level]||l.level,tone(l.level==='warn'?'warning':l.level==='info'?'ok':'offline'))}
-        <span>${esc(l.title)}</span>
-        <span style="color:var(--c-text3);margin-left:auto">${fmtTime(l.at)}</span>
-      </div>
-    `).join(''):empty('暂无日志')}
-  </div>`;
+  `;
 }
 
 
@@ -238,7 +343,7 @@ function classroomListPage(){
 function classroomDetailPage(){
   const state=s(); const c=getClassroom(state,view.classroomId); if(!c) return empty('教室不存在');
   const rt=crRuntime(state,c.id); const terms=termsInCr(state,c.id); const alerts=alertsInCr(state,c.id); const tk=taskForCr(state,c.id);
-  const tabs=[{l:'总览',k:'overview'},{l:'终端列表',k:'terminals'},{l:'桌面与存储',k:'desktops'},{l:'告警',k:'alerts'}];
+  const tabs=[{l:'总览',k:'overview'},{l:'终端列表',k:'terminals'},{l:'告警',k:'alerts'}];
   const tab=view.tab||'overview';
 
   return `
@@ -258,7 +363,6 @@ function classroomDetailPage(){
   <div class="tab-bar">${tabs.map(t=>`<div class="tab-item${t.k===tab?' active':''}" data-tab="${t.k}">${t.l}</div>`).join('')}</div>
   ${tab==='overview'?crOverviewTab(c,rt,terms,alerts,tk):''}
   ${tab==='terminals'?crTerminalsTab(c,terms):''}
-  ${tab==='desktops'?crDesktopsTab(c):''}
   ${tab==='alerts'?crAlertsTab(c,alerts):''}
   `;
 }
@@ -285,18 +389,19 @@ function crOverviewTab(c,rt,terms,alerts,tk){
 
 function crTerminalsTab(c,terms){
   const onlineTerms = terms.filter(t=>t.online);
-  const viewMode = view.termListMode || 'layout';
+  const viewMode = view.termListMode || 'list';
   const pa = view.platAction || null;
   const par = view.platActionResult || null;
   const sel = view.platSelectedTerms || [];
   const selOnline = sel.filter(id => onlineTerms.some(t=>t.id===id));
 
   const actions = [
-    {k:'shutdown', l:'批量关机', color:'var(--c-warn)', needSel:true},
-    {k:'restart', l:'批量重启', color:'var(--c-info)', needSel:true},
-    {k:'distribute', l:'部署桌面', color:'var(--c-brand)', needSel:true},
-    {k:'ip-mod', l:'修改 IP', color:'var(--c-info)', needSel:true},
-    {k:'remote-test', l:'网络测试', color:'var(--c-ok)', needSel:true},
+    {k:'shutdown', l:'执行关机', color:'var(--c-warn)', needSel:true},
+    {k:'restart', l:'执行重启', color:'var(--c-info)', needSel:true},
+    {k:'distribute', l:'部署桌面到教室', color:'var(--c-brand)', needSel:true},
+    {k:'ip-mod', l:'修改终端IP', color:'var(--c-info)', needSel:true},
+    {k:'block-internet', l:'禁止外网', color:'var(--c-warn)', needSel:true},
+    {k:'block-usb', l:'禁止USB', color:'var(--c-warn)', needSel:true},
   ];
 
   return `
@@ -308,13 +413,17 @@ function crTerminalsTab(c,terms){
         return `<button class="batch-btn${active?' active':''}" data-plat-action="${a.k}" style="--accent:${a.color}"${disabled?' disabled':''}>${a.l}${a.needSel && selOnline.length>0 ? ' ('+selOnline.length+')' : ''}</button>`;
       }).join('')}
       <span class="batch-sep"></span>
-      <button class="batch-btn${pa==='broadcast-test'?' active':''}" data-plat-action="broadcast-test" style="--accent:var(--c-warn)">教室广播隔离测试</button>
+      <button class="batch-btn${pa==='remote-test'?' active':''}" data-plat-action="remote-test" style="--accent:var(--c-ok)">执行网络测试</button>
+      <button class="batch-btn${pa==='hw-test'?' active':''}" data-plat-action="hw-test" style="--accent:var(--c-info)">执行硬件测试</button>
+      <button class="batch-btn${pa==='broadcast-test'?' active':''}" data-plat-action="broadcast-test" style="--accent:var(--c-warn)">执行跨教室广播隔离测试</button>
     </div>
     <div class="batch-sel-summary">
       ${sel.length > 0
         ? `已选 <strong>${sel.length}</strong> 台${selOnline.length!==sel.length ? `（在线 ${selOnline.length}）` : ''}`
         : `<span style="color:var(--c-text3)">点击下方终端进行选择</span>`}
       <a class="batch-sel-link" data-sel-all-online>全选在线</a>
+      <a class="batch-sel-link" data-sel-group="teacher">选教师终端</a>
+      <a class="batch-sel-link" data-sel-group="student">选学生终端</a>
       ${sel.length > 0 ? `<a class="batch-sel-link" data-sel-clear>清除选择</a>` : ''}
     </div>
   </div>
@@ -400,7 +509,7 @@ function platActionPanel(pa, par, c, terms){
   const crsInCampus = state.classrooms.filter(cr=>cr.campusId===view.campusId&&cr.stage==='deployed');
 
   let content = '';
-  const accentMap = {shutdown:'var(--c-warn)', restart:'var(--c-info)', distribute:'var(--c-brand)', 'ip-mod':'var(--c-info)', 'remote-test':'var(--c-ok)', 'broadcast-test':'var(--c-warn)'};
+  const accentMap = {shutdown:'var(--c-warn)', restart:'var(--c-info)', distribute:'var(--c-brand)', 'ip-mod':'var(--c-info)', 'remote-test':'var(--c-ok)', 'broadcast-test':'var(--c-warn)', 'block-internet':'var(--c-warn)', 'block-usb':'var(--c-warn)', 'hw-test':'var(--c-info)'};
 
   /* ── helper: compact terminal pill list ── */
   function termPills(list, max){
@@ -413,7 +522,7 @@ function platActionPanel(pa, par, c, terms){
   if(pa==='shutdown'){
     content = `
       <div class="card-header" style="margin:-14px -18px 12px;padding:10px 18px;background:rgba(234,179,8,.06);border-radius:8px 8px 0 0;font-size:.95rem">
-        批量关机
+        执行关机
       </div>
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
         将向以下 <strong>${selTerms.length}</strong> 台在线终端发送软件关机指令。
@@ -432,7 +541,7 @@ function platActionPanel(pa, par, c, terms){
   if(pa==='restart'){
     content = `
       <div class="card-header" style="margin:-14px -18px 12px;padding:10px 18px;background:rgba(59,130,246,.06);border-radius:8px 8px 0 0;font-size:.95rem">
-        批量重启
+        执行重启
       </div>
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
         将向以下 <strong>${selTerms.length}</strong> 台在线终端发送重启指令，终端将在数秒后自动恢复在线。
@@ -459,7 +568,7 @@ function platActionPanel(pa, par, c, terms){
 
     content = `
       <div class="card-header" style="margin:-14px -18px 12px;padding:10px 18px;background:rgba(59,130,246,.06);border-radius:8px 8px 0 0;font-size:.95rem">
-        批量部署桌面
+        部署桌面到教室
       </div>
       <div style="display:flex;gap:6px;margin-bottom:14px;font-size:.82rem">
         <span style="padding:3px 10px;border-radius:12px;${step>=1?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">① 选来源终端</span>
@@ -526,7 +635,7 @@ function platActionPanel(pa, par, c, terms){
     const previewTerms = selTerms.length ? selTerms : [];
     content = `
       <div class="card-header" style="margin:-14px -18px 12px;padding:10px 18px;background:rgba(59,130,246,.06);border-radius:8px 8px 0 0;font-size:.95rem">
-        批量修改 IP
+        修改终端IP
       </div>
       <div style="display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start">
         <div>
@@ -560,10 +669,73 @@ function platActionPanel(pa, par, c, terms){
         <button class="btn btn-ghost btn-sm" data-plat-cancel>取消</button>
       </div>`;
   }
+  if(pa==='block-internet'){
+    content = `
+      <div class="card-header" style="margin:-14px -18px 12px;padding:10px 18px;background:rgba(234,179,8,.06);border-radius:8px 8px 0 0;font-size:.95rem">
+        禁止外网访问
+      </div>
+      <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
+        将禁止以下 <strong>${selTerms.length}</strong> 台在线终端的外网访问。仅保留校园内网和服务器通信。
+      </div>
+      <div style="margin-bottom:12px;padding:8px 12px;background:var(--c-bg2);border-radius:6px;line-height:1.7">
+        ${termPills(selTerms, 20)}
+      </div>
+      ${par?.done?`<div style="padding:8px 12px;background:rgba(34,197,94,.06);border-radius:6px;margin-bottom:10px">
+        <span class="text-ok" style="font-size:.85rem">✓ 已对 ${par.count} 台终端禁止外网</span>
+      </div>`:''}
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" data-plat-confirm="block-internet"${par?.done||!selTerms.length?' disabled':''}>确认禁止 (${selTerms.length})</button>
+        <button class="btn btn-ghost btn-sm" data-plat-cancel>取消</button>
+      </div>`;
+  }
+  if(pa==='block-usb'){
+    content = `
+      <div class="card-header" style="margin:-14px -18px 12px;padding:10px 18px;background:rgba(234,179,8,.06);border-radius:8px 8px 0 0;font-size:.95rem">
+        禁止USB存储设备
+      </div>
+      <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
+        将禁止以下 <strong>${selTerms.length}</strong> 台在线终端使用USB存储设备（U盘、移动硬盘等），不影响USB键鼠。
+      </div>
+      <div style="margin-bottom:12px;padding:8px 12px;background:var(--c-bg2);border-radius:6px;line-height:1.7">
+        ${termPills(selTerms, 20)}
+      </div>
+      ${par?.done?`<div style="padding:8px 12px;background:rgba(34,197,94,.06);border-radius:6px;margin-bottom:10px">
+        <span class="text-ok" style="font-size:.85rem">✓ 已对 ${par.count} 台终端禁止USB</span>
+      </div>`:''}
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" data-plat-confirm="block-usb"${par?.done||!selTerms.length?' disabled':''}>确认禁止 (${selTerms.length})</button>
+        <button class="btn btn-ghost btn-sm" data-plat-cancel>取消</button>
+      </div>`;
+  }
+  if(pa==='hw-test'){
+    content = `
+      <div class="card-header" style="margin:-14px -18px 12px;padding:10px 18px;background:rgba(59,130,246,.06);border-radius:8px 8px 0 0;font-size:.95rem">
+        执行硬件测试
+      </div>
+      <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
+        对选中的 <strong>${selTerms.length}</strong> 台终端执行硬件检测。可选择多项测试同时执行。
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer"><input type="checkbox" data-hw-test-item="multi-monitor" checked> 多显示器分辨率检测</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer"><input type="checkbox" data-hw-test-item="smart" checked> SMART 硬盘健康检测</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer"><input type="checkbox" data-hw-test-item="hw-consistency" checked> 硬件一致性检测</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer"><input type="checkbox" data-hw-test-item="usb-port" checked> USB接口检测</label>
+      </div>
+      <div style="margin-bottom:12px;padding:8px 12px;background:var(--c-bg2);border-radius:6px;line-height:1.7">
+        ${termPills(selTerms, 20)}
+      </div>
+      ${par?.done?`<div style="padding:8px 12px;background:rgba(34,197,94,.06);border-radius:6px;margin-bottom:10px">
+        <span class="text-ok" style="font-size:.85rem">✓ 硬件测试完成 · ${par.count} 台终端${par.failed?' · <span class="text-err">'+par.failed+' 台异常</span>':' · 全部正常'}</span>
+      </div>`:''}
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" data-plat-confirm="hw-test"${par?.done||!selTerms.length?' disabled':''}>执行测试 (${selTerms.length})</button>
+        <button class="btn btn-ghost btn-sm" data-plat-cancel>取消</button>
+      </div>`;
+  }
   if(pa==='remote-test'){
     content = `
       <div class="card-header" style="margin:-14px -18px 12px;padding:10px 18px;background:rgba(34,197,94,.06);border-radius:8px 8px 0 0;font-size:.95rem">
-        终端网络连通性测试
+        执行网络连通性测试
       </div>
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
         逐台测试以下 <strong>${selTerms.length}</strong> 台选中在线终端的网络延迟、带宽、服务器连通性和网关连通性。
@@ -576,6 +748,9 @@ function platActionPanel(pa, par, c, terms){
         <span class="${par.results.every(r=>r.serverReachable&&r.gatewayReachable)?'text-ok':'text-err'}" style="font-size:.85rem">
           ${par.results.every(r=>r.serverReachable&&r.gatewayReachable)?'✓ 全部终端网络正常':'⚠ 有终端网络异常'} · 已测试 ${par.results.length} 台
         </span>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button class="btn btn-ghost btn-sm" data-plat-confirm="export-test-report" style="font-size:.78rem">导出测试报告</button>
       </div>
       <div style="max-height:260px;overflow-y:auto">
         <table class="data-table" style="font-size:.78rem">
@@ -598,7 +773,7 @@ function platActionPanel(pa, par, c, terms){
     const selCrs = view.broadcastCrs || [];
     content = `
       <div class="card-header" style="margin:-14px -18px 12px;padding:10px 18px;background:rgba(234,179,8,.06);border-radius:8px 8px 0 0;font-size:.95rem">
-        教室广播隔离测试
+        执行跨教室广播隔离测试
       </div>
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
         测试本教室 <strong>${esc(c.name)}</strong> 与其他教室之间的广播域隔离。选择对端教室后执行测试，检测是否存在跨教室广播泄漏。
@@ -958,14 +1133,34 @@ function assetsPage(){
   const crIds = state.classrooms.filter(c=>c.campusId===view.campusId).map(c=>c.id);
   const crsWithDesktops = state.classrooms.filter(c=>crIds.includes(c.id)&&(c.desktopCatalog||[]).length>0);
 
-  const totalDesktops = crsWithDesktops.reduce((n,c)=>(c.desktopCatalog||[]).length+n,0);
+  /* Build a flat list of all desktops across classrooms */
+  const allDesktops = [];
+  crsWithDesktops.forEach(c=>{
+    (c.desktopCatalog||[]).forEach(d=>{
+      const tUsing = termsInCr(state,c.id).filter(t=>(t.desktops||[]).some(td=>td.id===d.id));
+      /* find other classrooms that also reference this desktop by name */
+      const otherCrs = crsWithDesktops.filter(oc=>oc.id!==c.id&&(oc.desktopCatalog||[]).some(od=>od.name===d.name));
+      allDesktops.push({...d, classroomId:c.id, classroomName:c.name, termCount:tUsing.length, otherCrs});
+    });
+  });
+
+  /* sorting */
+  const sortKey = view.assetSort || 'name';
+  const sortAsc = view.assetSortAsc ?? true;
+  const dir = sortAsc ? 1 : -1;
+  allDesktops.sort((a,b)=>{
+    if(sortKey==='name') return a.name.localeCompare(b.name)*dir;
+    if(sortKey==='classroom') return a.classroomName.localeCompare(b.classroomName)*dir;
+    if(sortKey==='terminals') return (a.termCount-b.termCount)*dir;
+    if(sortKey==='created') return (new Date(a.createdAt||0)-new Date(b.createdAt||0))*dir;
+    return 0;
+  });
+
+  const totalDesktops = allDesktops.length;
   const totalSnaps = crsWithDesktops.reduce((n,c)=>(c.snapshotTree||[]).length+n,0);
   const totalImages = crsWithDesktops.reduce((n,c)=>(c.imageStore||[]).length+n,0);
-  const totalDisks = crsWithDesktops.reduce((n,c)=>(c.desktopCatalog||[]).filter(d=>d.dataDisk).length+n,0);
 
-  /* fake file size from id */
   function fSize(id){ let h=0;for(let i=0;i<id.length;i++) h=((h<<5)-h+id.charCodeAt(i))|0; return (Math.abs(h%40)+8)+'.'+(Math.abs(h>>8)%10)+' GB'; }
-  /* estimate total storage */
   const estSnaps = crsWithDesktops.flatMap(c=>(c.snapshotTree||[]));
   const estImages = crsWithDesktops.flatMap(c=>(c.imageStore||[]));
   const totalStorageGB = [...estSnaps,...estImages].reduce((sum,item)=>{
@@ -973,51 +1168,13 @@ function assetsPage(){
     return sum+(Math.abs(h%40)+8)+((Math.abs(h>>8)%10)/10);
   },0);
 
-  function snapChain(snTree, snapId){
-    const chain=[];
-    let cur=snTree.find(sn=>sn.id===snapId);
-    while(cur){ chain.unshift(cur); cur=snTree.find(sn=>sn.id===cur.parentId); }
-    return chain;
-  }
-  function termsUsingDesktop(crId, desktopId){
-    return termsInCr(state,crId).filter(t=>(t.desktops||[]).some(d=>d.id===desktopId));
-  }
+  const sortArrow = sortAsc ? '↑' : '↓';
+  function sortBtn(key,label){ return `<button class="btn btn-sm${sortKey===key?' btn-primary':' btn-ghost'}" data-asset-sort="${key}">${label}${sortKey===key?' '+sortArrow:''}</button>`; }
 
-  /* Build full snapshot tree for a classroom */
-  function buildCrTree(c){
-    const imgs=c.imageStore||[]; const snTree=c.snapshotTree||[];
-    const roots=snTree.filter(sn=>!sn.parentId);
-    function children(pid){ return snTree.filter(sn=>sn.parentId===pid); }
-    function renderNode(sn,depth){
-      const indent=depth*20;
-      const prefix=depth>0?'└─ ':'';
-      return `<div style="margin-left:${indent}px;padding:2px 0;font-size:.78rem;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
-        <span style="color:var(--c-text3);font-family:monospace">${prefix}</span>
-        <span style="background:var(--c-bg2);padding:1px 4px;border-radius:2px">[快照] ${esc(sn.name)}</span>
-        <span class="mono" style="color:var(--c-text3)">${esc(sn.name.replace(/\s+/g,'_'))}.qcow2</span>
-        <span style="color:var(--c-text3)">${fSize(sn.id)}</span>
-        <span style="color:var(--c-text3)">${fmtTime(sn.createdAt)}</span>
-      </div>${children(sn.id).map(k=>renderNode(k,depth+1)).join('')}`;
-    }
-    let html='';
-    for(const img of imgs){
-      const imgRoots=roots.filter(sn=>sn.imageId===img.id);
-      html+=`<div style="padding:2px 0;font-size:.78rem;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
-        <span style="background:var(--c-info);color:#fff;padding:1px 4px;border-radius:2px;font-size:.72rem">[镜像]</span>
-        <span style="font-weight:600">${esc(img.name)}</span>
-        <span class="mono" style="color:var(--c-text3)">${esc(img.name.replace(/\s+/g,'_'))}.vhd</span>
-        <span style="color:var(--c-text3)">${fSize(img.id)}</span>
-        <span style="color:var(--c-text3)">${fmtTime(img.importedAt)}</span>
-      </div>`;
-      for(const r of imgRoots) html+=renderNode(r,1);
-    }
-    return html;
-  }
+  const dar = view.deleteAssetResult || null;
 
   return `
-  <div class="section-sub">${esc(campus?.name||'')} — 桌面资产总览（只读，桌面由终端侧管理）</div>
-
-  <div class="metric-grid" style="margin-bottom:20px">
+  <div class="metric-grid" style="margin-bottom:16px">
     <div class="metric-card"><div class="mc-label">桌面总数</div><div class="mc-value">${totalDesktops}</div>
       <div class="mc-sub">分布在 ${crsWithDesktops.length} 个教室</div></div>
     <div class="metric-card"><div class="mc-label">镜像</div><div class="mc-value">${totalImages}</div>
@@ -1026,47 +1183,38 @@ function assetsPage(){
       <div class="mc-sub">快照文件链构成桌面版本</div></div>
     <div class="metric-card"><div class="mc-label">估算存储</div><div class="mc-value">${totalStorageGB.toFixed(0)} GB</div>
       <div class="mc-sub">服务器存储占 ${server?server.storage+'%':'--'}</div></div>
-    <div class="metric-card"><div class="mc-label">数据盘</div><div class="mc-value">${totalDisks}</div>
-      <div class="mc-sub">VHD 用户数据盘</div></div>
   </div>
 
-  ${crsWithDesktops.length ? crsWithDesktops.map(c=>{
-    const catalog = c.desktopCatalog || [];
-    const crTermCount = termsInCr(state,c.id).length;
-    return `
-    <div class="section mb-16">
-      <div class="section-head" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <h3 class="clickable" data-nav-cr="${c.id}" style="cursor:pointer">${esc(c.name)}</h3>
-        <span style="font-size:.82rem;color:var(--c-text3)">
-          ${catalog.length} 桌面 · ${(c.snapshotTree||[]).length} 快照 · ${crTermCount} 终端
-        </span>
-      </div>
-      ${catalog.map(d=>{
-        const chain=snapChain(c.snapshotTree||[], d.snapshotId);
-        const img=chain.length?(c.imageStore||[]).find(im=>im.id===chain[0].imageId):null;
-        const tUsing=termsUsingDesktop(c.id, d.id);
-        return `
-      <div class="asset-card mb-8" style="margin-left:8px;padding:10px 16px;border:1px solid var(--c-border);border-radius:6px">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-weight:600">${esc(d.name)}</span>
-          <span style="font-size:.82rem;color:var(--c-text3)">${esc(d.os||'')}</span>
-        </div>
-        <div style="font-size:.82rem;color:var(--c-text3);margin-top:4px">
-          ${d.dataDisk?`<span style="color:var(--c-info)">${esc(d.dataDisk)}</span> · `:''}${tUsing.length} 台终端在用 · 创建于 ${fmtTime(d.createdAt)} · 更新于 ${fmtTime(d.editedAt)}
-        </div>
-        <div style="margin-top:6px;margin-left:4px">${(()=>{
-          let h='';
-          if(img) h+=`<div style="padding:1px 0;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="background:var(--c-info);color:#fff;padding:0 4px;border-radius:2px;font-size:.72rem">[镜像]</span><span>${esc(img.name)}</span><span class="mono" style="color:var(--c-text3)">${esc(img.name.replace(/\\s+/g,'_'))}.vhd</span><span style="color:var(--c-text3)">${fSize(img.id)}</span></div>`;
-          chain.forEach((sn,i)=>{ h+=`<div style="margin-left:${(i+1)*16}px;padding:1px 0;font-size:.78rem;display:flex;align-items:center;gap:4px"><span style="color:var(--c-text3);font-family:monospace">└─</span><span style="background:var(--c-bg2);padding:0 4px;border-radius:2px">[快照] ${esc(sn.name)}</span><span class="mono" style="color:var(--c-text3)">${esc(sn.name.replace(/\\s+/g,'_'))}.qcow2</span><span style="color:var(--c-text3)">${fSize(sn.id)}</span></div>`; });
-          return h;
-        })()}</div>
-      </div>`;}).join('')}
-      <details style="margin-left:8px;margin-top:8px">
-        <summary style="font-size:.82rem;color:var(--c-text2);cursor:pointer;font-weight:600">完整快照依赖树</summary>
-        <div style="margin-top:4px;padding:8px 12px;border:1px solid var(--c-border);border-radius:4px;background:var(--c-bg2)">${buildCrTree(c)}</div>
-      </details>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;gap:6px;align-items:center">
+      <span style="font-size:.85rem;font-weight:600;color:var(--c-text2)">排序：</span>
+      ${sortBtn('name','名称')} ${sortBtn('classroom','教室')} ${sortBtn('terminals','终端数')} ${sortBtn('created','创建时间')}
     </div>
-  `}).join('') : empty('当前校区无桌面资产','需从终端侧上传桌面后可见')}
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-secondary btn-sm" data-asset-action="import">导入桌面</button>
+      <button class="btn btn-secondary btn-sm" data-asset-action="export">导出清单</button>
+    </div>
+  </div>
+
+  ${dar?.done?`<div style="color:var(--c-ok);font-size:.85rem;margin-bottom:12px;padding:8px 12px;background:rgba(34,197,94,.08);border-radius:6px">✓ ${esc(dar.message)}</div>`:''}
+
+  ${allDesktops.length?`
+  <table class="data-table">
+    <thead><tr><th>桌面名称</th><th>操作系统</th><th>教室</th><th>数据盘</th><th>终端引用</th><th>创建时间</th><th>操作</th></tr></thead>
+    <tbody>${allDesktops.map(d=>{
+      const unreferenced = d.termCount===0;
+      return `<tr${unreferenced?' style="opacity:.7"':''}>
+        <td style="font-weight:600">${esc(d.name)}</td>
+        <td>${esc(d.os||'--')}</td>
+        <td><a class="clickable" data-nav-cr="${d.classroomId}" style="cursor:pointer">${esc(d.classroomName)}</a>${d.otherCrs.length?`<span style="font-size:.75rem;color:var(--c-text3)"> +${d.otherCrs.length}</span>`:''}</td>
+        <td>${d.dataDisk?`<span style="color:var(--c-info)">${esc(d.dataDisk)}</span>`:'--'}</td>
+        <td>${d.termCount} 台${unreferenced?' <span style="color:var(--c-warn);font-size:.78rem">无引用</span>':''}</td>
+        <td style="font-size:.82rem;color:var(--c-text3)">${fmtTime(d.createdAt)}</td>
+        <td>${unreferenced?`<button class="btn btn-ghost btn-sm" style="color:var(--c-err);font-size:.78rem" data-delete-asset="${d.id}" data-delete-cr="${d.classroomId}">删除</button>`:'<span style="font-size:.78rem;color:var(--c-text3)">使用中</span>'}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`
+  :empty('当前校区无桌面资产','需从终端侧上传桌面后可见')}
   `;
 }
 
@@ -1112,70 +1260,66 @@ function alertsPage(){
 }
 
 
-function settingsPage(){
+function serverChangePage(){
   const state=s(); const server=serverFor(state,view.campusId); const campus=getCampus(state,view.campusId);
   const stats=campusStats(state,view.campusId);
   const sr = view.settingsResult || {};
-  const allCampuses = state.campuses || [];
+  const offlineTerms = state.terminals.filter(t=>{
+    const cr=state.classrooms.find(c=>c.id===t.classroomId);
+    return cr&&cr.campusId===view.campusId&&!t.online;
+  });
+  const onlineTerms = state.terminals.filter(t=>{
+    const cr=state.classrooms.find(c=>c.id===t.classroomId);
+    return cr&&cr.campusId===view.campusId&&t.online;
+  });
+
   return `
   <div class="section">
-    <div class="section-head"><h3>授权管理</h3></div>
-    <div class="card" style="max-width:640px">
-      <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:12px">
-        导入或更新产品授权文件（License），授权文件决定可管理的最大终端数量。导入后全域自动生效。
-      </div>
-      ${defRow('可授权终端总数', String(server?.license||0))}
-      ${defRow('已授权终端数', String(stats.terminals))}
-      ${defRow('授权状态', (stats.terminals<=(server?.license||0))?pill('正常','ok'):pill('超限','err'), {raw:true})}
-      <div style="margin-top:8px">${meter('授权使用率',pct(stats.terminals,server?.license||1),(stats.terminals/(server?.license||1))>0.9?'err':'ok')}</div>
-      ${sr.license?`<div style="color:var(--c-ok);font-size:.85rem;margin:8px 0">✓ 授权已更新为 ${sr.license}</div>`:''}
-      <div style="margin-top:12px">
-        <button class="btn btn-secondary btn-sm" data-settings-action="import-license">导入授权文件</button>
-      </div>
-    </div>
-  </div>
-  <div class="section">
-    <div class="section-head"><h3>服务器 IP 变更</h3></div>
-    <div class="card" style="max-width:600px">
-      <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:12px">
+    <div class="section-head"><h3>服务器地址变更</h3></div>
+    <div class="card" style="max-width:700px">
+      <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:16px">
         <strong>变更流程：</strong>
-        <ol style="margin:8px 0;padding-left:20px;font-size:.85rem">
+        <ol style="margin:8px 0;padding-left:20px;font-size:.85rem;line-height:1.7">
           <li>在此页面输入新服务器地址，系统向所有<strong>在线终端</strong>推送地址变更通知</li>
           <li>在线终端自动更新本地服务器配置</li>
           <li>物理修改服务器 IP / 重新签发 SSL 证书</li>
           <li><strong>离线终端</strong>需工程师到现场通过终端"网络与服务器"页面手动修改</li>
         </ol>
       </div>
-      <div class="prep-field"><label>当前地址</label><span class="mono">${esc(server?.address||'--')}</span></div>
-      <div class="prep-field"><label>新地址</label><input type="text" data-server-new-addr placeholder="输入新服务器 IP" value="${esc(view.newServerAddr||'')}"></div>
-      ${sr.serverIp?`<div style="color:var(--c-ok);font-size:.85rem;margin:8px 0">✓ 已变更服务器地址，已通知 ${sr.serverIpCount} 台在线终端</div>`:''}
-      <button class="btn btn-secondary btn-sm" data-settings-action="server-ip"${!view.newServerAddr?' disabled':''}>通知在线终端并变更</button>
-    </div>
-  </div>
-  <div class="section">
-    <div class="section-head"><h3>校区与账号管理</h3></div>
-    ${allCampuses.map(cp=>{
-      const cpStats = campusStats(state,cp.id);
-      return `<div class="card mb-16" style="max-width:640px">
-        <div class="card-header">${esc(cp.name)}</div>
-        ${defRow('校区 ID', cp.id, {mono:true})}
-        <div style="margin-top:10px;font-size:.85rem;font-weight:600;color:var(--c-text2)">管理员账号</div>
-        <table class="data-table" style="font-size:.85rem;box-shadow:none;margin-top:4px">
-          <thead><tr><th>用户名</th><th>角色</th><th>状态</th></tr></thead>
-          <tbody>
-            <tr><td>${esc(cp.id.replace(/-/g,'_')+'_admin')}</td><td>校区管理员</td><td>${pill('启用','ok')}</td></tr>
-          </tbody>
-        </table>
-      </div>`;
-    }).join('')}
-    <div class="card" style="max-width:640px">
-      <div class="card-header">全局管理员</div>
-      <table class="data-table" style="font-size:.85rem;box-shadow:none">
-        <thead><tr><th>用户名</th><th>角色</th><th>管辖范围</th></tr></thead>
-        <tbody>
-          <tr><td>admin</td><td>系统管理员</td><td>全平台</td></tr>
-        </tbody>
-      </table>
+      ${defRow('当前地址',server?.address||'--',{mono:true})}
+      ${defRow('域名',server?.domain||'--',{mono:true})}
+      ${defRow('在线终端',onlineTerms.length+' 台')}
+      ${defRow('离线终端',offlineTerms.length+' 台',offlineTerms.length?{raw:true}:{})}
+      <div class="prep-field" style="margin-top:12px"><label style="width:90px;font-weight:600;font-size:.85rem">新地址</label><input type="text" data-server-new-addr placeholder="输入新服务器 IP 或域名" value="${esc(view.newServerAddr||'')}" style="width:280px"></div>
+
+      ${sr.serverIp?`<div style="color:var(--c-ok);font-size:.85rem;margin:12px 0;padding:8px 12px;background:rgba(34,197,94,.08);border-radius:6px">
+        ✓ 已变更服务器地址，已通知 ${sr.serverIpCount} 台在线终端
+      </div>`:''}
+
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-primary" data-settings-action="server-ip"${!view.newServerAddr?' disabled':''}>通知在线终端并变更</button>
+      </div>
+
+      ${offlineTerms.length?`
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--c-border)">
+        <div style="font-size:.85rem;font-weight:600;color:var(--c-text2);margin-bottom:8px">⚠ 离线终端列表 — 需手动处理 (${offlineTerms.length} 台)</div>
+        <div style="max-height:240px;overflow-y:auto">
+          <table class="data-table" style="font-size:.82rem">
+            <thead><tr><th>座位号</th><th>机器名</th><th>IP</th><th>教室</th></tr></thead>
+            <tbody>${offlineTerms.map(t=>{
+              const cr=getClassroom(state,t.classroomId);
+              return `<tr>
+                <td>${esc(t.seat||'--')}</td>
+                <td>${esc(t.name||'未命名')}</td>
+                <td class="mono">${esc(t.ip||'--')}</td>
+                <td>${cr?esc(cr.name):'--'}</td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table>
+        </div>
+        <div style="font-size:.82rem;color:var(--c-text3);margin-top:8px">这些终端在变更时不在线，需工程师到现场通过终端"网络与服务器"页面手动修改服务器地址。</div>
+      </div>
+      `:''}
     </div>
   </div>
   `;
@@ -1299,6 +1443,14 @@ function bindEvents(){
         } else if(act==='broadcast-test'){
           const r=await client.send('plat-broadcast-test',{classroomId:crId,classroomIds:view.broadcastCrs||[]});
           view.platActionResult={results:r.results,hasInterference:r.hasInterference};
+        } else if(act==='block-internet'){
+          view.platActionResult={done:true,count:selIds.length};
+        } else if(act==='block-usb'){
+          view.platActionResult={done:true,count:selIds.length};
+        } else if(act==='hw-test'){
+          view.platActionResult={done:true,count:selIds.length,failed:Math.random()>0.7?1:0};
+        } else if(act==='export-test-report'){
+          /* simulated export */
         } else if(act==='import-list'){
           const target=view.importTarget||'_new';
           const tgtCrId = target==='_new' ? null : target;
@@ -1399,24 +1551,61 @@ function bindEvents(){
     });
   });
 
-  /* ── Settings page actions ── */
+  /* ── Terminal group selection ── */
+  root.querySelectorAll('[data-sel-group]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const group=el.dataset.selGroup;
+      const c=getClassroom(s(),view.classroomId);
+      const terms=termsInCr(s(),c?.id).filter(t=>t.online);
+      if(group==='teacher') view.platSelectedTerms=terms.filter(t=>t.use==='教师终端').map(t=>t.id);
+      else if(group==='student') view.platSelectedTerms=terms.filter(t=>t.use!=='教师终端').map(t=>t.id);
+      render(s());
+    });
+  });
+
+  /* ── Asset sort ── */
+  root.querySelectorAll('[data-asset-sort]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const key=el.dataset.assetSort;
+      if(view.assetSort===key) view.assetSortAsc=!view.assetSortAsc;
+      else { view.assetSort=key; view.assetSortAsc=true; }
+      render(s());
+    });
+  });
+
+  /* ── Asset actions (import/export/delete) ── */
+  root.querySelectorAll('[data-asset-action]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const act=el.dataset.assetAction;
+      if(act==='import') view.deleteAssetResult={done:true,message:'模拟导入完成 — 已导入 1 个桌面镜像'};
+      if(act==='export') view.deleteAssetResult={done:true,message:'模拟导出完成 — 已导出桌面资产清单 (Excel)'};
+      render(s());
+    });
+  });
+  root.querySelectorAll('[data-delete-asset]').forEach(el=>{
+    el.addEventListener('click',async()=>{
+      const dtId=el.dataset.deleteAsset;
+      const crId=el.dataset.deleteCr;
+      try{
+        await client.send('plat-delete-desktop-asset',{classroomId:crId,desktopId:dtId});
+        view.deleteAssetResult={done:true,message:'已删除桌面及关联的无引用快照和镜像'};
+      }catch(e){ console.error(e); }
+      render(s());
+    });
+  });
+
+  /* ── Server address change page actions ── */
   root.querySelectorAll('[data-settings-action]').forEach(el=>{
     el.addEventListener('click',async()=>{
       const act=el.dataset.settingsAction;
       if(!view.settingsResult) view.settingsResult={};
       try{
-        if(act==='import-license'){
-          const r=await client.send('plat-import-license',{campusId:view.campusId});
-          view.settingsResult.license=r.newLicense;
-        } else if(act==='server-ip'){
+        if(act==='server-ip'){
           const addr=view.newServerAddr||root.querySelector('[data-server-new-addr]')?.value||'';
           if(!addr) return;
           const r=await client.send('plat-server-ip-change',{campusId:view.campusId,newAddress:addr});
           view.settingsResult.serverIp=true;
           view.settingsResult.serverIpCount=r.count;
-        } else if(act==='import-list'){
-          await client.send('plat-import-terminal-list',{campusId:view.campusId});
-          view.settingsResult.importList=true;
         }
       }catch(e){console.error(e);}
       render(s());
