@@ -202,7 +202,7 @@ function shellHtml(){
         <span class="sep">|</span>
         <span>座位: ${esc(m?.seat||'--')}</span>
         <span class="sep">|</span>
-        <button class="btn btn-danger" style="padding:6px 18px;font-size:.85rem;display:inline-flex;align-items:center;justify-content:center;gap:4px;line-height:1" data-act="exit-to-desktop">⏻ 退出</button>
+        <button class="btn btn-danger" data-act="exit-to-desktop">⏻ 退出</button>
       </div>
     </div>
     <div class="term-body">${screenContent(demo().motherScreen)}</div>
@@ -542,9 +542,12 @@ function wbLayoutContent(terms, rt, c, m, d){
           ${hasNewTermsBeyondGrid?`<span style="color:var(--t-err);font-weight:600;margin-left:4px">终端数 (${discoveredCount}) 超出网格容量 (${activeCount})，请调整布局</span>`:''}</div>
       </div>
       <div class="card">
-        <div class="card-header">❸ IP 分配</div>
+        <div class="card-header">❸ 网络配置</div>
+        <div class="prep-field"><label>服务器地址</label><input type="text" id="layout-srv" value="${esc(m.serverAddr||'')}" placeholder="管理服务器 IP 或域名"></div>
         <div class="prep-field"><label>IP 前缀</label><input type="text" data-rule="ipBase" value="${esc(r.ipBase||'')}" placeholder="如 10.21.31"></div>
         <div class="prep-field"><label>起始编号</label><input type="number" data-rule="ipStart" value="${r.ipStart||20}" min="1" max="254"></div>
+        <div class="prep-field"><label>子网掩码</label><input type="text" id="layout-mask" value="${esc(m.subnetMask||'')}" placeholder="255.255.255.0"></div>
+        <div class="prep-field"><label>网关</label><input type="text" id="layout-gw" value="${esc(m.gateway||'')}" placeholder="网关地址"></div>
       </div>
       <div class="card">
         <div class="card-header">❹ 机器名 / 座位号</div>
@@ -1486,7 +1489,14 @@ function bindAll(){
       const a=el.dataset.act;
       if(a==='confirm-takeover'){
         const nm=root.querySelector('#tk-name');
-        act(a,nm?{classroomName:nm.value}:{});
+        /* Save layout network fields (server addr, subnet, gateway) to mother terminal before takeover */
+        const layoutSrv = root.querySelector('#layout-srv')?.value || '';
+        const layoutMask = root.querySelector('#layout-mask')?.value || '';
+        const layoutGw = root.querySelector('#layout-gw')?.value || '';
+        if(layoutSrv || layoutMask || layoutGw){
+          act('save-layout-network',{serverAddr:layoutSrv, subnetMask:layoutMask, gateway:layoutGw});
+        }
+        setTimeout(()=>act(a,nm?{classroomName:nm.value}:{}), 80);
       } else if(a==='start-maint-ip'){
         act(a,{serverAddr:root.querySelector('#mip-srv')?.value,
           ipBase:root.querySelector('#mip-base')?.value,

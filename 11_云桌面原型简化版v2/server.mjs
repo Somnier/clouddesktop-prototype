@@ -444,6 +444,12 @@ function act(action, payload={}){
     if(payload.serverAddr!==undefined) mt.serverAddr=payload.serverAddr;
     return {ok:true};
 
+  case 'save-layout-network':
+    if(payload.serverAddr) mt.serverAddr=payload.serverAddr;
+    if(payload.subnetMask) mt.subnetMask=payload.subnetMask;
+    if(payload.gateway) mt.gateway=payload.gateway;
+    return {ok:true};
+
   /* ── LOCAL DESKTOP MANAGEMENT ── */
   case 'create-desktop-from-file':{
     const dtId = 'dt-'+cr.id+'-'+uid();
@@ -936,7 +942,12 @@ function act(action, payload={}){
       sourceDesktopId:demo.maintDraft.desktopId, selectedIds:scope, keepIds:keep});
     startTask(task);
     demo.maintDraft.step=3;
-    demo.motherScreen='maint-progress'; mt.screen='maint-progress';
+    /* If invoked from workbench (integrated), stay on workbench */
+    if(demo.motherScreen==='workbench'){
+      /* stay on workbench — task progress shown inline */
+    } else {
+      demo.motherScreen='maint-progress'; mt.screen='maint-progress';
+    }
     addLog('info','终端','开始教室维护: '+cr.name, scope.length+' 台');
     return {ok:true};
   }
