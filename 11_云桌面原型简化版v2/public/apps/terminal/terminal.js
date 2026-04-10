@@ -704,17 +704,24 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         <button class="btn btn-ghost btn-sm" style="margin-top:6px" data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看详情'}</button>
       </div>`:''}
       ${opsMode==='maint-ip'?`<div class="card">
-        <div class="card-header">修改 IP / 服务器地址</div>
+        <div class="card-header">网络规则（继承自布局设置）</div>
+        <div style="font-size:.78rem;color:var(--t-text2);padding:4px 0">
+          <div>IP 前缀: <strong>${esc(r.ipBase||'未设置')}</strong></div>
+          <div>起始编号: <strong>${r.ipStart||20}</strong></div>
+          <div>子网掩码: <strong>${esc(m.subnetMask||'255.255.255.0')}</strong></div>
+          <div>网关: <strong>${esc(m.gateway||'未设置')}</strong></div>
+          <div>DNS: <strong>${esc((m.dns||[]).join(', ')||'未设置')}</strong></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">本次修改内容</div>
         <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(md.newServerAddr||c.serverAddress||m.serverAddr||'')}" placeholder="server.edu.cn"></div>
-        <div class="prep-field"><label>IP 前缀</label><input type="text" id="mip-base" value="${esc(md.newIpBase||c.networkBase||'')}" placeholder="10.21.31"></div>
-        <div class="prep-field"><label>起始编号</label><input type="number" id="mip-start" value="${md.newIpStart||20}" min="1" max="254"></div>
+        <div class="prep-field"><label>新 IP 前缀</label><input type="text" id="mip-base" value="${esc(md.newIpBase||r.ipBase||c.networkBase||'')}" placeholder="10.21.31"></div>
+        <div class="prep-field"><label>新起始编号</label><input type="number" id="mip-start" value="${md.newIpStart||r.ipStart||20}" min="1" max="254"></div>
         <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(md.newSubnetMask||m.subnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
         <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(md.newGateway||m.gateway||c.gateway||'')}" placeholder="10.x.x.1"></div>
         <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(md.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
-        <div style="display:flex;gap:6px;margin-top:8px">
-          <button class="btn btn-ghost" data-act="ops-mode-idle">取消</button>
-          <button class="btn btn-primary" data-act="start-maint-ip">开始执行</button>
-        </div>
+        <div style="font-size:.7rem;color:var(--t-text3);margin-top:4px">在右侧选择终端后点击底部执行按钮</div>
       </div>`:''}
     </div>
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
@@ -735,6 +742,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
       <div class="dt-export-bar" style="border-top:1px solid var(--t-border);padding-top:10px;justify-content:space-between">
         <div style="display:flex;gap:8px;align-items:center">
           ${opsMode==='deploy'&&!isRunning?`<button class="btn btn-primary" ${boundCount>=1?'':'disabled'} data-act="start-deployment">开始部署（${boundCount} 台）</button>`:''}
+          ${opsMode==='maint-ip'&&!isRunning?`<button class="btn btn-primary" data-act="start-maint-ip">开始执行</button>`:''}
         </div>
         <button class="btn btn-ghost dt-export-btn" ${isRunning?'disabled':''} data-act="open-export">
           导出教室终端清单
