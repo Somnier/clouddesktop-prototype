@@ -1171,7 +1171,11 @@ function act(action, payload={}){
   case 'deploy-bind-all-terminals':{
     const grid = demo.deployDraft.grid;
     const bindings = demo.deployDraft.bindings;
-    const activeBlocks = grid.blocks.filter(b=>b.state==='active');
+    const activeBlocks = grid.blocks.filter(b=>b.state==='active').sort((a,b)=>a.idx-b.idx);
+    /* Pin mother to first active block */
+    if(activeBlocks.length>0 && !bindings[activeBlocks[0].idx]){
+      bindings[activeBlocks[0].idx]={terminalId:mt.id, mac:mt.mac};
+    }
     const allCtrlBind = termsInCr(cr.id).filter(t=>t.id!==mt.id&&t.online);
     const boundIds = new Set(Object.values(bindings).map(b=>b.terminalId));
     const available = allCtrlBind.filter(t=>!boundIds.has(t.id));
@@ -1190,6 +1194,8 @@ function act(action, payload={}){
     const bindings = demo.deployDraft.bindings;
     const block = grid.blocks.find(b=>b.idx===payload.idx);
     if(!block || block.state!=='active') return {ok:false,reason:'块不可用'};
+    /* Mother block — not toggleable */
+    if(bindings[block.idx] && bindings[block.idx].terminalId===mt.id) return {ok:false,reason:'本机不可操作'};
     if(bindings[block.idx]){
       /* Unbind */
       delete bindings[block.idx];
@@ -1212,6 +1218,13 @@ function act(action, payload={}){
   }
   case 'set-flag':{
     Object.assign(demo.flags, payload);
+    return {ok:true};
+  }
+  case 'restore-grid-backup':{
+    /* Restore grid from JSON backup stored in flags */
+    const bk=demo.flags.gridBackup;
+    if(bk){ try{ demo.deployDraft.grid=JSON.parse(bk); demo.deployDraft.bindings={}; }catch(e){} }
+    demo.flags.gridBackup=null;
     return {ok:true};
   }
   case 'clear-completed-task':{
@@ -1564,14 +1577,24 @@ function tickHeartbeats(){
     t.metrics.cpu=clamp(t.metrics.cpu+((i%3)-1)*2,5,94);
     t.metrics.mem=clamp(t.metrics.mem+((i%5)-2),12,96);
     t.heartbeat=now();
+    /* Terminal-level monitor history for sparklines */
+    if(!t._monitorHistory) t._monitorHistory=[];
+    t._monitorHistory.push({cpu:t.metrics.cpu,mem:t.metrics.mem,gpu:t.metrics.gpu||0,disk:t.metrics.diskUsed||0});
+    if(t._monitorHistory.length>40) t._monitorHistory.shift();
   });
   /* update server metrics + history */
   state.servers.forEach(sv=>{
-    sv.cpu=clamp(sv.cpu+Math.round((Math.random()-0.5)*4),5,95);
-    sv.memory=clamp(sv.memory+Math.round((Math.random()-0.5)*3),10,95);
-    const net=Math.round((12+Math.sin(Date.now()/8000)*6+(Math.random()-0.5)*3)*10)/10;
+    /* Simulate realistic load: sinusoidal base + random jitter */
+    const t=Date.now()/1000;
+    const cpuBase=35+Math.sin(t/120)*15+Math.sin(t/37)*8;
+    const memBase=40+Math.sin(t/200)*10+Math.sin(t/53)*5;
+    sv.cpu=clamp(Math.round(cpuBase+(Math.random()-0.5)*6),5,95);
+    sv.memory=clamp(Math.round(memBase+(Math.random()-0.5)*4),10,95);
+    /* Storage drifts very slowly */
+    sv.storage=clamp(sv.storage+((Math.random()>0.9)?Math.round((Math.random()-0.4)*1):0),20,95);
+    const net=Math.round((12+Math.sin(t/60)*6+Math.sin(t/17)*3+(Math.random()-0.5)*2)*10)/10;
     if(!sv.monitorHistory) sv.monitorHistory=[];
-    sv.monitorHistory.push({cpu:sv.cpu,memory:sv.memory,net});
+    sv.monitorHistory.push({cpu:sv.cpu,memory:sv.memory,net,storage:sv.storage});
     if(sv.monitorHistory.length>80) sv.monitorHistory.shift();
   });
 }

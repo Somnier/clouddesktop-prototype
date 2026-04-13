@@ -154,8 +154,6 @@ function asideContent(){
       cards+=`<div class="aside-card"><div class="aside-title">教室概况</div>
         <div class="aside-item" style="justify-content:space-between"><span>健康度</span><span style="font-weight:700;color:${hsColor}">${hs}/100</span></div>
         <div class="aside-item" style="justify-content:space-between"><span>终端</span><span>${rt.online}/${rt.total} 在线</span></div>
-        <div class="aside-item" style="justify-content:space-between"><span>桌面已同步</span><span>${rt.deployed}/${rt.total}</span></div>
-        <div class="aside-item" style="justify-content:space-between"><span>阶段</span><span>${cr?stageLabel(cr.stage):'--'}</span></div>
       </div>`;
       if(crAlerts.length){
         const alertLimit2 = Math.min(crAlerts.length, 10);
@@ -168,15 +166,15 @@ function asideContent(){
             </div>`;
           }).join('')}
         </div>`;
+      } else {
+        cards+=`<div class="aside-card"><div class="aside-title">教室告警</div><div style="font-size:.82rem;color:var(--c-text3);padding:4px 0">无活跃告警</div></div>`;
       }
     } else {
       /* Classroom list — show campus deployment summary */
       const crsInCampus=state.classrooms.filter(c=>c.campusId===cId);
-      const deployed=crsInCampus.filter(c=>c.stage==='deployed').length;
       const totalTerms=stats.terminals;
       cards+=`<div class="aside-card"><div class="aside-title">校区概况</div>
         <div class="aside-item" style="justify-content:space-between"><span>教室</span><span style="font-weight:600">${crsInCampus.length}</span></div>
-        <div class="aside-item" style="justify-content:space-between"><span>桌面已同步</span><span style="font-weight:600">${deployed}</span></div>
         <div class="aside-item" style="justify-content:space-between"><span>终端总数</span><span style="font-weight:600">${totalTerms}</span></div>
         <div class="aside-item" style="justify-content:space-between"><span>在线率</span><span style="font-weight:600">${pct(stats.online,stats.terminals)}%</span></div>
         <div class="aside-item" style="justify-content:space-between"><span>活跃告警</span><span style="font-weight:600${campusAlerts.length?' ;color:var(--c-err)':''}">${campusAlerts.length}</span></div>
@@ -186,8 +184,7 @@ function asideContent(){
     /* assets aside: storage summary */
     cards+=`<div class="aside-card"><div class="aside-title">存储概况</div>
       <div class="aside-item" style="justify-content:space-between"><span>服务器存储</span><span style="font-weight:600">${server?server.storage+'%':'--'}</span></div>
-      <div class="aside-item" style="justify-content:space-between"><span>注册终端</span><span style="font-weight:600">${stats.terminals}</span></div>
-      <div class="aside-item" style="justify-content:space-between"><span>授权上限</span><span style="font-weight:600">${server?.license||'--'}</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span>终端总数</span><span style="font-weight:600">${stats.terminals}</span></div>
     </div>`;
   } else if(view.page==='alerts'){
     /* alerts aside: severity stats */
@@ -227,14 +224,27 @@ function sparklineSvg(data, color, w, h){
 }
 
 function healthScore(state,crId){
-  const rt=crRuntime(state,crId);
+  const terms=termsInCr(state,crId);
   const alerts=alertsInCr(state,crId);
-  /* Weighted alert penalty: high=15, medium=8, low=3 */
-  const penalty=alerts.reduce((s,a)=>s+(a.level==='high'?15:a.level==='medium'?8:3),0);
-  /* Online rate contributes 60 pts, alert penalty deducts from remaining 40 */
-  const onlinePts=rt.total?Math.round(rt.online/rt.total*60):60;
-  const alertPts=Math.max(0,40-penalty);
-  return Math.max(0,Math.min(100,onlinePts+alertPts));
+  if(!terms.length) return 100;
+  const n=terms.length;
+  /* 1. Alert penalty: capped per-terminal to avoid zeroing out large classrooms
+     high=8, medium=4, low=2 — penalizes affected terminal ratio */
+  const affectedByAlert=new Set(alerts.map(a=>a.terminalId).filter(Boolean));
+  const alertRatio=n>0?affectedByAlert.size/n:0;
+  const alertPenalty=Math.round(alertRatio*40); /* max 40 if every terminal has alert */
+  /* 2. Desktop consistency: proportion of inconsistent terminals */
+  const dtSigs=terms.filter(t=>t.online&&(t.desktops||[]).length>0).map(t=>(t.desktops||[]).map(d=>d.name).sort().join('|'));
+  const sigCounts={}; dtSigs.forEach(sig=>{sigCounts[sig]=(sigCounts[sig]||0)+1;});
+  const majorityCount=Math.max(...Object.values(sigCounts),0);
+  const inconsistent=dtSigs.length>0?dtSigs.length-majorityCount:0;
+  const consistencyRatio=dtSigs.length>0?inconsistent/dtSigs.length:0;
+  const consistencyPenalty=Math.round(consistencyRatio*30); /* max 30 */
+  /* 3. Hardware alert severity bonus: extra penalty for high severity */
+  const highAlerts=alerts.filter(a=>a.level==='high').length;
+  const severityBonus=Math.min(15,highAlerts*3); /* max 15 */
+  /* Score: 100 - penalties, floor at 15 (never truly 0 in demo) */
+  return Math.max(15,Math.min(100,100-alertPenalty-consistencyPenalty-severityBonus));
 }
 
 function dashboardPage(){
@@ -252,19 +262,19 @@ function dashboardPage(){
   const cpuHist=hist.map(h=>h.cpu);
   const memHist=hist.map(h=>h.memory);
   const netHist=hist.map(h=>h.net||0);
+  const stoPct=server?.storage||0;
+  const stoHist=hist.map(h=>h.storage||stoPct);
 
   const cpuColor=(server?.cpu||0)>80?'#ef4444':(server?.cpu||0)>60?'#f59e0b':'#22c55e';
   const memColor=(server?.memory||0)>80?'#ef4444':(server?.memory||0)>60?'#f59e0b':'#3b82f6';
   const stoColor=(server?.storage||0)>85?'#ef4444':(server?.storage||0)>70?'#f59e0b':'#3b82f6';
-  const stoPct=server?.storage||0;
-  const stoFree=100-stoPct;
 
   return `
   <div class="metric-grid">
     <div class="metric-card"><div class="mc-label">教室</div><div class="mc-value">${stats.classrooms}</div>
-      <div class="mc-sub">${esc(campus?.name||'')}</div></div>
+      <div class="mc-sub">${esc(campus?.name||'')}${(()=>{const w=crsInCampus.filter(c2=>healthScore(state,c2.id)<80&&c2.stage==='deployed').length;return w?` · ${w} 间需关注`:(crsInCampus.some(c2=>c2.stage==='deployed')?' · 全部正常':'');})()}</div></div>
     <div class="metric-card"><div class="mc-label">终端 / 在线</div><div class="mc-value">${stats.terminals} <span style="font-size:.7em;color:var(--c-text3)">/</span> ${stats.online}</div>
-      <div class="mc-sub">在线率 ${pct(stats.online,stats.terminals)}% · 离线 ${stats.offline}</div></div>
+      <div class="mc-sub">在线率 ${pct(stats.online,stats.terminals)}%</div></div>
     <div class="metric-card"><div class="mc-label">桌面资产</div><div class="mc-value">${totalDesktops}</div>
       <div class="mc-sub">占用 ${totalDiskGB} GB</div></div>
     <div class="metric-card"><div class="mc-label">活跃告警</div><div class="mc-value${campusAlerts.length?' text-err':''}">${campusAlerts.length}</div>
@@ -273,31 +283,27 @@ function dashboardPage(){
 
   ${server?`<div class="section">
     <div class="section-head"><h3>服务器状态</h3></div>
-    <div style="display:grid;grid-template-columns:1fr 280px;gap:20px;max-width:960px">
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-        <div class="sparkline-wrap">
-          <div class="spark-label"><span class="spark-title">CPU</span><span class="spark-value" style="color:${cpuColor}">${server.cpu}%</span></div>
-          ${sparklineSvg(cpuHist, cpuColor, 200, 48)}
-        </div>
-        <div class="sparkline-wrap">
-          <div class="spark-label"><span class="spark-title">内存</span><span class="spark-value" style="color:${memColor}">${server.memory}%</span></div>
-          ${sparklineSvg(memHist, memColor, 200, 48)}
-        </div>
-        <div class="sparkline-wrap">
-          <div class="spark-label"><span class="spark-title">以太网</span><span class="spark-value" style="color:#6366f1">${netHist.length?netHist[netHist.length-1].toFixed(1):'--'} MB/s</span></div>
-          ${sparklineSvg(netHist, '#6366f1', 200, 48)}
-        </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:960px">
+      <div class="sparkline-wrap">
+        <div class="spark-label"><span class="spark-title">CPU</span><span class="spark-value" style="color:${cpuColor}">${server.cpu}%</span></div>
+        ${sparklineSvg(cpuHist, cpuColor, 200, 48)}
       </div>
-      <div class="sparkline-wrap" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
-        <div class="spark-title" style="margin-bottom:8px">服务器存储</div>
-        <div style="position:relative;width:90px;height:90px">
-          <svg viewBox="0 0 42 42" style="width:90px;height:90px">
-            <circle cx="21" cy="21" r="16" fill="none" stroke="var(--c-border)" stroke-width="5"></circle>
-            <circle cx="21" cy="21" r="16" fill="none" stroke="${stoColor}" stroke-width="5" stroke-dasharray="${stoPct*1.005} ${100.5-stoPct*1.005}" stroke-dashoffset="25" stroke-linecap="round"></circle>
-          </svg>
-          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:700;color:${stoColor}">${stoPct}%</div>
-        </div>
-        <div style="font-size:.78rem;color:var(--c-text3);margin-top:6px">授权 ${server.license||'--'} 终端</div>
+      <div class="sparkline-wrap">
+        <div class="spark-label"><span class="spark-title">内存</span><span class="spark-value" style="color:${memColor}">${server.memory}%</span></div>
+        ${sparklineSvg(memHist, memColor, 200, 48)}
+      </div>
+      <div class="sparkline-wrap">
+        <div class="spark-label"><span class="spark-title">以太网</span><span class="spark-value" style="color:#6366f1">${netHist.length?netHist[netHist.length-1].toFixed(1):'--'} MB/s</span></div>
+        ${sparklineSvg(netHist, '#6366f1', 200, 48)}
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-head"><h3>服务器存储</h3></div>
+    <div style="max-width:320px">
+      <div class="sparkline-wrap">
+        <div class="spark-label"><span class="spark-title">存储</span><span class="spark-value" style="color:${stoColor}">${stoPct}%</span></div>
+        ${sparklineSvg(stoHist, stoColor, 200, 48)}
       </div>
     </div>
   </div>`:''}
@@ -306,29 +312,24 @@ function dashboardPage(){
     <div class="section-head"><h3>教室健康度</h3></div>
     ${(()=>{
       const deployed=crsInCampus.filter(c=>c.stage==='deployed');
-      const scored=deployed.map(c=>({c,hs:healthScore(state,c.id)})).sort((a,b)=>a.hs-b.hs);
-      const healthy=scored.filter(x=>x.hs>=80).length;
-      const warning=scored.filter(x=>x.hs>=50&&x.hs<80).length;
-      const critical=scored.filter(x=>x.hs<50).length;
-      const total=deployed.length||1;
-      const hPct=Math.round(healthy/total*100), wPct=Math.round(warning/total*100), cPct=100-hPct-wPct;
-      const hDash=hPct*1.005, wDash=wPct*1.005, cDash=cPct*1.005;
-      return `<div style="display:flex;gap:24px;align-items:center">
-        <div style="position:relative;width:100px;height:100px;flex-shrink:0">
-          <svg viewBox="0 0 42 42" style="width:100px;height:100px">
-            <circle cx="21" cy="21" r="16" fill="none" stroke="var(--c-border)" stroke-width="5"></circle>
-            <circle cx="21" cy="21" r="16" fill="none" stroke="#22c55e" stroke-width="5" stroke-dasharray="${hDash} ${100.5-hDash}" stroke-dashoffset="25" stroke-linecap="round"></circle>
-            ${wPct>0?`<circle cx="21" cy="21" r="16" fill="none" stroke="#f59e0b" stroke-width="5" stroke-dasharray="${wDash} ${100.5-wDash}" stroke-dashoffset="${25-hDash}" stroke-linecap="round"></circle>`:''}
-            ${cPct>0?`<circle cx="21" cy="21" r="16" fill="none" stroke="#ef4444" stroke-width="5" stroke-dasharray="${cDash} ${100.5-cDash}" stroke-dashoffset="${25-hDash-wDash}" stroke-linecap="round"></circle>`:''}
-          </svg>
-          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:700">${deployed.length}</div>
-        </div>
-        <div style="font-size:.85rem;line-height:2">
-          <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#22c55e;margin-right:6px;vertical-align:middle"></span>健康（≥80） ${healthy} 间</div>
-          <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f59e0b;margin-right:6px;vertical-align:middle"></span>警告（50-79） ${warning} 间</div>
-          <div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#ef4444;margin-right:6px;vertical-align:middle"></span>异常（<50） ${critical} 间</div>
-        </div>
-        <div style="margin-left:auto"><button class="btn btn-ghost" data-nav="classrooms" style="cursor:pointer;font-size:.85rem">查看教室管理 →</button></div>
+      const scored=deployed.map(c=>({c,hs:healthScore(state,c.id),alerts:alertsInCr(state,c.id)})).sort((a,b)=>a.hs-b.hs);
+      if(!scored.length) return '<div style="font-size:.85rem;color:var(--c-text3)">暂无已部署教室</div>';
+      const allHealthy = scored.every(x=>x.hs>=80);
+      return `${allHealthy?'<div style="padding:12px 16px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:8px;margin-bottom:12px;font-size:.88rem;color:var(--c-ok);font-weight:500">所有教室运行正常</div>':''}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+        ${scored.map(({c,hs,alerts:crAlerts})=>{
+          const bg=hs>=80?'rgba(34,197,94,.06)':hs>=50?'rgba(245,158,11,.06)':'rgba(239,68,68,.06)';
+          const border=hs>=80?'rgba(34,197,94,.2)':hs>=50?'rgba(245,158,11,.25)':'rgba(239,68,68,.25)';
+          const color=hs>=80?'var(--c-ok)':hs>=50?'var(--c-warn)':'var(--c-err)';
+          const rt=crRuntime(state,c.id);
+          return `<div class="clickable" data-nav-cr="${c.id}" style="padding:10px 14px;border-radius:8px;background:${bg};border:1px solid ${border};cursor:pointer">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <span style="font-weight:600;font-size:.88rem">${esc(c.name)}</span>
+              <span style="font-weight:700;font-size:.92rem;color:${color}">${hs}</span>
+            </div>
+            <div style="font-size:.78rem;color:var(--c-text3)">${rt.online}/${rt.total} 在线${crAlerts.length?` · <span style="color:var(--c-err)">${crAlerts.length} 告警</span>`:''}</div>
+          </div>`;
+        }).join('')}
       </div>`;
     })()}
   </div>
@@ -422,13 +423,12 @@ function classroomListPage(){
 function classroomDetailPage(){
   const state=s(); const c=getClassroom(state,view.classroomId); if(!c) return empty('教室不存在');
   const rt=crRuntime(state,c.id); const terms=termsInCr(state,c.id); const alerts=alertsInCr(state,c.id); const tk=taskForCr(state,c.id);
-  const tabs=[{l:'总览',k:'overview'},{l:'终端列表',k:'terminals'}];
-  const tab=view.tab||'overview';
 
+  /* No tabs — go directly to batch toolbar + terminal list */
   return `
   <div style="margin-bottom:16px">
     <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
-      <button class="btn btn-ghost btn-sm" data-nav="classrooms">← 教室列表</button>
+      <button class="btn btn-ghost btn-sm" data-nav="classrooms">\u2190 教室列表</button>
       <h2 style="font-size:1.2rem">${esc(c.name)}</h2>
     </div>
     <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:.85rem;color:var(--c-text2)">
@@ -437,52 +437,7 @@ function classroomDetailPage(){
       ${c.remark?`<span>备注：${esc(c.remark)}</span>`:''}
     </div>
   </div>
-  <div class="tab-bar">${tabs.map(t=>`<div class="tab-item${t.k===tab?' active':''}" data-tab="${t.k}">${t.l}</div>`).join('')}</div>
-  ${tab==='overview'?crOverviewTab(c,rt,terms,alerts,tk):''}
-  ${tab==='terminals'?crTerminalsTab(c,terms):''}
-  `;
-}
-
-
-function crOverviewTab(c,rt,terms,alerts,tk){
-  const sortMode = view.crAlertSort || 'severity';
-  const sortAsc = view.crAlertSortAsc ?? false;
-  const dir = sortAsc ? 1 : -1;
-  const levelOrder = {high:0,medium:1,low:2};
-  const sorted = [...alerts].sort((a,b)=>{
-    if(sortMode==='severity'){
-      const cmp = (levelOrder[a.level]??9)-(levelOrder[b.level]??9);
-      return cmp!==0 ? (sortAsc ? -cmp : cmp) : (new Date(b.at)-new Date(a.at));
-    }
-    return (new Date(a.at)-new Date(b.at))*dir;
-  });
-  const arrow = sortAsc ? '↑' : '↓';
-  const high=alerts.filter(a=>a.level==='high').length;
-  const medium=alerts.filter(a=>a.level==='medium').length;
-  const low=alerts.filter(a=>a.level==='low').length;
-
-  return `
-  <div class="metric-grid">
-    <div class="metric-card"><div class="mc-label">终端总数</div><div class="mc-value">${rt.total}</div></div>
-    <div class="metric-card"><div class="mc-label">在线</div><div class="mc-value text-ok">${rt.online}</div></div>
-    <div class="metric-card"><div class="mc-label">离线</div><div class="mc-value${rt.offline?' text-err':''}">${rt.offline}</div></div>
-    <div class="metric-card"><div class="mc-label">告警</div><div class="mc-value${alerts.length?' text-err':''}">${alerts.length}</div></div>
-  </div>
-  <div class="section-head" style="margin-top:8px"><h3>告警中心</h3></div>
-  ${alerts.length?`
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-    <div style="display:flex;gap:16px;font-size:.88rem">
-      ${high?`<span style="color:var(--c-err);font-weight:600">高 ${high}</span>`:''}
-      ${medium?`<span style="color:var(--c-warn);font-weight:600">中 ${medium}</span>`:''}
-      ${low?`<span style="color:var(--c-text3)">低 ${low}</span>`:''}
-    </div>
-    <div style="display:flex;gap:6px">
-      <button class="btn btn-sm${sortMode==='time'?' btn-primary':' btn-ghost'}" data-cr-alert-sort="time">按时间 ${sortMode==='time'?arrow:''}</button>
-      <button class="btn btn-sm${sortMode==='severity'?' btn-primary':' btn-ghost'}" data-cr-alert-sort="severity">按严重度 ${sortMode==='severity'?arrow:''}</button>
-    </div>
-  </div>
-  ${sorted.map(a=>alertHtml(a,false)).join('')}`
-  :`<div style="font-size:.85rem;color:var(--c-text3);padding:12px 0">当前无活跃告警</div>`}
+  ${crTerminalsTab(c,terms)}
   `;
 }
 
@@ -514,7 +469,7 @@ function crTerminalsTab(c,terms){
       {k:'remote-test', l:'网络测试', color:'var(--c-ok)', needSel:true},
       {k:'hw-test', l:'硬件测试', color:'var(--c-info)', needSel:true},
     ]},
-    {label:'跨教室', icon:'', actions:[
+    {label:'跨教室测试', icon:'', actions:[
       {k:'broadcast-test', l:'广播隔离测试', color:'var(--c-warn)', needSel:false},
     ]},
   ];
@@ -535,10 +490,9 @@ function crTerminalsTab(c,terms){
       ${sel.length > 0
         ? `已选 <strong>${sel.length}</strong> 台${selOnline.length!==sel.length ? `（在线 ${selOnline.length}）` : ''}`
         : `<span style="color:var(--c-text3)">点击下方终端进行选择</span>`}
-      <a class="batch-sel-link" data-sel-all-online>全选在线</a>
       ${uses.length>1?`<span style="position:relative;display:inline-block"><a class="batch-sel-link" data-sel-use-toggle>按用途 ▾</a>${view.showUseDropdown?`<div style="position:absolute;left:0;top:100%;background:#fff;border:1px solid var(--c-border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:100;min-width:130px;padding:4px 0;margin-top:2px">${uses.map(u=>`<div class="batch-sel-link" data-sel-use="${esc(u)}" style="display:block;padding:6px 14px;cursor:pointer;font-size:.82rem;white-space:nowrap">${esc(u)}</div>`).join('')}</div>`:''}</span>`
       :(uses.length===1?`<a class="batch-sel-link" data-sel-use="${esc(uses[0])}">选${esc(uses[0])}</a>`:'')}
-      ${sel.length > 0 ? `<a class="batch-sel-link" data-sel-clear>清除</a>` : ''}
+      <a class="batch-sel-link" data-sel-all-online>全选在线</a>      ${sel.length > 0 ? `<a class="batch-sel-link" data-sel-clear>清除</a>` : ''}
     </div>
   </div>
 
@@ -952,12 +906,14 @@ function alertHtml(a, showNav){
   const c=showNav?getClassroom(s(),a.classroomId):null;
   const levelLabel={high:'高',medium:'中',low:'低'};
   return `<div class="alert-row ${a.level}">
-    <div><div class="al-title">${pill(levelLabel[a.level]||a.level,a.level==='high'?'err':a.level==='medium'?'warn':'muted')} ${esc(a.title)}</div>
+    <div style="flex:1;min-width:0">
+      <div class="al-title">${pill(levelLabel[a.level]||a.level,a.level==='high'?'err':a.level==='medium'?'warn':'muted')} ${esc(a.title)}</div>
       <div class="al-detail">${esc(a.detail)}</div>
-      <div class="al-source">
-        ${c?`<a class="clickable" data-nav-cr-tab="${c.id}" data-tab-target="alerts" style="cursor:pointer;text-decoration:underline;color:var(--c-brand)">${esc(c.name)}</a> · `:''}
-        ${t?`<a class="clickable" data-nav-term="${t.id}" style="cursor:pointer;text-decoration:underline;color:var(--c-brand)">${pill(t.seat||'--','muted')} ${esc(t.name||'')}</a> ${t.ip?`<span class="mono">${esc(t.ip)}</span>`:''}`:''}
-      </div></div>
+      <div class="al-source" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">
+        ${c?`<a class="clickable" data-nav-cr-tab="${c.id}" data-tab-target="alerts" style="cursor:pointer;text-decoration:underline;color:var(--c-brand);font-size:.82rem">${esc(c.name)}</a>`:''}
+        ${t?`<a class="clickable" data-nav-term="${t.id}" style="cursor:pointer;text-decoration:underline;color:var(--c-brand);font-size:.82rem">${esc(t.seat||'--')} ${esc(t.name||'')}</a>`:''}
+      </div>
+    </div>
     <div class="al-time">${relTime(a.at)}</div>
   </div>`;
 }
@@ -976,6 +932,17 @@ function terminalDetailPage(){
   const memPct = met.memTotal ? Math.round(met.memUsed/met.memTotal*100) : 0;
   const diskPct = met.diskTotal ? Math.round(met.diskUsed/met.diskTotal*100) : 0;
 
+  /* Sparkline data from terminal history */
+  const hist = t._monitorHistory || [];
+  const cpuHist = hist.map(h=>h.cpu);
+  const memHist = hist.map(h=>h.mem);
+  const gpuHist = hist.map(h=>h.gpu);
+  const cpuColor = (met.cpu||0)>80?'#ef4444':(met.cpu||0)>60?'#f59e0b':'#22c55e';
+  const memColor = memPct>85?'#ef4444':memPct>70?'#f59e0b':'#3b82f6';
+  const gpuColor = (met.gpu||0)>80?'#ef4444':(met.gpu||0)>60?'#f59e0b':'#22c55e';
+  const diskColor = diskPct>85?'#ef4444':diskPct>70?'#f59e0b':'#3b82f6';
+  const diskHist = hist.map(h=>h.disk);
+
   return `
   <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px;flex-wrap:wrap">
     <button class="btn btn-ghost btn-sm" data-back-cr="${t.classroomId}">← 返回教室</button>
@@ -986,7 +953,8 @@ function terminalDetailPage(){
     ${isBlank?pill('未部署','muted'):''}
   </div>
 
-  <div class="detail-grid">
+  <!-- Row 1: 配置 + 外部连接 + 硬件信息 (3 columns) -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
     <div class="card">
       <div class="card-header">配置</div>
       ${defRow('机器名', t.name || '未命名')}
@@ -1003,57 +971,77 @@ function terminalDetailPage(){
       <div class="def-row"><span class="def-label">服务器状态</span><span class="def-value">${t.serverAddr?pill('已连接','ok'):pill('未配置','muted')}</span></div>
       ${defRow('同步状态', t.sync==='synced'?'已同步':t.sync==='syncing'?'同步中':t.sync==='failed'?'同步失败':'未同步')}
       ${defRow('最近同步', t.lastSyncTime?fmtTime(t.lastSyncTime):'未同步')}
+      ${defRow('最近心跳', relTime(t.heartbeat))}
     </div>
     <div class="card">
       <div class="card-header">硬件信息</div>
-      ${(()=>{
-        return '';
-      })()}
       ${defRow('处理器', t.hw?.cpu||'--')}
       ${defRow('显卡', t.hw?.gpu||'--')}
       ${defRow('内存', t.hw?.mem||'--')}
       ${defRow('硬盘', (t.hw?.diskModel||'--')+' ('+esc(t.hw?.diskSn||'--')+')')}
     </div>
-    <div class="card">
-      <div class="card-header">运行状态</div>
-      <div style="display:flex;flex-direction:column;gap:6px;font-size:.88rem">
-        <div style="display:flex;align-items:baseline;gap:6px"><span style="color:${(met.cpu||0)>80?'var(--c-err)':(met.cpu||0)>60?'var(--c-warn)':'var(--c-ok)'}">CPU ${met.cpu||0}%</span><span style="font-size:.75rem;padding:1px 5px;border-radius:3px;background:${(met.cpuTemp||0)>=80?'rgba(239,68,68,.15)':(met.cpuTemp||0)>=65?'rgba(245,158,11,.15)':'rgba(34,197,94,.08)'};color:${(met.cpuTemp||0)>=80?'var(--c-err)':(met.cpuTemp||0)>=65?'var(--c-warn)':'var(--c-ok)'}">${met.cpuTemp||'--'}°C</span></div>
-        <div style="display:flex;align-items:baseline;gap:6px"><span style="color:${(met.gpu||0)>80?'var(--c-err)':(met.gpu||0)>60?'var(--c-warn)':'var(--c-ok)'}">GPU ${met.gpu||0}%</span><span style="font-size:.75rem;padding:1px 5px;border-radius:3px;background:${(met.gpuTemp||0)>=80?'rgba(239,68,68,.15)':(met.gpuTemp||0)>=65?'rgba(245,158,11,.15)':'rgba(34,197,94,.08)'};color:${(met.gpuTemp||0)>=80?'var(--c-err)':(met.gpuTemp||0)>=65?'var(--c-warn)':'var(--c-ok)'}">${met.gpuTemp||'--'}°C</span></div>
-        <div style="display:flex;align-items:baseline;gap:6px"><span style="color:${memPct>85?'var(--c-err)':memPct>70?'var(--c-warn)':'var(--c-ok)'}">内存 ${met.memUsed||0}/${met.memTotal||0} GB</span><span style="font-size:.72rem;padding:1px 5px;border-radius:3px;background:var(--c-bg2);color:var(--c-text2)">${memPct}%</span></div>
-        <div style="display:flex;align-items:baseline;gap:6px"><span style="color:${diskPct>85?'var(--c-err)':diskPct>70?'var(--c-warn)':'var(--c-ok)'}">磁盘 ${met.diskUsed||0}/${met.diskTotal||0} GB</span><span style="font-size:.72rem;padding:1px 5px;border-radius:3px;background:var(--c-bg2);color:var(--c-text2)">${diskPct}%</span></div>
+  </div>
+
+  <!-- Row 2: 实时状态 sparklines -->
+  <div class="section" style="margin-bottom:16px">
+    <div class="section-head"><h3>实时状态</h3></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:960px">
+      <div class="sparkline-wrap">
+        <div class="spark-label"><span class="spark-title">CPU</span><span class="spark-value" style="color:${cpuColor}">${met.cpu||0}% <span style="font-size:.72rem;opacity:.7">${met.cpuTemp||'--'}°C</span></span></div>
+        ${sparklineSvg(cpuHist, cpuColor, 200, 48)}
       </div>
-      ${defRow('最近心跳', relTime(t.heartbeat))}
+      <div class="sparkline-wrap">
+        <div class="spark-label"><span class="spark-title">内存</span><span class="spark-value" style="color:${memColor}">${met.memUsed||0}/${met.memTotal||0} GB (${memPct}%)</span></div>
+        ${sparklineSvg(memHist, memColor, 200, 48)}
+      </div>
+      <div class="sparkline-wrap">
+        <div class="spark-label"><span class="spark-title">GPU</span><span class="spark-value" style="color:${gpuColor}">${met.gpu||0}% <span style="font-size:.72rem;opacity:.7">${met.gpuTemp||'--'}°C</span></span></div>
+        ${sparklineSvg(gpuHist, gpuColor, 200, 48)}
+      </div>
     </div>
   </div>
 
-  ${desktops.length?`<div class="card mt-16">
-    <div class="card-header">终端桌面 · ${desktops.length} 个</div>
-    <div style="font-size:.82rem;color:var(--c-text3);margin-bottom:8px">数据来自终端自行上报</div>
-    ${desktops.map(d=>{
-      const isDefault = d.id===bios?.defaultBootId;
-      const isPhysical = d.physicalDeploy;
-      const inBoot = bios?.bootEntries?.includes(d.id);
-      return `<div style="padding:10px 12px;border-bottom:1px solid var(--c-border);display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start">
-        <div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="font-weight:600">${esc(d.name)}</span>
+  <!-- Row 3: 存储 -->
+  <div class="section" style="margin-bottom:16px">
+    <div class="section-head"><h3>存储</h3></div>
+    <div style="max-width:320px">
+      <div class="sparkline-wrap">
+        <div class="spark-label"><span class="spark-title">磁盘</span><span class="spark-value" style="color:${diskColor}">${met.diskUsed||0}/${met.diskTotal||0} GB (${diskPct}%)</span></div>
+        ${sparklineSvg(diskHist, diskColor, 200, 48)}
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 4: 桌面 (card-style like terminal side) -->
+  ${desktops.length?`<div class="section">
+    <div class="section-head"><h3>终端桌面 · ${desktops.length} 个</h3><span style="font-size:.82rem;color:var(--c-text3);margin-left:8px">数据来自终端自行上报</span></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+      ${desktops.map(d=>{
+        const isDefault = d.id===bios?.defaultBootId;
+        const isPhysical = d.physicalDeploy;
+        const inBoot = bios?.bootEntries?.includes(d.id);
+        const dtSize = d.diskSize || 25;
+        return `<div class="card" style="padding:14px 16px${isDefault?';border-left:3px solid var(--c-brand)':''}">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+            <strong style="font-size:.95rem">${esc(d.name)}</strong>
             <span style="font-size:.82rem;color:var(--c-text3)">${esc(d.os||'')}</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">
+            <span style="font-weight:600;font-size:.88rem">${dtSize} GB</span>
+            ${d.dataDisk?`<span style="font-size:.78rem;color:var(--c-text3)">数据盘 ${esc(d.dataDisk)}</span>`:''}
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
             ${isDefault?pill('默认启动','info'):''}
             ${isPhysical?pill('物理部署','warn'):''}
             ${!inBoot&&!isPhysical?pill('隐藏','muted'):''}
+            ${d.restoreMode?`<span style="font-size:.75rem;color:var(--c-text3)">还原: ${esc(d.restoreMode)}</span>`:''}
           </div>
-          <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.82rem;color:var(--c-text3);margin-top:4px">
-            ${d.restoreMode?`<span>还原模式：${esc(d.restoreMode)}</span>`:''}
-            ${d.dataDisk?`<span>数据盘：${esc(d.dataDisk)}</span>`:''}
-            ${isPhysical?'<span>仅本机安装，服务器无此桌面</span>':''}
+          <div style="font-size:.72rem;color:var(--c-text3);margin-top:6px">
+            ${d.createdAt?`创建 ${fmtTime(d.createdAt)}`:''} ${d.editedAt?`· 更新 ${fmtTime(d.editedAt)}`:''}
           </div>
-        </div>
-        <div style="font-size:.78rem;color:var(--c-text3);text-align:right">
-          ${d.createdAt?`创建 ${fmtTime(d.createdAt)}<br>`:''}
-          ${d.editedAt?`更新 ${fmtTime(d.editedAt)}`:''}
-        </div>
-      </div>`;
-    }).join('')}
+        </div>`;
+      }).join('')}
+    </div>
   </div>`:''}
   ${alerts.length?`<div class="mt-16 section-head"><h3>告警</h3></div>${alerts.map(a=>alertHtml(a,false)).join('')}`:''}
   `;
@@ -1106,26 +1094,13 @@ function assetsPage(){
   const expanded = view.expandedAssets || {};
 
   return `
-  <div class="metric-grid" style="margin-bottom:16px">
-    <div class="metric-card"><div class="mc-label">桌面总数</div><div class="mc-value">${totalDesktops}</div>
-      <div class="mc-sub">分布在 ${crsWithDesktops.length} 个教室</div></div>
-    <div class="metric-card"><div class="mc-label">镜像</div><div class="mc-value">${totalImages}</div>
-      <div class="mc-sub">基础操作系统镜像</div></div>
-    <div class="metric-card"><div class="mc-label">快照</div><div class="mc-value">${totalSnaps}</div>
-      <div class="mc-sub">快照文件链构成桌面版本</div></div>
-    <div class="metric-card"><div class="mc-label">估算存储</div><div class="mc-value">${totalStorageGB.toFixed(0)} GB</div>
-      <div class="mc-sub">服务器存储占 ${server?server.storage+'%':'--'}</div></div>
-  </div>
+  <!-- Two-column: main content (left) + stats sidebar (right) -->
+  <div style="display:flex;gap:20px;align-items:flex-start">
+  <div style="flex:1;min-width:0">
 
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-    <div style="display:flex;gap:6px;align-items:center">
-      <span style="font-size:.85rem;font-weight:600;color:var(--c-text2)">排序：</span>
-      ${sortBtn('name','名称')} ${sortBtn('classroom','教室')} ${sortBtn('terminals','终端数')} ${sortBtn('created','创建时间')}
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-primary btn-sm" data-asset-action="import">导入桌面</button>
-      <button class="btn btn-primary btn-sm" style="background:var(--c-ok);border-color:var(--c-ok)" data-asset-action="export">导出清单</button>
-    </div>
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <button class="btn btn-primary btn-sm" data-asset-action="import">导入桌面</button>
+    <button class="btn btn-ghost btn-sm" data-asset-action="export">导出桌面</button>
   </div>
 
   ${dar?.done?`<div style="color:var(--c-ok);font-size:.85rem;margin-bottom:12px;padding:8px 12px;background:rgba(34,197,94,.08);border-radius:6px">✓ ${esc(dar.message)}</div>`:''}
@@ -1170,6 +1145,29 @@ function assetsPage(){
     }).join('')}
   </div>`
   :empty('当前校区无桌面资产','需从终端侧上传桌面后可见')}
+  </div>
+
+  <!-- Right sidebar: stats + sort -->
+  <div style="flex-shrink:0;width:220px;display:flex;flex-direction:column;gap:12px">
+    <div class="card" style="padding:14px">
+      <div style="font-size:.78rem;font-weight:600;color:var(--c-text2);margin-bottom:8px">资产统计</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:.82rem">
+        <div style="display:flex;justify-content:space-between"><span>桌面</span><strong>${totalDesktops}</strong></div>
+        <div style="display:flex;justify-content:space-between"><span>教室</span><span>${crsWithDesktops.length}</span></div>
+        <div style="display:flex;justify-content:space-between"><span>镜像</span><span>${totalImages}</span></div>
+        <div style="display:flex;justify-content:space-between"><span>快照</span><span>${totalSnaps}</span></div>
+        <div style="border-top:1px solid var(--c-border);padding-top:6px;display:flex;justify-content:space-between"><span>估算存储</span><strong>${totalStorageGB.toFixed(0)} GB</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--c-text3)"><span>服务器占用</span><span>${server?server.storage+'%':'--'}</span></div>
+      </div>
+    </div>
+    <div class="card" style="padding:14px">
+      <div style="font-size:.78rem;font-weight:600;color:var(--c-text2);margin-bottom:8px">排序</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${sortBtn('name','名称')} ${sortBtn('classroom','教室')} ${sortBtn('terminals','终端数')} ${sortBtn('created','创建时间')}
+      </div>
+    </div>
+  </div>
+  </div>
   `;
 }
 
@@ -1206,18 +1204,35 @@ function alertsPage(){
   }).filter(Boolean).join(' · ');
 
   return `
-  <div class="metric-grid" style="margin-bottom:16px">
-    <div class="metric-card"><div class="mc-label">活跃告警</div><div class="mc-value${campusAlerts.length?' text-err':''}">${campusAlerts.length}</div></div>
-    <div class="metric-card"><div class="mc-label" style="color:var(--c-err)">高严重度</div><div class="mc-value" style="color:var(--c-err)">${high}</div></div>
-    <div class="metric-card"><div class="mc-label" style="color:var(--c-warn)">中严重度</div><div class="mc-value" style="color:var(--c-warn)">${medium}</div></div>
-    <div class="metric-card"><div class="mc-label">低严重度</div><div class="mc-value">${low}</div></div>
-  </div>
-  ${topCrs?`<div style="font-size:.82rem;color:var(--c-text2);margin-bottom:12px">告警集中教室：${topCrs}</div>`:''}
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
-      <button class="btn btn-sm${sortMode==='time'?' btn-primary':' btn-ghost'}" data-alert-sort="time">按时间 ${sortMode==='time'?arrow:''}</button>
-      <button class="btn btn-sm${sortMode==='severity'?' btn-primary':' btn-ghost'}" data-alert-sort="severity">按严重度 ${sortMode==='severity'?arrow:''}</button>
+  <!-- Two-column: alerts (left) + stats sidebar (right) -->
+  <div style="display:flex;gap:20px;align-items:flex-start">
+  <div style="flex:1;min-width:0">
+  <div style="display:flex;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm${sortMode==='time'?' btn-primary':' btn-ghost'}" data-alert-sort="time">按时间 ${sortMode==='time'?arrow:''}</button>
+        <button class="btn btn-sm${sortMode==='severity'?' btn-primary':' btn-ghost'}" data-alert-sort="severity">按严重度 ${sortMode==='severity'?arrow:''}</button>
+      </div>
     </div>
   ${sorted.length ? sorted.map(a=>alertHtml(a,true)).join('') : empty('当前无活跃告警')}
+  </div>
+
+  <!-- Right sidebar: alert stats -->
+  <div style="flex-shrink:0;width:220px;display:flex;flex-direction:column;gap:12px">
+    <div class="card" style="padding:14px">
+      <div style="font-size:.78rem;font-weight:600;color:var(--c-text2);margin-bottom:8px">告警统计</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:.82rem">
+        <div style="display:flex;justify-content:space-between"><span>总计</span><strong>${campusAlerts.length} 条</strong></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--c-err)">高</span><span>${high}</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--c-warn)">中</span><span>${medium}</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--c-text3)">低</span><span>${low}</span></div>
+      </div>
+    </div>
+    ${topCrs?`<div class="card" style="padding:14px">
+      <div style="font-size:.78rem;font-weight:600;color:var(--c-text2);margin-bottom:8px">集中教室</div>
+      <div style="font-size:.82rem;color:var(--c-text2);line-height:1.6">${topCrs}</div>
+    </div>`:''}
+  </div>
+  </div>
   `;
 }
 
@@ -1226,63 +1241,92 @@ function serverChangePage(){
   const state=s(); const server=serverFor(state,view.campusId); const campus=getCampus(state,view.campusId);
   const stats=campusStats(state,view.campusId);
   const sr = view.settingsResult || {};
-  const offlineTerms = state.terminals.filter(t=>{
-    const cr=state.classrooms.find(c=>c.id===t.classroomId);
-    return cr&&cr.campusId===view.campusId&&!t.online;
+  const crIdsSet=new Set(state.classrooms.filter(c=>c.campusId===view.campusId).map(c=>c.id));
+  const campusTerms=state.terminals.filter(t=>crIdsSet.has(t.classroomId));
+  const offlineTerms = campusTerms.filter(t=>!t.online);
+  const onlineTerms = campusTerms.filter(t=>t.online);
+
+  /* group terminals by classroom for result display */
+  const crGroups=[];
+  state.classrooms.filter(c=>c.campusId===view.campusId).forEach(cr=>{
+    const ts=campusTerms.filter(t=>t.classroomId===cr.id);
+    if(ts.length) crGroups.push({cr,terms:ts,online:ts.filter(t=>t.online).length,offline:ts.filter(t=>!t.online).length});
   });
-  const onlineTerms = state.terminals.filter(t=>{
-    const cr=state.classrooms.find(c=>c.id===t.classroomId);
-    return cr&&cr.campusId===view.campusId&&t.online;
-  });
+
+  const step = sr.done ? 3 : (view.newServerAddr ? 2 : 1);
 
   return `
   <div class="section">
     <div class="section-head"><h3>服务器地址变更</h3></div>
-    <div class="card" style="max-width:700px">
+
+    <div style="display:flex;gap:8px;margin-bottom:20px;font-size:.85rem">
+      <span style="padding:4px 12px;border-radius:12px;${step>=1?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">\u2460 输入新地址</span>
+      <span style="padding:4px 12px;border-radius:12px;${step>=2?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">\u2461 确认并推送</span>
+      <span style="padding:4px 12px;border-radius:12px;${step>=3?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">\u2462 查看结果</span>
+    </div>
+
+    <div class="card" style="max-width:800px;margin-bottom:16px">
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:16px">
-        <strong>变更流程：</strong>
-        <ol style="margin:8px 0;padding-left:20px;font-size:.85rem;line-height:1.7">
-          <li>在此页面输入新服务器地址，系统向所有<strong>在线终端</strong>推送地址变更通知</li>
-          <li>在线终端自动更新本地服务器配置</li>
-          <li>物理修改服务器 IP / 重新签发 SSL 证书</li>
-          <li><strong>离线终端</strong>需工程师到现场通过终端"网络与服务器"页面手动修改</li>
+        <strong>变更流程说明：</strong>
+        <ol style="margin:8px 0;padding-left:20px;font-size:.85rem;line-height:1.8">
+          <li>输入新服务器地址（IP 或域名）</li>
+          <li>系统向所有<strong>在线终端</strong>推送地址变更指令，在线终端自动更新本地配置</li>
+          <li>物理修改服务器网络 / 重新签发 SSL 证书（如启用 HTTPS）</li>
+          <li><strong>离线终端</strong>需工程师到现场，通过终端侧"网络与服务器"页面手动修改，或由母机在教室维护流程中批量修改</li>
         </ol>
       </div>
+
       ${defRow('当前地址',server?.address||'--',{mono:true})}
       ${defRow('域名',server?.domain||'--',{mono:true})}
       ${defRow('在线终端',onlineTerms.length+' 台')}
-      ${defRow('离线终端',offlineTerms.length+' 台',offlineTerms.length?{raw:true}:{})}
-      <div class="prep-field" style="margin-top:12px"><label style="width:90px;font-weight:600;font-size:.85rem">新地址</label><input type="text" data-server-new-addr placeholder="输入新服务器 IP 或域名" value="${esc(view.newServerAddr||'')}" style="width:280px"></div>
+      ${defRow('离线终端',offlineTerms.length+' 台')}
 
-      ${sr.serverIp?`<div style="color:var(--c-ok);font-size:.85rem;margin:12px 0;padding:8px 12px;background:rgba(34,197,94,.08);border-radius:6px">
-        ✓ 已变更服务器地址，已通知 ${sr.serverIpCount} 台在线终端
+      ${offlineTerms.length&&!sr.done?`
+      <div style="margin:12px 0;padding:10px 14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:8px;font-size:.85rem;color:var(--c-text2)">
+        <strong style="color:var(--c-warn)">注意：</strong>当前有 <strong>${offlineTerms.length}</strong> 台终端未联机，这些终端不会收到本次地址变更推送。
+        变更仍可继续 -- 离线终端后续可通过终端本机或母机教室维护流程补充修改。
       </div>`:''}
 
-      <div style="display:flex;gap:8px;margin-top:16px">
-        <button class="btn btn-primary" data-settings-action="server-ip"${!view.newServerAddr?' disabled':''}>通知在线终端并变更</button>
-      </div>
+      <div class="prep-field" style="margin-top:12px"><label style="width:90px;font-weight:600;font-size:.85rem">新地址</label><input type="text" data-server-new-addr placeholder="输入新服务器 IP 或域名" value="${esc(view.newServerAddr||'')}" style="width:280px"></div>
 
-      ${offlineTerms.length?`
-      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--c-border)">
-        <div style="font-size:.85rem;font-weight:600;color:var(--c-text2);margin-bottom:8px">⚠ 离线终端列表 — 需手动处理 (${offlineTerms.length} 台)</div>
-        <div style="max-height:240px;overflow-y:auto">
-          <table class="data-table" style="font-size:.82rem">
-            <thead><tr><th>座位号</th><th>机器名</th><th>IP</th><th>教室</th></tr></thead>
-            <tbody>${offlineTerms.map(t=>{
-              const cr=getClassroom(state,t.classroomId);
-              return `<tr>
-                <td>${esc(t.seat||'--')}</td>
-                <td>${esc(t.name||'未命名')}</td>
-                <td class="mono">${esc(t.ip||'--')}</td>
-                <td>${cr?esc(cr.name):'--'}</td>
-              </tr>`;
-            }).join('')}</tbody>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-primary" data-settings-action="server-ip"${!view.newServerAddr||sr.done?' disabled':''}>确认变更并推送到在线终端 (${onlineTerms.length} 台)</button>
+      </div>
+    </div>
+
+    ${sr.done?`
+    <div style="padding:12px 16px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:8px;margin-bottom:16px;font-size:.88rem;color:var(--c-ok);font-weight:500">
+      已完成地址变更推送，${sr.serverIpCount||onlineTerms.length} 台在线终端已收到新地址
+    </div>
+
+    <div class="section-head"><h3>各教室变更结果</h3></div>
+    <div style="display:flex;flex-direction:column;gap:12px;max-width:800px">
+      ${crGroups.map(({cr,terms:ts,online:onCnt,offline:offCnt})=>`
+      <div class="card" style="padding:0;overflow:hidden${offCnt?';border-left:3px solid var(--c-warn)':''}">
+        <div style="padding:12px 18px;display:flex;justify-content:space-between;align-items:center;background:var(--c-bg2)">
+          <div>
+            <strong>${esc(cr.name)}</strong>
+            <span style="font-size:.82rem;color:var(--c-text3);margin-left:8px">${esc(cr.building)} ${esc(cr.floor)}</span>
+          </div>
+          <div style="font-size:.82rem">
+            <span style="color:var(--c-ok)">${onCnt} 已推送</span>
+            ${offCnt?`<span style="color:var(--c-warn);margin-left:8px">${offCnt} 待手动处理</span>`:''}
+          </div>
+        </div>
+        <div style="padding:8px 18px">
+          <table class="data-table" style="font-size:.8rem;margin:0">
+            <thead><tr><th>座位</th><th>机器名</th><th>状态</th><th>结果</th></tr></thead>
+            <tbody>${ts.map(t=>`<tr>
+              <td>${esc(t.seat||'--')}</td>
+              <td>${esc(t.name||'--')}</td>
+              <td>${t.online?pill('在线','ok'):pill('离线','muted')}</td>
+              <td>${t.online?'<span style="color:var(--c-ok)">已推送</span>':'<span style="color:var(--c-warn)">需手动修改</span>'}</td>
+            </tr>`).join('')}</tbody>
           </table>
         </div>
-        <div style="font-size:.82rem;color:var(--c-text3);margin-top:8px">这些终端在变更时不在线，需工程师到现场通过终端"网络与服务器"页面手动修改服务器地址。</div>
-      </div>
-      `:''}
+      </div>`).join('')}
     </div>
+    `:''}
   </div>
   `;
 }
@@ -1301,7 +1345,7 @@ function bindEvents(){
     });
   });
   root.querySelectorAll('[data-nav-cr]').forEach(el=>{
-    el.addEventListener('click',()=>nav('classrooms',{classroomId:el.dataset.navCr,terminalId:null,tab:'overview',platAction:null,platActionResult:null,platSelectedTerms:[]}));
+    el.addEventListener('click',()=>nav('classrooms',{classroomId:el.dataset.navCr,terminalId:null,tab:'terminals',platAction:null,platActionResult:null,platSelectedTerms:[]}));
   });
   root.querySelectorAll('[data-nav-term]').forEach(el=>{
     const tId=el.dataset.navTerm;
@@ -1577,6 +1621,7 @@ function bindEvents(){
           const r=await client.send('plat-server-ip-change',{campusId:view.campusId,newAddress:addr});
           view.settingsResult.serverIp=true;
           view.settingsResult.serverIpCount=r.count;
+          view.settingsResult.done=true;
         }
       }catch(e){console.error(e);}
       render(s());
@@ -1588,6 +1633,8 @@ function bindEvents(){
   if(srvAddrEl){
     srvAddrEl.addEventListener('input',()=>{
       view.newServerAddr=srvAddrEl.value;
+      const btn=root.querySelector('[data-settings-action="server-ip"]');
+      if(btn) btn.disabled=!srvAddrEl.value||!!(view.settingsResult&&view.settingsResult.done);
     });
   }
 

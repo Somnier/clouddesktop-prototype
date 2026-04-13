@@ -387,14 +387,11 @@ function localDesktopScreen(){
   const diskPct = Math.round(diskUsed/diskTotal*100);
   const diskColor = diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-accent)';
 
-  /* pie segments: system → desktops → free */
+  /* pie segments: system → desktop total → free (3 categories only) */
   const dtSegments = [];
   dtSegments.push({ name:'系统占用', size:systemUsed, color:'#64748b' });
-  desktops.forEach((d,i)=>{
-    const colors = ['#3b82f6','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#06b6d4','#f97316'];
-    dtSegments.push({ name:d.name, size:d.diskSize||25, color:colors[i%colors.length] });
-  });
-  if(diskFree>0) dtSegments.push({ name:'可用空间', size:diskFree, color:'#1e293b' });
+  dtSegments.push({ name:'桌面占用', size:desktopUsed, color:'#3b82f6' });
+  if(diskFree>0) dtSegments.push({ name:'剩余空间', size:diskFree, color:'#1e293b' });
 
   /* SVG pie chart */
   const total = dtSegments.reduce((s,seg)=>s+seg.size,0);
@@ -428,18 +425,17 @@ function localDesktopScreen(){
 
   <div class="page-scroll" style="padding-bottom:12px">
 
-  <!-- Import bar (top, full-width) -->
-  <div class="dt-card dt-add-card" data-desktop-action="import" style="margin-bottom:16px;cursor:pointer">
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 0">
-      <span style="font-size:1.5rem;color:var(--t-text3)">+</span>
-      <span style="font-size:.88rem;color:var(--t-text3)">导入桌面</span>
-    </div>
-  </div>
-
-  <!-- Two-column: card grid (left) + pie chart (right) -->
+  <!-- Two-column: card grid + import (left) + pie chart (right) -->
   <div style="display:flex;gap:20px;align-items:flex-start">
-    <!-- Desktop cards (left, two-column) -->
+    <!-- Desktop cards (left, two-column waterfall) -->
     <div style="flex:1;min-width:0">
+      <!-- Import bar (spans 2 columns) -->
+      <div class="dt-card dt-add-card" data-desktop-action="import" style="margin-bottom:12px;cursor:pointer">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 0">
+          <span style="font-size:1.5rem;color:var(--t-text3)">+</span>
+          <span style="font-size:.88rem;color:var(--t-text3)">导入桌面</span>
+        </div>
+      </div>
       <div class="dt-grid">
         ${desktops.map(d=>{
         const isDefault = d.id===bid;
@@ -481,13 +477,19 @@ function localDesktopScreen(){
       ${!desktops.length ? empty('暂无本机桌面','请点击上方 + 导入桌面') : ''}
     </div>
 
-    <!-- Pie chart (right sidebar) -->
+    <!-- Pie chart + stats (right sidebar) -->
     <div class="card" style="flex-shrink:0;width:220px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px">
       <svg width="140" height="140" viewBox="0 0 140 140">${pieSlices}
         <circle cx="${pieCx}" cy="${pieCy}" r="32" fill="var(--t-bg)"/>
         <text x="${pieCx}" y="${pieCy+4}" text-anchor="middle" fill="${diskColor}" font-size="16" font-weight="700">${diskPct}%</text>
       </svg>
       <div style="width:100%;display:flex;flex-direction:column;gap:3px">${pieLegend}</div>
+      <div style="width:100%;border-top:1px solid var(--t-border);padding-top:8px;display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--t-text2)">
+        <div style="display:flex;justify-content:space-between"><span>总容量</span><strong>${diskTotal} GB</strong></div>
+        <div style="display:flex;justify-content:space-between"><span>系统</span><span>${systemUsed} GB</span></div>
+        <div style="display:flex;justify-content:space-between"><span>桌面 (${desktops.length})</span><span>${desktopUsed} GB</span></div>
+        <div style="display:flex;justify-content:space-between"><span>剩余</span><span style="color:${diskColor}">${diskFree} GB</span></div>
+      </div>
     </div>
   </div>
   </div>
@@ -604,8 +606,17 @@ function wbLayoutContent(terms, rt, c, m, d){
   const exSeat = seatLabel(0, 0, r);
   const exName = prefix ? prefix + '-' + exSeat : '(前缀)-(座位号)';
 
+  /* Dirty detection: compare current layout state with snapshot taken on tab entry */
+  const layoutSnap = demo().flags?.layoutSnapshot;
+  const layoutDirty = !layoutSnap || layoutSnap !== JSON.stringify({
+    rows:grid.rows,cols:grid.cols,blocks:activeCount,
+    ipBase:r.ipBase||'',namePrefix:r.namePrefix||'',
+    ipStart:r.ipStart||20,startLetter:r.startLetter||'A',
+    gridDirection:r.gridDirection||'tl',termCount:discoveredCount});
+
   return `<div style="display:grid;grid-template-columns:280px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden">
-    <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+      <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">
       <div class="card">
         <div class="card-header">❶ 教室信息</div>
         ${scanning?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;background:var(--t-accent-bg);border:1px solid rgba(88,166,255,.3);border-radius:4px">
@@ -633,6 +644,11 @@ function wbLayoutContent(terms, rt, c, m, d){
         </div>
         <div style="font-size:.7rem;color:var(--t-text3);margin-top:2px">机器名 = 前缀 + "-" + 座位号，座位号 = 起始字母 + 序号</div>
       </div>
+      </div>
+      <div style="padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0">
+        <button class="btn btn-primary" ${layoutDirty&&activeCount>0&&totalTermCount>0&&hasRules&&!hasNewTermsBeyondGrid?'':'disabled'} data-act="complete-layout">完成布局</button>
+        <div style="font-size:.75rem;color:var(--t-text3);margin-top:4px">${hasNewTermsBeyondGrid?'终端数超出容量，请调整布局':!hasRules?'请先设置IP前缀和机器名前缀':activeCount<=0?'请先设置网格布局':totalTermCount<=0?'等待终端上线…':!layoutDirty?'布局未变更':''}</div>
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
       <div style="padding:10px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:8px;font-size:.82rem;flex-shrink:0">
@@ -642,9 +658,8 @@ function wbLayoutContent(terms, rt, c, m, d){
           <div class="prep-field" style="padding:0;font-size:.78rem;gap:6px"><label style="width:auto;flex-shrink:0;color:var(--t-text2)">列数</label><input type="number" data-grid="cols" value="${grid.cols}" min="1" max="15" style="width:56px"></div>
           <span style="font-size:.75rem;color:var(--t-text2)">${pill('可用 '+activeCount,'ok')}${hasNewTermsBeyondGrid?` <span style="color:var(--t-err);font-weight:600">终端 ${totalTermCount} 超出容量 ${activeCount}</span>`:''}</span>
         </div>
-        <div style="font-size:.7rem;color:var(--t-text3);margin-bottom:6px">每列 = 网格行数，列数 = 网格列数</div>
         <div style="display:flex;gap:4px;margin-bottom:6px;align-items:center">
-          <span style="font-size:.72rem;color:var(--t-text3);margin-right:4px">布局起点</span>
+          <span style="font-size:.78rem;color:var(--t-text2);margin-right:4px">布局起点</span>
           ${[['tl','↘ 左上'],['tr','↙ 右上'],['bl','↗ 左下'],['br','↖ 右下']].map(([v,l])=>
             `<button class="btn ${dir===v?'btn-primary':'btn-secondary'}" style="padding:3px 8px;font-size:.72rem;justify-content:center" data-rule-dir="${v}">${l}</button>`
           ).join('')}
@@ -653,10 +668,6 @@ function wbLayoutContent(terms, rt, c, m, d){
       </div>
       <div class="page-scroll" style="flex:1;min-height:0">
         ${renderSeatGridLayout(grid, r, dir, previewMap, termBlockMap, isTakenOver, hasRules)}
-      </div>
-      <div style="display:flex;gap:8px;padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0;align-items:center;min-height:44px">
-        <button class="btn btn-primary" ${activeCount>0&&totalTermCount>0&&hasRules&&!hasNewTermsBeyondGrid?'':'disabled'} data-act="complete-layout">完成布局</button>
-        <span style="font-size:.75rem;color:var(--t-text3)">${hasNewTermsBeyondGrid?'终端数超出容量，请调整布局':!hasRules?'请先设置IP前缀和机器名前缀':activeCount<=0?'请先设置网格布局':totalTermCount<=0?'等待终端上线…':''}</span>
       </div>
     </div>
   </div>`;
@@ -683,7 +694,8 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
   const viewingLastResult = demo().flags?.viewLastResult;
 
   return `<div style="display:grid;grid-template-columns:280px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden;align-items:stretch">
-    <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+      <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">
       <div class="card">
         <div class="card-header">功能</div>
         <div style="display:flex;gap:0;border:1px solid var(--t-border);border-radius:var(--radius);overflow:hidden">
@@ -691,29 +703,19 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
           <button class="maint-tab-btn ${opsMode==='maint-ip'?'active':''}" ${isRunning?'disabled':''} data-act="ops-mode-maint-ip" style="flex:1">修改 IP / 服务器地址</button>
         </div>
       </div>
-      ${opsMode==='deploy'&&!isRunning?`<div class="card">
+      ${opsMode==='deploy'?`<div class="card"${isRunning?' style="opacity:.6;pointer-events:none"':''}>
         <div class="card-header">设置部署参数</div>
-        <div class="prep-field"><label>部署模式</label><select id="deploy-mode-sel">
+        <div class="prep-field"><label>部署模式</label><select id="deploy-mode-sel" ${isRunning?'disabled':''}>
           <option value="incremental" ${(d.deployMode||'incremental')==='incremental'?'selected':''}>增量更新</option>
           <option value="full" ${d.deployMode==='full'?'selected':''}>全量部署</option>
         </select></div>
       </div>`:''}
-      ${lastResult&&!isRunning?`<div class="card">
+      ${lastResult?`<div class="card"${isRunning?' style="opacity:.6;pointer-events:none"':''}>
         <div class="card-header">上次部署结果</div>
         <div style="font-size:.82rem;color:var(--t-ok)">成功 ${lastResult.completed||0} · 失败 ${lastResult.failed||0} / ${lastResult.total||0}</div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:6px" data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看详情'}</button>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" ${isRunning?'disabled':''} data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看详情'}</button>
       </div>`:''}
       ${opsMode==='maint-ip'?`<div class="card">
-        <div class="card-header">网络规则（继承自布局设置）</div>
-        <div style="font-size:.78rem;color:var(--t-text2);padding:4px 0">
-          <div>IP 前缀: <strong>${esc(r.ipBase||'未设置')}</strong></div>
-          <div>起始编号: <strong>${r.ipStart||20}</strong></div>
-          <div>子网掩码: <strong>${esc(m.subnetMask||'255.255.255.0')}</strong></div>
-          <div>网关: <strong>${esc(m.gateway||'未设置')}</strong></div>
-          <div>DNS: <strong>${esc((m.dns||[]).join(', ')||'未设置')}</strong></div>
-        </div>
-      </div>
-      <div class="card">
         <div class="card-header">本次修改内容</div>
         <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(md.newServerAddr||c.serverAddress||m.serverAddr||'')}" placeholder="server.edu.cn"></div>
         <div class="prep-field"><label>新 IP 前缀</label><input type="text" id="mip-base" value="${esc(md.newIpBase||r.ipBase||c.networkBase||'')}" placeholder="10.21.31"></div>
@@ -721,8 +723,18 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(md.newSubnetMask||m.subnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
         <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(md.newGateway||m.gateway||c.gateway||'')}" placeholder="10.x.x.1"></div>
         <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(md.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
-        <div style="font-size:.7rem;color:var(--t-text3);margin-top:4px">在右侧选择终端后点击底部执行按钮</div>
+        <div style="font-size:.7rem;color:var(--t-text3);margin-top:4px">在右侧选择终端后点击下方执行按钮</div>
       </div>`:''}
+      ${opsMode==='maint-ip'&&lastResult?`<div class="card"${isRunning?' style="opacity:.6;pointer-events:none"':''}>
+        <div class="card-header">上次执行结果</div>
+        <div style="font-size:.82rem;color:var(--t-ok)">成功 ${lastResult.completed||0} · 失败 ${lastResult.failed||0} / ${lastResult.total||0}</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" ${isRunning?'disabled':''} data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看详情'}</button>
+      </div>`:''}
+      </div>
+      <div style="padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0">
+        ${opsMode==='deploy'?`<button class="btn btn-primary" ${!isRunning&&boundCount>=1?'':'disabled'} data-act="start-deployment">开始部署（${boundCount} 台）</button>`:''}
+        ${opsMode==='maint-ip'?`<button class="btn btn-primary" ${isRunning?'disabled':''} data-act="start-maint-ip">开始执行</button>`:''}
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
       ${isRunning?`<div style="padding:10px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.82rem">
@@ -739,11 +751,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
           opsMode==='maint-ip' ? renderSeatGridMaint(terms, m, c, d, md) :
           renderSeatGridOps(grid, r, dir, bindings, terms, m)}
       </div>
-      <div class="dt-export-bar" style="border-top:1px solid var(--t-border);padding-top:10px;justify-content:space-between">
-        <div style="display:flex;gap:8px;align-items:center">
-          ${opsMode==='deploy'&&!isRunning?`<button class="btn btn-primary" ${boundCount>=1?'':'disabled'} data-act="start-deployment">开始部署（${boundCount} 台）</button>`:''}
-          ${opsMode==='maint-ip'&&!isRunning?`<button class="btn btn-primary" data-act="start-maint-ip">开始执行</button>`:''}
-        </div>
+      <div style="border-top:1px solid var(--t-border);padding-top:10px;flex-shrink:0">
         <button class="btn btn-ghost dt-export-btn" ${isRunning?'disabled':''} data-act="open-export">
           导出教室终端清单
         </button>
@@ -944,10 +952,8 @@ function renderSeatGridMaint(terms, m, c, d, md){
         }
         const t = terms.find(tt=>tt.id===binding.terminalId);
         const checked = scope.includes(binding.terminalId);
-        const pv = ipPreview.find(x=>x.terminalId===binding.terminalId);
         html+=`<div class="gb ${checked?'gb-bound':'gb-waiting'}" style="cursor:pointer" data-maint-toggle="${binding.terminalId}">
           <div class="gb-seat">${esc(seat)}</div>
-          <div class="gb-ip">${esc(t?.ip||'--')}${checked&&pv?' → <span style="color:var(--t-ok)">'+esc(pv.newIp)+'</span>':''}</div>
           ${checked?'<div class="gb-tag" style="color:var(--t-ok)">已选</div>':`<div class="gb-tag">${t?.online?'在线':'离线'}</div>`}
         </div>`;
       }
@@ -966,10 +972,8 @@ function renderSeatGridMaint(terms, m, c, d, md){
         <div class="gb-tag" style="color:var(--t-warn)">本机</div>
       </div>`;
       const checked=scope.includes(t.id);
-      const pv = ipPreview.find(x=>x.terminalId===t.id);
       return `<div class="gb ${checked?'gb-bound':'gb-waiting'}" style="cursor:pointer" data-maint-toggle="${t.id}">
         <div class="gb-seat">${esc(t.seat)}</div>
-        <div class="gb-ip">${esc(t.ip||'--')}${checked&&pv?' → <span style="color:var(--t-ok)">'+esc(pv.newIp)+'</span>':''}</div>
         ${checked?'<div class="gb-tag" style="color:var(--t-ok)">已选</div>':`<div class="gb-tag">${t.online?'在线':'离线'}</div>`}
       </div>`;
     }).join('')}
@@ -1741,21 +1745,76 @@ function bindAll(){
         setTimeout(()=>act('start-deployment'),50);
       } else if(a==='wb-tab-layout'){
         saveGridRulesIfPresent();
-        /* Switching to layout tab — trigger re-scan for new terminals */
-        act('set-flag',{wbTab:'layout', layoutRescan:true});
+        /* Full grid backup for data isolation: maint should not see unsaved layout edits */
+        const dd=demo().deployDraft||{};
+        const gr=dd.grid||{rows:7,cols:6,blocks:[]};
+        const ru=dd.rules||{};
+        const onCnt=termsInCr(s(),cr().id).filter(t=>t.id!==mt().id&&t.online).length;
+        act('set-flag',{wbTab:'layout', layoutRescan:true,
+          gridBackup:JSON.stringify(gr),
+          layoutSnapshot:JSON.stringify({rows:gr.rows,cols:gr.cols,
+            blocks:gr.blocks.filter(b=>b.state==='active').length,
+            ipBase:ru.ipBase||'',namePrefix:ru.namePrefix||'',
+            ipStart:ru.ipStart||20,startLetter:ru.startLetter||'A',
+            gridDirection:ru.gridDirection||'tl',termCount:onCnt})
+        });
       } else if(a==='wb-tab-maint'){
         saveGridRulesIfPresent();
         /* Only allow switching to maint if takeover is confirmed */
         const isMother = mt()?.controlState==='mother';
-        if(!isMother) return; /* button is disabled, but double-check */
-        /* Check for new unassigned terminals when returning from layout */
+        if(!isMother) return;
+        /* Dirty detection: compare current state with snapshot taken when entering layout */
+        const dd=demo().deployDraft||{};
+        const gr=dd.grid||{rows:7,cols:6,blocks:[]};
+        const ru=dd.rules||{};
         const onlineCount = termsInCr(s(), cr().id).filter(t=>t.id!==mt().id&&t.online).length;
-        const activeCount = (demo().deployDraft?.grid?.blocks||[]).filter(b=>b.state==='active').length;
-        if(demo().flags?.layoutRescan && onlineCount > activeCount){
-          showTermAlert('发现 '+onlineCount+' 台终端但网格仅有 '+activeCount+' 个可用位。请先调整网格布局。');
+        const activeCount = gr.blocks.filter(b=>b.state==='active').length;
+        const curState=JSON.stringify({rows:gr.rows,cols:gr.cols,
+          blocks:activeCount,
+          ipBase:ru.ipBase||'',namePrefix:ru.namePrefix||'',
+          ipStart:ru.ipStart||20,startLetter:ru.startLetter||'A',
+          gridDirection:ru.gridDirection||'tl',termCount:onlineCount});
+        const snap=demo().flags?.layoutSnapshot;
+        const isDirty = !snap || snap !== curState;
+        if(isDirty){
+          /* If terminals exceed grid, block entirely */
+          if(onlineCount > activeCount){
+            showTermAlert('发现 '+onlineCount+' 台终端但网格仅有 '+activeCount+' 个可用位。请先调整网格布局。');
+            return;
+          }
+          /* Prompt user to save or discard layout changes */
+          showTermConfirm('布局已修改','您对布局做了修改但尚未保存，是否保存变更？',()=>{
+            /* Save: trigger complete-layout flow and switch to maint */
+            const nm=root.querySelector('#tk-name');
+            const layoutSrv=root.querySelector('#layout-srv')?.value||'';
+            const layoutMask=root.querySelector('#layout-mask')?.value||'';
+            const layoutGw=root.querySelector('#layout-gw')?.value||'';
+            const layoutDns=root.querySelector('#layout-dns')?.value||'';
+            if(layoutSrv||layoutMask||layoutGw||layoutDns) act('save-layout-network',{serverAddr:layoutSrv,subnetMask:layoutMask,gateway:layoutGw,dns:layoutDns});
+            saveGridRulesIfPresent();
+            setTimeout(()=>{
+              act('confirm-takeover',nm?{classroomName:nm.value}:{});
+              setTimeout(()=>{ act('deploy-bind-all-terminals'); act('set-flag',{wbTab:'maint',layoutRescan:false,layoutSnapshot:null,gridBackup:null}); },100);
+            },80);
+          },{danger:false});
+          /* Add a discard option by modifying the modal */
+          setTimeout(()=>{
+            const modal=document.querySelector('.t-modal-actions');
+            if(modal){
+              const discardBtn=document.createElement('button');
+              discardBtn.className='btn btn-ghost';
+              discardBtn.textContent='放弃修改';
+              discardBtn.addEventListener('click',()=>{
+                document.querySelector('.t-modal-overlay')?.remove();
+                act('restore-grid-backup');
+                setTimeout(()=>act('set-flag',{wbTab:'maint',layoutRescan:false,layoutSnapshot:null,gridBackup:null}),50);
+              });
+              modal.insertBefore(discardBtn, modal.firstChild);
+            }
+          },0);
           return;
         }
-        act('set-flag',{wbTab:'maint', layoutRescan:false});
+        act('set-flag',{wbTab:'maint', layoutRescan:false, layoutSnapshot:null, gridBackup:null});
       } else if(a==='ops-mode-deploy'){
         act('set-flag',{opsMode:'deploy'});
       } else if(a==='ops-mode-maint-ip'){

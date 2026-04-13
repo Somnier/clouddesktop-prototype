@@ -111,7 +111,7 @@ function page(){
     <!-- ═══ 教室切换 ═══ -->
     <div class="dir-card">
       <h3>演示聚焦教室</h3>
-      <p>切换后母机/受控终端将自动切换到该教室。不同教室处于不同部署阶段。</p>
+      <p>切换后母机/受控终端将自动切换到该教室。不同教室处于不同生命周期阶段。</p>
       <div class="dir-btn-group">
         ${state.classrooms.map(cc=>`
           <button class="dir-btn${cc.id===state.demo.focusClassroomId?' primary':''}" data-switch-cr="${cc.id}">
