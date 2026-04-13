@@ -53,6 +53,11 @@ function render(state){
   const savedScrollTop = scrollEl ? scrollEl.scrollTop : 0;
   const asideEl = root.querySelector('.plat-aside');
   const savedAsideScroll = asideEl ? asideEl.scrollTop : 0;
+  /* Save inner scrollable container positions (progress/result tables) */
+  const innerScrolls = [];
+  root.querySelectorAll('.plat-inner-scroll').forEach((el,i)=>{
+    innerScrolls.push(el.scrollTop);
+  });
   _isRendering = true;
   root.innerHTML = shellHtml();
   bindEvents();
@@ -62,6 +67,10 @@ function render(state){
   if(newScrollEl && savedScrollTop) newScrollEl.scrollTop = savedScrollTop;
   const newAsideEl = root.querySelector('.plat-aside');
   if(newAsideEl && savedAsideScroll) newAsideEl.scrollTop = savedAsideScroll;
+  /* Restore inner scrollable positions */
+  root.querySelectorAll('.plat-inner-scroll').forEach((el,i)=>{
+    if(innerScrolls[i] != null) el.scrollTop = innerScrolls[i];
+  });
   _isRendering = false;
 }
 
@@ -141,7 +150,7 @@ function asideContent(){
     /* dashboard aside: recent logs (30%) + alerts (70%) */
     const logLimit = Math.min(recentLogs.length, 4);
     cards+=`<div class="aside-card" style="flex:3;min-height:0"><div class="aside-title">最近日志</div>
-      ${recentLogs.length?recentLogs.slice(0,logLimit).map(l=>`<div class="aside-item">
+      ${recentLogs.length?recentLogs.slice(0,logLimit).map(l=>`<div class="aside-item" title="${esc(l.title+(l.detail?' — '+l.detail:''))}" style="cursor:default">
         ${pill(logLevelLabel[l.level]||l.level,tone(l.level==='warn'?'warning':l.level==='info'?'ok':'offline'))}
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.title)}</span>
         <span style="color:var(--c-text3);font-size:.72rem;white-space:nowrap">${relTime(l.at)}</span>
@@ -182,7 +191,7 @@ function asideContent(){
             const t=getTerm(state,a.terminalId);
             return `<div class="aside-item" style="flex-direction:column;align-items:flex-start;gap:2px">
               <div>${pill(a.level==='high'?'高':a.level==='medium'?'中':'低',a.level==='high'?'err':a.level==='medium'?'warn':'muted')} <span style="font-weight:500">${esc(a.title)}</span></div>
-              <div style="font-size:.75rem;color:var(--c-text3)">${t?esc(t.seat||'--')+' · '+esc(t.name||''):''} ${relTime(a.at)}</div>
+              <div style="font-size:.75rem;color:var(--c-text3)">${t?`<a class="clickable" data-nav-term="${a.terminalId}" style="cursor:pointer;text-decoration:underline">${esc(t.seat||'--')}</a> · `:''} ${relTime(a.at)}</div>
             </div>`;
           }).join('')}
         </div>`;
@@ -643,12 +652,18 @@ function platActionPanel(pa, par, c, terms){
   let content = '';
   const accentMap = {shutdown:'var(--c-warn)', restart:'var(--c-info)', distribute:'var(--c-brand)', 'ip-mod':'var(--c-info)', 'remote-test':'var(--c-ok)', 'broadcast-test':'var(--c-warn)', 'block-internet':'var(--c-warn)', 'block-usb':'var(--c-warn)', 'hw-test':'var(--c-info)'};
 
-  /* ── helper: compact terminal pill list ── */
-  function termPills(list, max){
-    const show = list.slice(0, max||8);
-    const rest = list.length - show.length;
-    return show.map(t=>`<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:.75rem;background:var(--c-bg2);margin:1px">${esc(t.seat||'--')}</span>`).join('')
-      + (rest > 0 ? `<span style="font-size:.75rem;color:var(--c-text3);margin-left:2px">等 ${list.length} 台</span>` : '');
+  /* ── helper: per-terminal result table ── */
+  function resultTable(results, columns){
+    if(!results||!results.length) return '';
+    return `<div class="plat-inner-scroll" style="max-height:260px;overflow-y:auto;margin-top:10px">
+      <table class="data-table plat-sortable" style="font-size:.78rem">
+        <thead><tr>${columns.map(c2=>`<th data-sort>${c2.label}</th>`).join('')}<th data-sort>结果</th></tr></thead>
+        <tbody>${results.map((r,ri)=>`<tr data-orig-idx="${ri}">
+          ${columns.map(c2=>`<td${c2.mono?' class="mono"':''}>${esc(r[c2.key]||'--')}</td>`).join('')}
+          <td>${r.ok?pill('成功','ok'):pill('失败','err')}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
   }
 
   if(pa==='shutdown'){
@@ -657,14 +672,12 @@ function platActionPanel(pa, par, c, terms){
         执行关机
       </div>
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
-        将向以下 <strong>${selTerms.length}</strong> 台在线终端发送软件关机指令。
-      </div>
-      <div style="margin-bottom:12px;padding:8px 12px;background:var(--c-bg2);border-radius:6px;line-height:1.7">
-        ${termPills(selTerms, 20)}
+        对选中的 <strong>${selTerms.length}</strong> 台在线终端发送关机指令。
       </div>
       ${par?.done?`<div style="padding:8px 12px;background:rgba(34,197,94,.06);border-radius:6px;margin-bottom:10px">
-        <span class="text-ok" style="font-size:.85rem">✓ 已成功向 ${par.count} 台终端发送关机指令</span>
-      </div>`:''}
+        <span class="text-ok" style="font-size:.85rem">✓ 已向 ${par.count} 台终端发送关机指令</span>
+      </div>
+      ${resultTable(par.results,[{key:'seat',label:'座位'},{key:'name',label:'机器名'},{key:'ip',label:'IP',mono:true}])}`:''}
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary btn-sm" data-plat-confirm="shutdown"${par?.done||!selTerms.length?' disabled':''}>确认关机 (${selTerms.length})</button>
         <button class="btn btn-ghost btn-sm" data-plat-cancel>取消</button>
@@ -676,62 +689,46 @@ function platActionPanel(pa, par, c, terms){
         执行重启
       </div>
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
-        将向以下 <strong>${selTerms.length}</strong> 台在线终端发送重启指令，终端将在数秒后自动恢复在线。
-      </div>
-      <div style="margin-bottom:12px;padding:8px 12px;background:var(--c-bg2);border-radius:6px;line-height:1.7">
-        ${termPills(selTerms, 20)}
+        对选中的 <strong>${selTerms.length}</strong> 台在线终端发送重启指令。
       </div>
       ${par?.done?`<div style="padding:8px 12px;background:rgba(34,197,94,.06);border-radius:6px;margin-bottom:10px">
-        <span class="text-ok" style="font-size:.85rem">✓ 已成功向 ${par.count} 台终端发送重启指令</span>
-      </div>`:''}
+        <span class="text-ok" style="font-size:.85rem">✓ 已向 ${par.count} 台终端发送重启指令</span>
+      </div>
+      ${resultTable(par.results,[{key:'seat',label:'座位'},{key:'name',label:'机器名'},{key:'ip',label:'IP',mono:true}])}`:''}
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary btn-sm" data-plat-confirm="restart"${par?.done||!selTerms.length?' disabled':''}>确认重启 (${selTerms.length})</button>
         <button class="btn btn-ghost btn-sm" data-plat-cancel>取消</button>
       </div>`;
   }
   if(pa==='distribute'){
-    const sourceCandidates = terms.filter(t=>t.online&&(t.desktops||[]).length>0);
-    const selSrc = view.distSrcId || null;
-    const srcTerm = selSrc ? terms.find(t=>t.id===selSrc) : null;
-    const srcDesktops = srcTerm ? (srcTerm.desktops||[]) : [];
+    /* Desktop catalog from this classroom */
+    const catalog = c.desktopCatalog || [];
     const selDts = view.distDtIds || [];
-    const targetTerms = selTerms.filter(t=>t.id!==selSrc);
-    const step = !selSrc ? 1 : (!selDts.length ? 2 : 3);
+    const step = !selDts.length ? 1 : 2;
 
     content = `
       <div class="card-header" style="margin:-14px -18px 12px;padding:10px 18px;background:rgba(59,130,246,.06);border-radius:8px 8px 0 0;font-size:.95rem">
-        部署桌面到教室
+        部署桌面到选中终端
       </div>
       <div style="display:flex;gap:6px;margin-bottom:14px;font-size:.82rem">
-        <span style="padding:3px 10px;border-radius:12px;${step>=1?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">① 选来源终端</span>
-        <span style="padding:3px 10px;border-radius:12px;${step>=2?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">② 选部署桌面</span>
-        <span style="padding:3px 10px;border-radius:12px;${step>=3?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">③ 选目标终端并确认</span>
+        <span style="padding:3px 10px;border-radius:12px;${step>=1?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">① 选择桌面</span>
+        <span style="padding:3px 10px;border-radius:12px;${step>=2?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">② 选择部署模式并确认</span>
       </div>
 
-      <div style="display:grid;grid-template-columns:${srcDesktops.length?'280px 1fr':'1fr'};gap:16px;align-items:start">
-        <div>
-          <div style="font-size:.82rem;font-weight:600;margin-bottom:6px">来源终端（已有桌面的在线终端）</div>
-          <select data-dist-src style="width:100%;padding:6px 8px;border:1px solid var(--c-border);border-radius:4px">
-            <option value="">-- 选择来源 --</option>
-            ${sourceCandidates.map(t=>`<option value="${t.id}"${t.id===selSrc?' selected':''}>${esc(t.seat||'--')} · ${esc(t.name||'')} · ${(t.desktops||[]).length} 个桌面</option>`).join('')}
-          </select>
-          ${srcTerm?`<div style="font-size:.78rem;color:var(--c-text3);margin-top:4px">IP: ${esc(srcTerm.ip||'--')}</div>`:''}
-        </div>
-        ${srcDesktops.length?`<div>
-          <div style="font-size:.82rem;font-weight:600;margin-bottom:6px">选择要部署的桌面（可多选）</div>
-          <div style="display:flex;flex-direction:column;gap:4px">
-            ${srcDesktops.map(d=>{
-              const chk=selDts.includes(d.id);
-              return `<label style="display:flex;align-items:center;gap:8px;font-size:.82rem;cursor:pointer;padding:6px 10px;border:1px solid ${chk?'var(--c-brand)':'var(--c-border)'};border-radius:6px;background:${chk?'rgba(59,130,246,.06)':'#fff'}">
-              <input type="checkbox" data-dist-dt-chk value="${d.id}"${chk?' checked':''}>
-              <div style="flex:1">
-                <div style="font-weight:600">${esc(d.name)}</div>
-                <div style="font-size:.78rem;color:var(--c-text3)">${esc(d.os||'')}${d.dataDisk?' · 数据盘 '+esc(d.dataDisk):''}</div>
-              </div>
-              ${d.physicalDeploy?pill('物理部署','warn'):''}
-            </label>`;}).join('')}
-          </div>
-        </div>`:''}
+      <div>
+        <div style="font-size:.82rem;font-weight:600;margin-bottom:6px">选择要部署的桌面（可多选）</div>
+        ${catalog.length?`<div style="display:flex;flex-direction:column;gap:4px">
+          ${catalog.map(d=>{
+            const chk=selDts.includes(d.id);
+            return `<label style="display:flex;align-items:center;gap:8px;font-size:.82rem;cursor:pointer;padding:6px 10px;border:1px solid ${chk?'var(--c-brand)':'var(--c-border)'};border-radius:6px;background:${chk?'rgba(59,130,246,.06)':'#fff'}">
+            <input type="checkbox" data-dist-dt-chk value="${d.id}"${chk?' checked':''}>
+            <div style="flex:1">
+              <div style="font-weight:600">${esc(d.name)} <span style="font-weight:normal;font-size:.78rem;color:var(--c-text3)">${esc(d.version||'')}</span></div>
+              <div style="font-size:.78rem;color:var(--c-text3)">${esc(d.os||'')} · ${d.diskSize||25} GB${d.dataDisk?' · 数据盘 '+esc(d.dataDisk):''}</div>
+            </div>
+            ${d.physicalDeploy?pill('物理部署','warn'):''}
+          </label>`;}).join('')}
+        </div>`:`<div style="font-size:.82rem;color:var(--c-text3)">该教室无桌面可部署</div>`}
       </div>
 
       ${selDts.length > 0 ? `
@@ -741,21 +738,39 @@ function platActionPanel(pa, par, c, terms){
           <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="distMode" data-dist-mode="incremental"${(view.distMode||'incremental')==='incremental'?' checked':''}> 增量更新（仅同步差异，更快）</label>
           <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="distMode" data-dist-mode="full"${view.distMode==='full'?' checked':''}> 全量部署（完整覆盖，更可靠）</label>
         </div>
-      </div>
-      <div style="margin-top:8px;padding:10px 14px;background:var(--c-bg2);border-radius:6px">
-        <div style="font-size:.82rem;font-weight:600;margin-bottom:6px">目标终端 · ${targetTerms.length} 台（在下方座位图中选择）</div>
-        <div style="line-height:1.7">${termPills(targetTerms, 20)}</div>
       </div>` : ''}
 
-      ${par?.running?`<div style="padding:8px 12px;background:rgba(59,130,246,.06);border-radius:6px;margin-top:10px">
-        <span class="text-info" style="font-size:.85rem">⏳ 部署进行中… ${par.progress?par.progress.filter(p=>p.state==='completed').length+'/'+par.progress.length+' 完成':'请查看下方座位图进度'}</span>
+      ${par?.running?`<div style="margin-top:10px">
+        <div style="padding:8px 12px;background:rgba(59,130,246,.06);border-radius:6px;margin-bottom:8px">
+          <span class="text-info" style="font-size:.85rem">⏳ 部署进行中… ${par.progress?par.progress.filter(p=>p.state==='completed'||p.state==='failed').length+'/'+par.progress.length+' 完成':'进行中'}</span>
+        </div>
+        <div class="plat-inner-scroll" style="max-height:300px;overflow-y:auto">
+          <table class="data-table" style="font-size:.78rem"><thead><tr><th>座位</th><th>机器名</th><th>进度</th><th>状态</th></tr></thead>
+          <tbody>${(par.progress||[]).map(p=>{
+            const t=terms.find(tt=>tt.id===p.id);
+            const done2=p.state==='completed'||p.state==='failed';
+            return `<tr><td>${esc(t?.seat||'--')}</td><td>${esc(t?.name||'--')}</td>
+              <td style="width:120px">${done2?'':`<div style="height:6px;background:var(--c-bg2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.round(p.pct)}%;background:var(--c-brand);border-radius:3px;transition:width .3s"></div></div>`}</td>
+              <td>${p.state==='completed'?pill('完成','ok'):p.state==='failed'?pill('失败','err'):pill('传输中','info')}</td></tr>`;
+          }).join('')}</tbody></table>
+        </div>
       </div>`:''}
-      ${par?.done?`<div style="padding:8px 12px;background:rgba(34,197,94,.06);border-radius:6px;margin-top:10px">
-        <span class="text-ok" style="font-size:.85rem">✓ 已将 ${par.dtCount||1} 个桌面部署到 ${par.count} 台终端${par.failed?' · <span class="text-err">'+par.failed+' 台失败</span>':''}</span>
+      ${par?.done?`<div style="margin-top:10px">
+        <div style="padding:8px 12px;background:${par.failed?'rgba(239,68,68,.06)':'rgba(34,197,94,.06)'};border-radius:6px;margin-bottom:8px">
+          <span class="${par.failed?'text-err':'text-ok'}" style="font-size:.85rem">${par.failed?'⚠':'✓'} 已将 ${par.dtCount||1} 个桌面部署到 ${par.count} 台终端${par.failed?' · '+par.failed+' 台失败':''}</span>
+        </div>
+        <div class="plat-inner-scroll" style="max-height:260px;overflow-y:auto">
+          <table class="data-table plat-sortable" style="font-size:.78rem"><thead><tr><th data-sort>座位</th><th data-sort>机器名</th><th data-sort>结果</th></tr></thead>
+          <tbody>${(par.progress||[]).map((p,pi)=>{
+            const t=terms.find(tt=>tt.id===p.id);
+            return `<tr data-orig-idx="${pi}"><td>${esc(t?.seat||'--')}</td><td>${esc(t?.name||'--')}</td>
+              <td>${p.state==='completed'?pill('成功','ok'):pill('失败','err')}</td></tr>`;
+          }).join('')}</tbody></table>
+        </div>
       </div>`:''}
 
       <div style="display:flex;gap:8px;margin-top:12px">
-        <button class="btn btn-primary btn-sm" data-plat-confirm="distribute"${(!selSrc||!selDts.length||!targetTerms.length||par?.done||par?.running)?' disabled':''}>确认部署 ${selDts.length?'('+selDts.length+' 桌面 → '+targetTerms.length+' 终端)':''}</button>
+        <button class="btn btn-primary btn-sm" data-plat-confirm="distribute"${(!selDts.length||!selTerms.length||par?.done||par?.running)?' disabled':''}>确认部署 ${selDts.length?'('+selDts.length+' 桌面 → '+selTerms.length+' 终端)':''}</button>
         <button class="btn btn-ghost btn-sm" data-plat-cancel>取消</button>
       </div>`;
   }
@@ -763,29 +778,35 @@ function platActionPanel(pa, par, c, terms){
     const curBase = c.networkBase || '10.0.0';
     const newBase = view.newIpBase || curBase;
     const newStart = view.newIpStart || 20;
+    const newMask = view.newIpMask || '255.255.255.0';
+    const newGw = view.newIpGw || c.gateway || '';
+    const newDns = view.newIpDns || (c.dns||[]).join(',') || '';
     /* Build preview for selected terminals */
     const previewTerms = selTerms.length ? selTerms : [];
     content = `
       <div class="card-header" style="margin:-14px -18px 12px;padding:10px 18px;background:rgba(59,130,246,.06);border-radius:8px 8px 0 0;font-size:.95rem">
-        修改终端IP
+        修改终端网络参数
       </div>
       <div style="display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start">
         <div>
-          <div style="font-size:.82rem;font-weight:600;margin-bottom:8px">IP 分配规则</div>
+          <div style="font-size:.82rem;font-weight:600;margin-bottom:8px">网络参数</div>
           <div class="prep-field" style="margin-bottom:6px"><label style="width:70px">当前网段</label><span class="mono" style="font-size:.82rem">${esc(curBase)}.0/24</span></div>
           <div class="prep-field" style="margin-bottom:6px"><label style="width:70px">新网段</label><input type="text" data-ip-base value="${esc(newBase)}" placeholder="10.22.15" style="width:130px"></div>
           <div class="prep-field" style="margin-bottom:6px"><label style="width:70px">起始位</label><input type="number" data-ip-start value="${newStart}" min="2" max="250" style="width:80px"></div>
-          <div class="prep-field" style="margin-bottom:6px"><label style="width:70px">网关</label><input type="text" data-ip-gw value="${esc(view.newIpGw||c.gateway||'')}" placeholder="${esc(curBase)}.1" style="width:130px"></div>
+          <div class="prep-field" style="margin-bottom:6px"><label style="width:70px">子网掩码</label><input type="text" data-ip-mask value="${esc(newMask)}" placeholder="255.255.255.0" style="width:130px"></div>
+          <div class="prep-field" style="margin-bottom:6px"><label style="width:70px">网关</label><input type="text" data-ip-gw value="${esc(newGw)}" placeholder="${esc(curBase)}.1" style="width:130px"></div>
+          <div class="prep-field" style="margin-bottom:6px"><label style="width:70px">DNS</label><input type="text" data-ip-dns value="${esc(newDns)}" placeholder="8.8.8.8,114.114.114.114" style="width:130px"></div>
         </div>
         <div>
-          <div style="font-size:.82rem;font-weight:600;margin-bottom:8px">IP 变更预览 · ${previewTerms.length} 台终端</div>
+          <div style="font-size:.82rem;font-weight:600;margin-bottom:8px">变更预览 · ${previewTerms.length} 台终端</div>
           ${previewTerms.length?`
           <div style="max-height:200px;overflow-y:auto">
             <table class="data-table" style="font-size:.78rem">
-              <thead><tr><th>座位</th><th>新 IP</th></tr></thead>
+              <thead><tr><th>座位</th><th>当前 IP</th><th>新 IP</th></tr></thead>
               <tbody>${previewTerms.map((t,i)=>{
                 const newIp=newBase+'.'+(newStart+i);
                 return `<tr><td>${esc(t.seat||'--')}</td>
+                  <td class="mono">${esc(t.ip||'--')}</td>
                   <td class="mono" style="color:var(--c-ok);font-weight:600">${esc(newIp)}</td></tr>`;
               }).join('')}</tbody>
             </table>
@@ -793,9 +814,10 @@ function platActionPanel(pa, par, c, terms){
           :`<div style="font-size:.82rem;color:var(--c-text3)">请在下方座位图中选择要修改的终端</div>`}
         </div>
       </div>
-      ${par?.done?`<div style="padding:8px 12px;background:rgba(34,197,94,.06);border-radius:6px;margin-top:10px">
-        <span class="text-ok" style="font-size:.85rem">✓ 已修改 ${par.count} 台终端 IP</span>
-      </div>`:''}
+      ${par?.done?`<div style="padding:8px 12px;background:${par.failed?'rgba(239,68,68,.06)':'rgba(34,197,94,.06)'};border-radius:6px;margin-top:10px">
+        <span class="${par.failed?'text-err':'text-ok'}" style="font-size:.85rem">${par.failed?'⚠':'✓'} 已修改 ${par.count} 台终端网络参数${par.failed?' · '+par.failed+' 台失败':''}</span>
+      </div>
+      ${resultTable(par.results,[{key:'seat',label:'座位'},{key:'name',label:'机器名'},{key:'oldIp',label:'原 IP',mono:true},{key:'newIp',label:'新 IP',mono:true}])}`:''}
       <div style="display:flex;gap:8px;margin-top:12px">
         <button class="btn btn-primary btn-sm" data-plat-confirm="ip-mod"${par?.done||!previewTerms.length?' disabled':''}>确认修改 (${previewTerms.length})</button>
         <button class="btn btn-ghost btn-sm" data-plat-cancel>取消</button>
@@ -807,14 +829,12 @@ function platActionPanel(pa, par, c, terms){
         禁止外网访问
       </div>
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
-        将禁止以下 <strong>${selTerms.length}</strong> 台在线终端的外网访问。仅保留校园内网和服务器通信。
-      </div>
-      <div style="margin-bottom:12px;padding:8px 12px;background:var(--c-bg2);border-radius:6px;line-height:1.7">
-        ${termPills(selTerms, 20)}
+        对选中的 <strong>${selTerms.length}</strong> 台在线终端禁止外网访问，仅保留校园内网和服务器通信。
       </div>
       ${par?.done?`<div style="padding:8px 12px;background:rgba(34,197,94,.06);border-radius:6px;margin-bottom:10px">
         <span class="text-ok" style="font-size:.85rem">✓ 已对 ${par.count} 台终端禁止外网</span>
-      </div>`:''}
+      </div>
+      ${resultTable(par.results,[{key:'seat',label:'座位'},{key:'name',label:'机器名'},{key:'ip',label:'IP',mono:true}])}`:''}
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary btn-sm" data-plat-confirm="block-internet"${par?.done||!selTerms.length?' disabled':''}>确认禁止 (${selTerms.length})</button>
         <button class="btn btn-ghost btn-sm" data-plat-cancel>取消</button>
@@ -826,41 +846,55 @@ function platActionPanel(pa, par, c, terms){
         禁止USB存储设备
       </div>
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
-        将禁止以下 <strong>${selTerms.length}</strong> 台在线终端使用USB存储设备（U盘、移动硬盘等），不影响USB键鼠。
-      </div>
-      <div style="margin-bottom:12px;padding:8px 12px;background:var(--c-bg2);border-radius:6px;line-height:1.7">
-        ${termPills(selTerms, 20)}
+        对选中的 <strong>${selTerms.length}</strong> 台在线终端禁止 USB 存储设备（U盘、移动硬盘等），不影响 USB 键鼠。
       </div>
       ${par?.done?`<div style="padding:8px 12px;background:rgba(34,197,94,.06);border-radius:6px;margin-bottom:10px">
-        <span class="text-ok" style="font-size:.85rem">✓ 已对 ${par.count} 台终端禁止USB</span>
-      </div>`:''}
+        <span class="text-ok" style="font-size:.85rem">✓ 已对 ${par.count} 台终端禁止 USB 存储</span>
+      </div>
+      ${resultTable(par.results,[{key:'seat',label:'座位'},{key:'name',label:'机器名'},{key:'ip',label:'IP',mono:true}])}`:''}
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary btn-sm" data-plat-confirm="block-usb"${par?.done||!selTerms.length?' disabled':''}>确认禁止 (${selTerms.length})</button>
         <button class="btn btn-ghost btn-sm" data-plat-cancel>取消</button>
       </div>`;
   }
   if(pa==='hw-test'){
+    /* 6 test items in user-specified order, stored in view state for persistence */
+    const hwItems = [
+      {k:'hw-consistency', l:'硬件一致性'},
+      {k:'smart', l:'SMART'},
+      {k:'disk-io', l:'硬盘读写速度'},
+      {k:'memory', l:'内存'},
+      {k:'multi-monitor', l:'显示器'},
+      {k:'peripheral', l:'键鼠'}
+    ];
+    if(!view.hwTestChecked) view.hwTestChecked = hwItems.reduce((o,it)=>{o[it.k]=true;return o;},{});
+    const checkedItems = hwItems.filter(it=>view.hwTestChecked[it.k]);
     content = `
       <div class="card-header" style="margin:-14px -18px 12px;padding:10px 18px;background:rgba(59,130,246,.06);border-radius:8px 8px 0 0;font-size:.95rem">
         执行硬件测试
       </div>
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
-        对选中的 <strong>${selTerms.length}</strong> 台终端执行硬件检测。可选择多项测试同时执行。
+        对选中的 <strong>${selTerms.length}</strong> 台终端发送自测指令。测试结果将自动上报，异常项将出现在告警中心。
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer"><input type="checkbox" data-hw-test-item="multi-monitor" checked> 多显示器分辨率检测</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer"><input type="checkbox" data-hw-test-item="smart" checked> SMART 硬盘健康检测</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer"><input type="checkbox" data-hw-test-item="hw-consistency" checked> 硬件一致性检测</label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer"><input type="checkbox" data-hw-test-item="usb-port" checked> USB接口检测</label>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px">
+        ${hwItems.map(it=>`<label style="display:flex;align-items:center;gap:6px;font-size:.82rem;cursor:pointer"><input type="checkbox" data-hw-chk="${it.k}"${view.hwTestChecked[it.k]?' checked':''}> ${esc(it.l)}</label>`).join('')}
       </div>
-      <div style="margin-bottom:12px;padding:8px 12px;background:var(--c-bg2);border-radius:6px;line-height:1.7">
-        ${termPills(selTerms, 20)}
+      <div style="font-size:.72rem;color:var(--c-text3);margin-bottom:10px">仅勾选的项目参与测试。測试结果由终端自测后上报服务器。</div>
+      ${par?.done?`<div style="padding:8px 12px;background:${par.failed?'rgba(239,68,68,.06)':'rgba(34,197,94,.06)'};border-radius:6px;margin-bottom:10px">
+        <span class="${par.failed?'text-err':'text-ok'}" style="font-size:.85rem">${par.failed?'⚠':'✓'} 硬件测试完成 · ${par.count} 台终端${par.failed?' · '+par.failed+' 台存在异常':' · 全部正常'}</span>
       </div>
-      ${par?.done?`<div style="padding:8px 12px;background:rgba(34,197,94,.06);border-radius:6px;margin-bottom:10px">
-        <span class="text-ok" style="font-size:.85rem">✓ 硬件测试完成 · ${par.count} 台终端${par.failed?' · <span class="text-err">'+par.failed+' 台异常</span>':' · 全部正常'}</span>
+      <div class="plat-inner-scroll" style="max-height:300px;overflow-y:auto">
+        <table class="data-table plat-sortable" style="font-size:.78rem">
+          <thead><tr><th data-sort>座位</th><th data-sort>机器名</th>${(par._testedItems||[]).map(it=>`<th data-sort>${esc(it.l)}</th>`).join('')}<th data-sort>结果</th></tr></thead>
+          <tbody>${(par.results||[]).map((r,ri)=>`<tr data-orig-idx="${ri}">
+            <td>${esc(r.seat)}</td><td>${esc(r.name)}</td>
+            ${(par._testedItems||[]).map(it=>`<td>${r[it.k]?pill('正常','ok'):pill('异常','err')}</td>`).join('')}
+            <td>${r.ok?pill('通过','ok'):pill('异常','err')}</td>
+          </tr>`).join('')}</tbody>
+        </table>
       </div>`:''}
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-primary btn-sm" data-plat-confirm="hw-test"${par?.done||!selTerms.length?' disabled':''}>执行测试 (${selTerms.length})</button>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-primary btn-sm" data-plat-confirm="hw-test"${par?.done||!selTerms.length||!checkedItems.length?' disabled':''}>执行测试 (${selTerms.length})</button>
         <button class="btn btn-ghost btn-sm" data-plat-cancel>取消</button>
       </div>`;
   }
@@ -870,10 +904,7 @@ function platActionPanel(pa, par, c, terms){
         执行网络连通性测试
       </div>
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
-        逐台测试以下 <strong>${selTerms.length}</strong> 台选中在线终端的网络延迟、带宽、服务器连通性和网关连通性。
-      </div>
-      <div style="margin-bottom:12px;padding:8px 12px;background:var(--c-bg2);border-radius:6px;line-height:1.7">
-        ${termPills(selTerms, 20)}
+        对选中的 <strong>${selTerms.length}</strong> 台在线终端逐台测试网络延迟、带宽、服务器连通性和网关连通性。
       </div>
       ${par?.results?`
       <div style="padding:8px 12px;background:${par.results.every(r=>r.serverReachable&&r.gatewayReachable)?'rgba(34,197,94,.06)':'rgba(239,68,68,.06)'};border-radius:6px;margin-bottom:10px">
@@ -1135,7 +1166,7 @@ function assetsPage(){
     (c.desktopCatalog||[]).forEach(d=>{
       const key = d.name;
       if(!groupMap.has(key)){
-        groupMap.set(key, {name:d.name, os:d.os||'', type:d.type||'', entries:[]});
+        groupMap.set(key, {name:d.name, os:d.os||'', type:d.type||'', diskSize:d.diskSize||0, dataDisk:d.dataDisk||'', physicalDeploy:!!d.physicalDeploy, restoreMode:c.restoreMode||'--', entries:[]});
       }
       const tUsing = termsInCr(state,c.id).filter(t=>(t.desktops||[]).some(td=>td.id===d.id));
       groupMap.get(key).entries.push({...d, classroomId:c.id, classroomName:c.name, termsUsing:tUsing});
@@ -1220,6 +1251,9 @@ function assetsPage(){
             </div>
             <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:.85rem;color:var(--c-text2)">
               <span>终端引用：<strong>${g.totalTerms}</strong> 台</span>
+              <span style="display:inline-block;width:1px;height:14px;background:var(--c-border)"></span>
+              <span style="font-weight:600">${g.diskSize||'--'} GB</span>
+              ${g.dataDisk?`<span style="display:inline-block;width:1px;height:14px;background:var(--c-border)"></span><span>数据盘：${esc(g.dataDisk)}</span>`:''}
             </div>
             <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.78rem;color:var(--c-text3);margin-top:4px">
               ${g.latestCreate?`<span>创建 ${fmtTime(g.latestCreate)}</span>`:''}
@@ -1440,7 +1474,7 @@ function bindEvents(){
     el.addEventListener('click',()=>{
       const act=el.dataset.platAction;
       view.platAction = view.platAction===act ? null : act;
-      view.platActionResult=null; view.distSrcId=null; view.distDtIds=[]; view.distMode=null; view.broadcastCrs=[];
+      view.platActionResult=null; view.distDtIds=[]; view.distMode=null; view.broadcastCrs=[];
       /* preserve platSelectedTerms — don't clear selection */
       render(s());
     });
@@ -1453,31 +1487,31 @@ function bindEvents(){
       const act=el.dataset.platConfirm;
       const crId=view.classroomId;
       const selIds=view.platSelectedTerms||[];
+      const state2=s();
+      const allTerms=termsInCr(state2,crId);
+      const mkResults=(ids)=>ids.map(id=>{const t=allTerms.find(tt=>tt.id===id);return{seat:t?.seat||'--',name:t?.name||'--',ip:t?.ip||'--',ok:Math.random()>0.05};});
       try{
         if(act==='shutdown'){
           const r=await client.send('plat-shutdown',{classroomId:crId,terminalIds:selIds});
-          view.platActionResult={done:true,count:r.count};
+          view.platActionResult={done:true,count:r.count,results:mkResults(selIds)};
         } else if(act==='restart'){
           const r=await client.send('plat-restart',{classroomId:crId,terminalIds:selIds});
-          view.platActionResult={done:true,count:r.count};
+          view.platActionResult={done:true,count:r.count,results:mkResults(selIds)};
         } else if(act==='distribute'){
           const dtIds=view.distDtIds||[];
-          const targetIds=selIds.filter(id=>id!==view.distSrcId);
-          /* Start progress simulation on grid */
+          const targetIds=selIds;
+          /* Start progress simulation */
           const progress = targetIds.map(id=>({id,state:'queued',pct:0}));
           view.platActionResult={running:true,progress,dtCount:dtIds.length};
           render(s());
-          /* Simulate progressive deployment */
           let tickIdx=0;
           const tickInterval=setInterval(()=>{
             const queued=progress.filter(p=>p.state==='queued');
             const running=progress.filter(p=>p.state==='running');
-            /* advance running items */
             running.forEach(p=>{
               p.pct=Math.min(100,p.pct+20+Math.random()*15);
               if(p.pct>=100){ p.state=Math.random()>0.92?'failed':'completed'; p.pct=100; }
             });
-            /* start up to 3 queued items per tick */
             queued.slice(0,3).forEach(p=>{p.state='running';p.pct=5+Math.random()*15;});
             tickIdx++;
             const allDone=progress.every(p=>p.state==='completed'||p.state==='failed');
@@ -1485,8 +1519,7 @@ function bindEvents(){
               clearInterval(tickInterval);
               const completed=progress.filter(p=>p.state==='completed').length;
               const failed=progress.filter(p=>p.state==='failed').length;
-              /* Actually send server request to apply changes */
-              client.send('plat-distribute',{classroomId:crId,sourceTerminalId:view.distSrcId,desktopIds:dtIds,targetTerminalIds:targetIds}).catch(()=>{});
+              client.send('plat-distribute',{classroomId:crId,desktopIds:dtIds,targetTerminalIds:targetIds}).catch(()=>{});
               view.platActionResult={done:true,count:completed,failed,dtCount:dtIds.length,progress};
             }
             render(s());
@@ -1494,8 +1527,12 @@ function bindEvents(){
         } else if(act==='ip-mod'){
           const ipBase=root.querySelector('[data-ip-base]')?.value||'';
           const ipStart=Number(root.querySelector('[data-ip-start]')?.value||20);
-          const r=await client.send('plat-ip-mod',{classroomId:crId,newIpBase:ipBase,startOctet:ipStart,terminalIds:selIds});
-          view.platActionResult={done:true,count:r.count};
+          const ipMask=root.querySelector('[data-ip-mask]')?.value||'255.255.255.0';
+          const ipGw=root.querySelector('[data-ip-gw]')?.value||'';
+          const ipDns=root.querySelector('[data-ip-dns]')?.value||'';
+          const r=await client.send('plat-ip-mod',{classroomId:crId,newIpBase:ipBase,startOctet:ipStart,subnetMask:ipMask,gateway:ipGw,dns:ipDns,terminalIds:selIds});
+          const ipResults=selIds.map((id,i)=>{const t=allTerms.find(tt=>tt.id===id);return{seat:t?.seat||'--',name:t?.name||'--',oldIp:t?.ip||'--',newIp:ipBase+'.'+(ipStart+i),ok:Math.random()>0.05};});
+          view.platActionResult={done:true,count:r.count,failed:ipResults.filter(r2=>!r2.ok).length,results:ipResults};
         } else if(act==='remote-test'){
           const r=await client.send('plat-remote-test',{classroomId:crId,terminalIds:selIds});
           view.platActionResult={results:r.results};
@@ -1503,11 +1540,22 @@ function bindEvents(){
           const r=await client.send('plat-broadcast-test',{classroomId:crId,classroomIds:view.broadcastCrs||[]});
           view.platActionResult={results:r.results,hasInterference:r.hasInterference};
         } else if(act==='block-internet'){
-          view.platActionResult={done:true,count:selIds.length};
+          view.platActionResult={done:true,count:selIds.length,results:mkResults(selIds)};
         } else if(act==='block-usb'){
-          view.platActionResult={done:true,count:selIds.length};
+          view.platActionResult={done:true,count:selIds.length,results:mkResults(selIds)};
         } else if(act==='hw-test'){
-          view.platActionResult={done:true,count:selIds.length,failed:Math.random()>0.7?1:0};
+          const hwChecked=view.hwTestChecked||{};
+          const testedKeys=Object.keys(hwChecked).filter(k=>hwChecked[k]);
+          const testedItems=[
+            {k:'hw-consistency',l:'硬件一致性'},{k:'smart',l:'SMART'},{k:'disk-io',l:'硬盘读写速度'},
+            {k:'memory',l:'内存'},{k:'multi-monitor',l:'显示器'},{k:'peripheral',l:'键鼠'}
+          ].filter(it=>testedKeys.includes(it.k));
+          const hwResults=selIds.map(id=>{const t=allTerms.find(tt=>tt.id===id);const allOk=Math.random()>0.15;
+            const r2={seat:t?.seat||'--',name:t?.name||'--',ok:allOk};
+            testedItems.forEach(it=>{r2[it.k]=allOk||Math.random()>0.2;if(!r2[it.k])r2.ok=false;});
+            return r2;});
+          const hwFailed=hwResults.filter(r2=>!r2.ok).length;
+          view.platActionResult={done:true,count:selIds.length,failed:hwFailed,results:hwResults,_testedItems:testedItems};
         } else if(act==='export-test-report'){
           /* simulated export */
         } else if(act==='import-list'){
@@ -1523,15 +1571,7 @@ function bindEvents(){
     });
   });
 
-  /* ── Distribute source/desktop selectors ── */
-  const distSrcEl=root.querySelector('[data-dist-src]');
-  if(distSrcEl){
-    distSrcEl.addEventListener('change',()=>{
-      view.distSrcId=distSrcEl.value||null;
-      view.distDtIds=[]; // reset desktop selection when source changes
-      render(s());
-    });
-  }
+  /* ── Distribute desktop selectors ── */
   root.querySelectorAll('[data-dist-dt-chk]').forEach(el=>{
     el.addEventListener('change',()=>{
       if(!view.distDtIds) view.distDtIds=[];
@@ -1546,6 +1586,15 @@ function bindEvents(){
     el.addEventListener('change',()=>{
       view.distMode=el.dataset.distMode;
       render(s());
+    });
+  });
+
+  /* ── Hardware test checkboxes (persist in view state) ── */
+  root.querySelectorAll('[data-hw-chk]').forEach(el=>{
+    el.addEventListener('change',()=>{
+      if(!view.hwTestChecked) view.hwTestChecked={};
+      view.hwTestChecked[el.dataset.hwChk]=el.checked;
+      /* Don't re-render — just update view state for the confirm handler */
     });
   });
 
@@ -1567,6 +1616,10 @@ function bindEvents(){
   if(ipStartEl){ ipStartEl.addEventListener('input',()=>{view.newIpStart=Number(ipStartEl.value); render(s());}); }
   const ipGwEl=root.querySelector('[data-ip-gw]');
   if(ipGwEl){ ipGwEl.addEventListener('input',()=>{view.newIpGw=ipGwEl.value;}); }
+  const ipMaskEl=root.querySelector('[data-ip-mask]');
+  if(ipMaskEl){ ipMaskEl.addEventListener('input',()=>{view.newIpMask=ipMaskEl.value; render(s());}); }
+  const ipDnsEl=root.querySelector('[data-ip-dns]');
+  if(ipDnsEl){ ipDnsEl.addEventListener('input',()=>{view.newIpDns=ipDnsEl.value;}); }
 
   /* ── Terminal selection (grid click + table checkbox) ── */
   root.querySelectorAll('[data-term-sel]').forEach(el=>{
@@ -1756,4 +1809,22 @@ function bindEvents(){
   if(impBuildingEl){ impBuildingEl.addEventListener('input',()=>{view.importCrBuilding=impBuildingEl.value;}); }
   const impRemarkEl=root.querySelector('[data-import-cr-remark]');
   if(impRemarkEl){ impRemarkEl.addEventListener('input',()=>{view.importCrRemark=impRemarkEl.value;}); }
+
+  /* ── Sortable data tables (result/progress tables) ── */
+  root.querySelectorAll('.plat-sortable th[data-sort]').forEach(th=>{
+    th.style.cursor='pointer'; th.style.userSelect='none'; th.style.position='relative';
+    th.addEventListener('click',()=>{
+      const table=th.closest('table'); if(!table) return;
+      const idx=[...th.parentElement.children].indexOf(th);
+      const tbody=table.querySelector('tbody'); if(!tbody) return;
+      const rows=[...tbody.querySelectorAll('tr')];
+      const cur=th.classList.contains('sort-asc')?'asc':th.classList.contains('sort-desc')?'desc':'none';
+      table.querySelectorAll('th[data-sort]').forEach(h2=>{h2.classList.remove('sort-asc','sort-desc');});
+      const next=cur==='none'?'desc':cur==='desc'?'asc':'none';
+      if(next!=='none') th.classList.add('sort-'+next);
+      if(next==='none'){ rows.sort((a,b)=>Number(a.dataset.origIdx||0)-Number(b.dataset.origIdx||0)); }
+      else { rows.sort((a,b)=>{ const va=(a.children[idx]?.textContent||'').trim(); const vb=(b.children[idx]?.textContent||'').trim(); const na=parseFloat(va),nb=parseFloat(vb); const cmp=(!isNaN(na)&&!isNaN(nb))?na-nb:va.localeCompare(vb,'zh'); return next==='asc'?cmp:-cmp; }); }
+      rows.forEach(r=>tbody.appendChild(r));
+    });
+  });
 }

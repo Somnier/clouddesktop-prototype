@@ -94,6 +94,11 @@ body { font-family: var(--font); color: var(--c-text); background: var(--c-bg); 
 .data-table tr:hover td { background: #f8f9fb; }
 .data-table .clickable { color: var(--c-brand); cursor: pointer; }
 .data-table .clickable:hover { text-decoration: underline; }
+/* sort indicator for sortable columns */
+.data-table th[data-sort] { position: relative; padding-right: 18px; }
+.data-table th[data-sort]::after { content: '↕'; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); opacity: .3; font-size: .7rem; }
+.data-table th[data-sort].sort-asc::after { content: '↑'; opacity: .8; }
+.data-table th[data-sort].sort-desc::after { content: '↓'; opacity: .8; }
 
 /* ── form inputs ── */
 input[type="text"], input[type="number"], select, textarea {

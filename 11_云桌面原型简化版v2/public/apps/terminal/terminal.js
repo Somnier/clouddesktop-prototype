@@ -59,7 +59,7 @@ function showExportDoneDialog(){
   const body=`<div style="margin-bottom:10px;font-size:.82rem;color:var(--t-text2)">以下桌面将导出到指定目录：</div>
 ${dtList}
 <div style="border-top:1px solid var(--t-border);margin-top:8px;padding-top:6px;font-size:.82rem;display:flex;justify-content:space-between"><strong>合计</strong><span>${dts.length} 个桌面 · ${totalSize} GB</span></div>
-<div style="margin-top:10px;padding:8px 12px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--t-accent)">D:\\CloudDesktop\\desktop-export-${new Date().toISOString().slice(0,10)}.cdpkg</div>`;
+<div style="margin-top:10px;padding:8px 12px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--t-accent)">E:\\desktop-export-${new Date().toISOString().slice(0,10)}.cdpkg</div>`;
   showTermConfirm('导出桌面',body,()=>{
     showTermAlert(`已导出 ${dts.length} 个桌面（共 ${totalSize} GB）`);
   },{danger:false});
@@ -227,11 +227,11 @@ function shellHtml(){
       <div class="status">
         <span class="dot ${m?.online?'dot-ok':'dot-err'}"></span><span class="status-label ${m?.online?'sol':'sol-err'}">${m?.online?'在线':'离线'}</span>
         <span class="sep">|</span>
-        <span>IP: <span class="mono">${m?.ip?esc(m.ip):'未配置'}</span></span>
+        <span>座位: ${esc(m?.seat||'--')}</span>
         <span class="sep">|</span>
         <span>机器名: ${esc(m?.name||'未命名')}</span>
         <span class="sep">|</span>
-        <span>座位: ${esc(m?.seat||'--')}</span>
+        <span>IP: <span class="mono">${m?.ip?esc(m.ip):'未配置'}</span></span>
         <span class="sep">|</span>
         <button class="btn-exit" data-act="exit-to-desktop">⏻ 退出</button>
       </div>
@@ -420,6 +420,11 @@ function localDesktopScreen(){
 
   <div class="page-scroll" style="padding-bottom:12px">
 
+  ${hasUnsync?`<div class="dt-unsync-banner">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span>有 ${desktops.filter(d=>!(d.uploaded||d.syncStatus==='synced')).length} 个桌面尚未同步到服务器，请尽快上传以避免数据丢失</span>
+  </div>`:''}
+
   <!-- Two-column: card grid + import (left) + pie chart (right) -->
   <div style="display:flex;gap:20px;align-items:flex-start">
     <!-- Desktop cards (left, two-column waterfall) -->
@@ -454,11 +459,14 @@ function localDesktopScreen(){
               ${isHidden?'<span class="pill muted pill-sm" style="opacity:.65">已隐藏</span>':''}
               ${isDefault?'<span class="pill info pill-sm" style="opacity:.55;font-size:.7rem">默认启动</span>':''}
             </div>
-            <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+            <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center">
               <button class="btn btn-sm btn-primary" data-dt-edit="${d.id}">编辑桌面</button>
-              ${!uploaded?`<button class="btn btn-sm btn-primary" style="font-weight:600" data-dt-upload="${d.id}">同步到服务器</button>`:''}
               <button class="btn btn-sm btn-ghost dt-overflow-btn" data-dt-overflow="${d.id}" style="margin-left:auto;padding:2px 8px">···</button>
             </div>
+            ${!uploaded?`<button class="dt-sync-btn" data-dt-upload="${d.id}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              同步到服务器
+            </button>`:''}
           </div>
           <div class="dt-overflow-menu" data-dt-menu="${d.id}">
             <button data-dt-copy="${d.id}">复制桌面</button>
@@ -517,7 +525,7 @@ function workbenchScreen(){
   const isBlank = c.stage==='blank'||c.stage==='bound';
   const d=demo().deployDraft||{};
   /* Default tab: if not takeover yet → layout, else → maint */
-  const defaultTab = (m.controlState!=='mother' || isBlank) ? 'layout' : 'maint';
+  const defaultTab = m.controlState!=='mother' ? 'layout' : 'maint';
   const wbTab = demo().flags?.wbTab || defaultTab;
   /* If a task is actively running (not completed), force maint tab */
   const activeTab = (tk && tk.phase!=='completed') ? 'maint' : wbTab;
@@ -533,7 +541,7 @@ function workbenchScreen(){
     <div class="section-title" style="margin:0">
       <button class="btn btn-ghost" data-act="go-home">←</button>
       ${esc(displayName)}
-      ${c.stage!=='blank'?'<span class="pill ok pill-sm" style="margin-left:6px">已设置布局</span>':''}
+      ${c.stage!=='blank'?'<span class="pill ok pill-sm" style="margin-left:6px">已设置布局</span>':'<span class="pill muted pill-sm" style="margin-left:6px">未设置布局</span>'}
       <span style="font-size:.78rem;color:var(--t-text2);margin-left:8px">${rt.online}/${rt.total} 在线</span>
     </div>
   </div>
@@ -543,7 +551,7 @@ function workbenchScreen(){
     <span style="width:1px;height:20px;background:var(--t-border);margin:0 8px"></span>
     <button class="btn btn-danger" ${isRunning?'disabled':''} data-act="end-management">结束管理</button>
   </div>
-  <div style="min-height:24px;margin-bottom:8px;font-size:.72rem;color:var(--t-text3)">${isBlank&&!isTakenOver?'请先确认接管教室后使用教室维护':''}</div>
+  <div style="min-height:24px;margin-bottom:8px;font-size:.72rem;color:var(--t-text3)">${isBlank&&!isTakenOver?'请先完成布局后使用教室维护':''}</div>
   ${activeTab==='maint' ? wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning) : wbLayoutContent(terms, rt, c, m, d)}
 </div>`;
 }
@@ -626,7 +634,7 @@ function wbLayoutContent(terms, rt, c, m, d){
         <div class="card-header">❷ 网络配置</div>
         <div class="prep-field"><label>服务器地址</label><input type="text" id="layout-srv" value="${esc(m.serverAddr||'')}" placeholder="server.edu.cn"></div>
         <div class="prep-field"><label>IP 前缀</label><input type="text" data-rule="ipBase" value="${esc(r.ipBase||'')}" placeholder="10.21.31"></div>
-        <div class="prep-field"><label>起始编号</label><input type="number" data-rule="ipStart" value="${r.ipStart||20}" min="1" max="254"></div>
+        <div class="prep-field"><label>IP 起始编号</label><input type="number" data-rule="ipStart" value="${r.ipStart||20}" min="1" max="254"></div>
         <div class="prep-field"><label>子网掩码</label><input type="text" id="layout-mask" value="${esc(m.subnetMask||'')}" placeholder="255.255.255.0"></div>
         <div class="prep-field"><label>网关</label><input type="text" id="layout-gw" value="${esc(m.gateway||'')}" placeholder="10.x.x.1"></div>
         <div class="prep-field"><label>DNS</label><input type="text" id="layout-dns" value="${esc((m.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
@@ -730,11 +738,11 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         <div class="card-header">本次修改内容</div>
         <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(md.newServerAddr||c.serverAddress||m.serverAddr||'')}" placeholder="server.edu.cn"></div>
         <div class="prep-field"><label>新 IP 前缀</label><input type="text" id="mip-base" value="${esc(md.newIpBase||r.ipBase||c.networkBase||'')}" placeholder="10.21.31"></div>
-        <div class="prep-field"><label>新起始编号</label><input type="number" id="mip-start" value="${md.newIpStart||r.ipStart||20}" min="1" max="254"></div>
+        <div class="prep-field"><label>新 IP 起始编号</label><input type="number" id="mip-start" value="${md.newIpStart||r.ipStart||20}" min="1" max="254"></div>
         <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(md.newSubnetMask||m.subnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
         <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(md.newGateway||m.gateway||c.gateway||'')}" placeholder="10.x.x.1"></div>
         <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(md.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
-        <div style="font-size:.7rem;color:var(--t-text3);margin-top:4px">在右侧选择终端后点击下方执行按钮</div>
+        <div style="font-size:.7rem;color:var(--t-text3);margin-top:4px">点击右侧座位卡片选择/取消选择终端，然后执行修改</div>
       </div>
       <div class="card"${isRunning?' style="opacity:.6;pointer-events:none"':''}>
         <div class="card-header">上次执行结果</div>
@@ -753,8 +761,8 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         <div style="font-weight:600;color:${done?'var(--t-ok)':'var(--t-accent)'}">${done?'✓ 任务完成':'⏳ 任务执行中 — 功能切换已锁定'}</div>
         <div style="margin-top:4px">成功 ${tk.counts.completed||0} · 失败 ${tk.counts.failed||0} · 排队 ${tk.counts.queued||0} / 共 ${tk.counts.total||0}</div>
       </div>`:`<div style="padding:8px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.78rem;color:var(--t-text2)">
-        ${opsMode==='deploy'?'点击网格方块选择/取消选择终端':
-          opsMode==='maint-ip'?'点击方块选择/取消选择终端':
+        ${opsMode==='deploy'?'点击下方座位卡片选择/取消选择终端':
+          opsMode==='maint-ip'?'点击下方座位卡片选择/取消选择终端':
           '请从左侧选择功能'}
       </div>`}
       <div class="page-scroll" style="flex:1;min-height:0">
@@ -1156,7 +1164,7 @@ function deployGridScreen(){
       <div class="prep-group mb-8">
         <h4>IP 分配</h4>
         <div class="prep-field"><label>IP 前缀</label><input type="text" data-rule="ipBase" value="${esc(r.ipBase||'')}" placeholder="10.21.31"></div>
-        <div class="prep-field"><label>起始编号</label><input type="number" data-rule="ipStart" value="${r.ipStart||20}" min="1" max="254"></div>
+        <div class="prep-field"><label>IP 起始编号</label><input type="number" data-rule="ipStart" value="${r.ipStart||20}" min="1" max="254"></div>
       </div>
       <div class="prep-group mb-8">
         <h4>网格布局</h4>
@@ -1442,7 +1450,7 @@ function maintIpScreen(){
       <div class="card mb-16" style="max-width:480px">
         <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(d.newServerAddr||c.serverAddress||m.serverAddr||'')}" placeholder="server.edu.cn"></div>
         <div class="prep-field"><label>新 IP 前缀</label><input type="text" id="mip-base" value="${esc(d.newIpBase||c.networkBase||'')}" placeholder="10.21.31"></div>
-        <div class="prep-field"><label>IP 起始编号</label><input type="number" id="mip-start" value="${d.newIpStart||20}" min="1" max="254"></div>
+        <div class="prep-field"><label>新 IP 起始编号</label><input type="number" id="mip-start" value="${d.newIpStart||20}" min="1" max="254"></div>
         <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(d.newSubnetMask||m.subnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
         <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(d.newGateway||m.gateway||c.gateway||'')}" placeholder="10.x.x.1"></div>
         <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(d.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
@@ -1451,7 +1459,7 @@ function maintIpScreen(){
     </div>
     <div>
       <div class="section-title" style="font-size:.9rem">终端选择 · ${d.scope.length} 台
-        <span style="font-size:.75rem;color:var(--t-text2);margin-left:8px">点击方块可切换选中</span></div>
+        <span style="font-size:.75rem;color:var(--t-text2);margin-left:8px">点击卡片选择/取消选择终端</span></div>
       <div style="display:flex;gap:8px;margin-bottom:10px">
         <button class="btn btn-secondary" data-maint-all>全选在线</button>
         <button class="btn btn-secondary" data-maint-clear>清空</button>
@@ -1667,28 +1675,61 @@ function desktopEditorScreen(){
 }
 
 function exportScreen(){
-  const m=mt(); const c=cr(); const terms=termsInCr(s(), c.id);
-  const incomplete = terms.filter(t=>!t.name||!t.ip);
+  const m=mt(); const c=cr(); const st=s();
+  const terms=termsInCr(st, c.id);
+  /* Derive terminal info from layout rules + bindings if actual terminal data is empty */
+  const d=demo().deployDraft||{};
+  const r=d.rules||{};
+  const grid=d.grid||{rows:c.rows||7,cols:c.cols||6,blocks:[]};
+  const bindings=d.bindings||{};
+  const hasRules = !!(r.ipBase && r.namePrefix);
+  const pfx = r.namePrefix || '';
+  const assignable = grid.blocks.filter(b=>b.state!=='deleted').sort((a,b)=>{
+    const sa=seatLabel(a.row,a.col,r), sb=seatLabel(b.row,b.col,r);
+    return sa.localeCompare(sb);
+  });
+  let ipNum = r.ipStart || 20;
+  const blockAssignMap = {};
+  if(hasRules){
+    assignable.forEach(b=>{
+      const seat = seatLabel(b.row, b.col, r);
+      blockAssignMap[b.idx] = { seat, ip:(r.ipBase)+'.'+ipNum, name:pfx+'-'+seat };
+      ipNum++;
+    });
+  }
+  /* Enrich terminal display data: if terminal has no name/ip, look it up from layout bindings */
+  const enriched = terms.map(t=>{
+    if(t.name && t.ip) return t;
+    /* Try to find this terminal in bindings */
+    for(const [idx, binding] of Object.entries(bindings)){
+      if(binding.terminalId===t.id && blockAssignMap[idx]){
+        const asgn = blockAssignMap[idx];
+        return {...t, name:t.name||asgn.name, ip:t.ip||asgn.ip, seat:t.seat||asgn.seat};
+      }
+    }
+    return t;
+  });
+  const incomplete = enriched.filter(t=>!t.name||!t.ip);
   const exportName = demo().flags?.exportCrName || c.name;
   const exportRemark = demo().flags?.exportCrRemark || '';
   return `<div class="page">
   <div class="section-title"><button class="btn btn-ghost" data-act="return-workbench">←</button> 导出教室终端清单</div>
   <div class="page-scroll">
-  <div class="section-sub">导出 Excel 文件，包含教室内所有终端的座位、机器名、IP 等信息。修改教室名称仅影响导出文件，不影响系统内信息。</div>
+  <div class="section-sub">导出 Excel 文件，包含教室内所有终端的座位、机器名、IP 等信息。</div>
   ${incomplete.length?`<div class="card" style="border-color:var(--t-warn);margin-bottom:16px">
     <div style="font-size:.85rem;color:var(--t-warn)">提示：有 ${incomplete.length} 台终端信息不完整（缺少机器名或 IP），导出内容可能不全。</div>
   </div>`:''}
   <div class="card" style="margin-bottom:16px">
     <div class="card-header">导出选项</div>
     <div class="prep-field"><label>教室名称</label><input type="text" id="export-cr-name" value="${esc(exportName)}" placeholder="导出时使用的教室名称"></div>
-    <div style="font-size:.7rem;color:var(--t-text3);margin-top:2px;padding-left:92px">此名称将作为平台导入时生成的教室名称</div>
     <div class="prep-field"><label>教室备注 <span style="font-size:.68rem;color:var(--t-text3);font-weight:normal">可选</span></label><input type="text" id="export-cr-remark" value="${esc(exportRemark)}" placeholder="填写备注信息"></div>
+    <div style="font-size:.72rem;color:var(--t-text3);margin-top:6px">教室名称将作为平台导入时生成的教室名称，修改仅影响导出文件，不影响系统内信息。</div>
   </div>
   <div class="card" style="margin-bottom:16px;padding:0">
-    <div class="card-header" style="padding:12px 14px 8px">终端列表（共 ${terms.length} 台）</div>
+    <div class="card-header" style="padding:12px 14px 8px">终端列表（共 ${enriched.length} 台）</div>
     <table class="data-table" style="font-size:.8rem;white-space:nowrap">
       <thead><tr><th data-sort>#</th><th data-sort>座位</th><th data-sort>机器名</th><th data-sort>IP</th><th data-sort>MAC</th><th data-sort>硬盘序列号</th></tr></thead>
-      <tbody>${terms.map((t,i)=>`<tr class="${(!t.name||!t.ip)?'conflict':''}">
+      <tbody>${enriched.map((t,i)=>`<tr class="${(!t.name||!t.ip)?'conflict':''}">
         <td>${i+1}</td>
         <td>${esc(t.seat||'--')}</td><td>${esc(t.name||'--')}</td>
         <td class="mono">${esc(t.ip||'--')}</td>
@@ -1729,7 +1770,7 @@ function bindAll(){
           act('confirm-takeover',nm?{classroomName:nm.value}:{});
           setTimeout(()=>{
             act('deploy-bind-all-terminals');
-            setTimeout(()=>act('set-flag',{wbTab:'maint', layoutRescan:false, opsMode:'deploy'}), 50);
+            setTimeout(()=>act('set-flag',{wbTab:'maint', layoutRescan:false, layoutSnapshot:null, gridBackup:null, opsMode:'deploy'}), 50);
           }, 100);
         }, 80);
       } else if(a==='confirm-takeover'){
@@ -1763,7 +1804,7 @@ function bindAll(){
         if(window.electronAPI?.isElectron){
           window.electronAPI.showSaveDialog({
             title:'选择导出目录',
-            defaultPath:'D:\\CloudDesktop\\'+fileName,
+            defaultPath:'E:\\'+fileName,
             filters:[{name:'Excel 文件',extensions:['xlsx']},{name:'所有文件',extensions:['*']}]
           }).then(result=>{
             if(!result.canceled && result.filePath){
@@ -1771,9 +1812,9 @@ function bindAll(){
             }
           });
         } else {
-          const defaultPath='D:\\\\CloudDesktop\\\\'+fileName;
-          showTermConfirm('选择导出目录',
-            '将通过系统"另存为"对话框选择导出目录。<br>默认路径：<span style="font-family:monospace;font-size:.85rem;color:var(--t-accent)">'+esc(defaultPath)+'</span><br><br>点击确认模拟导出。',
+          const defaultPath='E:\\\\'+fileName;
+          showTermConfirm('导出教室终端清单',
+            '将导出 Excel 清单到 U 盘。<br>默认路径：<span style="font-family:monospace;font-size:.85rem;color:var(--t-accent)">'+esc(defaultPath)+'</span><br><br>点击确认模拟导出。',
             ()=>{ showTermAlert('终端清单已导出到：\n'+defaultPath); },
             {danger:false});
         }

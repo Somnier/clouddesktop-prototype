@@ -365,6 +365,13 @@ function genMac(prefix, idx){
   const hash = (prefix+idx).split('').reduce((a,c)=>((a<<5)-a)+c.charCodeAt(0),0);
   return '5c:7a:'+h((hash>>24)&0xff)+':'+h((hash>>16)&0xff)+':'+h((hash>>8)&0xff)+':'+h(hash&0xff);
 }
+/* Seat label from grid coordinates (mirrors client-side seatLabel) */
+function _seatLabel(row, col, startLetterCode, flow){
+  let letter, num;
+  if(flow==='col'){ letter=String.fromCharCode(startLetterCode+col); num=row+1; }
+  else { letter=String.fromCharCode(startLetterCode+row); num=col+1; }
+  return letter+String(num).padStart(2,'0');
+}
 function genSeat(sc, idx){
   if(idx===0) return 'T01';
   const adjustedIdx = idx - 1;
@@ -751,7 +758,7 @@ function act(action, payload={}){
       otherGroups,
       scanInfo,
       classroomName:cr.stage==='blank'?'未命名教室-'+new Date().toLocaleDateString('zh-CN')+' '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}):cr.name,
-      confirmed:false};
+      confirmed: mt.controlState==='mother'};
     return {ok:true};
   }
   case 'confirm-takeover':{
@@ -1223,6 +1230,7 @@ function act(action, payload={}){
   case 'deploy-bind-all-terminals':{
     const grid = demo.deployDraft.grid;
     const bindings = demo.deployDraft.bindings;
+    const r = demo.deployDraft.rules;
     const activeBlocks = grid.blocks.filter(b=>b.state==='active').sort((a,b)=>a.idx-b.idx);
     /* Pin mother to first active block */
     if(activeBlocks.length>0 && !bindings[activeBlocks[0].idx]){
@@ -1237,6 +1245,36 @@ function act(action, payload={}){
       if(ai>=available.length) break;
       bindings[b.idx]={terminalId:available[ai].id, mac:available[ai].mac};
       ai++;
+    }
+    /* Pre-fill terminal name/seat/ip from layout rules so data is consistent before deployment */
+    if(r && r.ipBase && r.namePrefix){
+      const pfx = r.namePrefix;
+      const startLetter = (r.startLetter||'A').charCodeAt(0);
+      const flow = r.seatFlow||'col';
+      const assignable = grid.blocks.filter(b=>b.state!=='deleted').sort((a,b)=>{
+        const seatA=_seatLabel(a.row,a.col,startLetter,flow), seatB=_seatLabel(b.row,b.col,startLetter,flow);
+        return seatA.localeCompare(seatB);
+      });
+      let ipN = r.ipStart||20;
+      for(const b of assignable){
+        const seat = _seatLabel(b.row, b.col, startLetter, flow);
+        const ip = r.ipBase+'.'+ipN;
+        const name = pfx+'-'+seat;
+        ipN++;
+        const binding = bindings[b.idx];
+        if(!binding) continue;
+        const t = termById(binding.terminalId);
+        if(!t) continue;
+        /* Only fill in if not already set (don't overwrite deployed data) */
+        if(!t.seat) t.seat = seat;
+        if(!t.name) t.name = name;
+        if(!t.ip) t.ip = ip;
+        if(!t.use || t.use==='未设定') t.use = (binding.terminalId===mt.id) ? '教师终端' : (r.defaultUse||'学生终端');
+        if(!t.subnetMask) t.subnetMask = mt.subnetMask||'255.255.255.0';
+        if(!t.gateway) t.gateway = mt.gateway||cr.gateway||'';
+        if(!t.dns || !t.dns.length) t.dns = mt.dns||cr.dns||[];
+        if(!t.serverAddr) t.serverAddr = mt.serverAddr||cr.serverAddress||'';
+      }
     }
     return {ok:true};
   }
