@@ -691,9 +691,9 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
           <button class="maint-tab-btn ${opsMode==='maint-ip'?'active':''}" ${isRunning?'disabled':''} data-act="ops-mode-maint-ip" style="flex:1">修改 IP / 服务器地址</button>
         </div>
       </div>
-      ${opsMode==='deploy'||tk?`<div class="card">
+      ${opsMode==='deploy'&&!isRunning?`<div class="card">
         <div class="card-header">设置部署参数</div>
-        <div class="prep-field"><label>部署模式</label><select id="deploy-mode-sel" ${isRunning?'disabled':''}>
+        <div class="prep-field"><label>部署模式</label><select id="deploy-mode-sel">
           <option value="incremental" ${(d.deployMode||'incremental')==='incremental'?'selected':''}>增量更新</option>
           <option value="full" ${d.deployMode==='full'?'selected':''}>全量部署</option>
         </select></div>

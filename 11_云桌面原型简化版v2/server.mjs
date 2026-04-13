@@ -1683,7 +1683,7 @@ function tickTasks(){
         cr.stage='deployed'; cr.memberMacs=termsInCr(cr.id).map(t=>t.mac);
         /* Save last task result for viewing history */
         state.demo.flags.lastTaskResult = { completed:task.counts.completed, failed:task.counts.failed, total:task.counts.total, type:task.type, label:task.label, at:now(), _task:task };
-        state.demo.flags.viewLastResult = false;
+        state.demo.flags.viewLastResult = true;
         if(state.demo.motherScreen==='workbench'){
           /* Auto-switch to maint tab after deployment completes */
           state.demo.flags.wbTab='maint';
