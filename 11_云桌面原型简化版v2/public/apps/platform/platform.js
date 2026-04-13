@@ -327,10 +327,13 @@ function dashboardPage(){
   const memColor=(server?.memory||0)>80?'#ef4444':(server?.memory||0)>60?'#f59e0b':'#3b82f6';
   const stoColor=stoPct>85?'#ef4444':stoPct>70?'#f59e0b':'#3b82f6';
 
+  /* Classrooms that are deployed on server — used for both metric card and health section */
+  const activeCrs=crsInCampus.filter(c=>c.stage==='deployed');
+
   return `
   <div class="metric-grid">
-    <div class="metric-card"><div class="mc-label">教室</div><div class="mc-value">${stats.classrooms}</div>
-      <div class="mc-sub">${esc(campus?.name||'')}${(()=>{const w=crsInCampus.filter(c2=>healthScore(state,c2.id)<80&&c2.stage==='deployed').length;return w?` · ${w} 间需关注`:(crsInCampus.some(c2=>c2.stage==='deployed')?' · 全部正常':'');})()}</div></div>
+    <div class="metric-card"><div class="mc-label">教室</div><div class="mc-value">${activeCrs.length}</div>
+      <div class="mc-sub">${esc(campus?.name||'')}${(()=>{const w=activeCrs.filter(c2=>healthScore(state,c2.id)<80).length;return w?` · ${w} 间需关注`:(activeCrs.length?' · 全部正常':'');})()}</div></div>
     <div class="metric-card"><div class="mc-label">终端 / 在线</div><div class="mc-value">${stats.terminals} <span style="font-size:.7em;color:var(--c-text3)">/</span> ${stats.online}</div>
       <div class="mc-sub">在线率 ${pct(stats.online,stats.terminals)}%</div></div>
     <div class="metric-card"><div class="mc-label">桌面资产</div><div class="mc-value">${totalDesktops}</div>
@@ -376,9 +379,8 @@ function dashboardPage(){
   <div class="section">
     <div class="section-head"><h3>教室健康度</h3></div>
     ${(()=>{
-      const deployed=crsInCampus.filter(c=>c.stage==='deployed');
-      const scored=deployed.map(c=>({c,hs:healthScore(state,c.id),alerts:alertsInCr(state,c.id)})).sort((a,b)=>a.hs-b.hs);
-      if(!scored.length) return '<div style="font-size:.85rem;color:var(--c-text3)">暂无已部署教室</div>';
+      const scored=activeCrs.map(c=>({c,hs:healthScore(state,c.id),alerts:alertsInCr(state,c.id)})).sort((a,b)=>a.hs-b.hs);
+      if(!scored.length) return '<div style="font-size:.85rem;color:var(--c-text3)">暂无教室</div>';
       const allHealthy = scored.every(x=>x.hs>=80);
       return `${allHealthy?'<div style="padding:12px 16px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:8px;margin-bottom:12px;font-size:.88rem;color:var(--c-ok);font-weight:500">所有教室运行正常</div>':''}
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
@@ -447,7 +449,7 @@ function classroomListPage(){
           ?'background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2)'
           :'background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2)'}">
           ${matchedCr
-            ?`匹配到已有教室 <strong>${esc(matchedCr.name)}</strong>（${esc(matchedCr.building||'')} ${esc(matchedCr.floor||'')}），终端将追加到该教室。`
+            ?`匹配到已有教室 <strong>${esc(matchedCr.name)}</strong> (${esc(matchedCr.building||'')} ${esc(matchedCr.floor||'')})，终端将追加到该教室。`
             :(importName
               ?`未找到名为「${esc(importName)}」的教室，将<strong>自动新建</strong>。`
               :'请输入教室名称以进行匹配。')}
@@ -560,7 +562,7 @@ function crTerminalsTab(c,terms){
     </div>
     <div class="batch-sel-summary">
       ${sel.length > 0
-        ? `已选 <strong>${sel.length}</strong> 台${selOnline.length!==sel.length ? `（在线 ${selOnline.length}）` : ''}`
+        ? `已选 <strong>${sel.length}</strong> 台${selOnline.length!==sel.length ? ` (在线 ${selOnline.length})` : ''}`
         : `<span style="color:var(--c-text3)">点击下方终端进行选择</span>`}
       ${uses.length>1?`<span style="position:relative;display:inline-block"><a class="batch-sel-link" data-sel-use-toggle>按用途 ▾</a>${view.showUseDropdown?`<div style="position:absolute;left:0;top:100%;background:#fff;border:1px solid var(--c-border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:100;min-width:130px;padding:4px 0;margin-top:2px">${uses.map(u=>`<div class="batch-sel-link" data-sel-use="${esc(u)}" style="display:block;padding:6px 14px;cursor:pointer;font-size:.82rem;white-space:nowrap">${esc(u)}</div>`).join('')}</div>`:''}</span>`
       :(uses.length===1?`<a class="batch-sel-link" data-sel-use="${esc(uses[0])}">选${esc(uses[0])}</a>`:'')}
@@ -716,7 +718,7 @@ function platActionPanel(pa, par, c, terms){
       </div>
 
       <div>
-        <div style="font-size:.82rem;font-weight:600;margin-bottom:6px">选择要部署的桌面（可多选）</div>
+        <div style="font-size:.82rem;font-weight:600;margin-bottom:6px">选择要部署的桌面 (可多选)</div>
         ${catalog.length?`<div style="display:flex;flex-direction:column;gap:4px">
           ${catalog.map(d=>{
             const chk=selDts.includes(d.id);
@@ -735,8 +737,8 @@ function platActionPanel(pa, par, c, terms){
       <div style="margin-top:12px;padding:10px 14px;background:var(--c-bg2);border-radius:6px">
         <div style="font-size:.82rem;font-weight:600;margin-bottom:6px">部署模式</div>
         <div style="display:flex;gap:16px;font-size:.82rem">
-          <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="distMode" data-dist-mode="incremental"${(view.distMode||'incremental')==='incremental'?' checked':''}> 增量更新（仅同步差异，更快）</label>
-          <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="distMode" data-dist-mode="full"${view.distMode==='full'?' checked':''}> 全量部署（完整覆盖，更可靠）</label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="distMode" data-dist-mode="incremental"${(view.distMode||'incremental')==='incremental'?' checked':''}> 增量更新 (仅同步差异，更快)</label>
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="distMode" data-dist-mode="full"${view.distMode==='full'?' checked':''}> 全量部署 (完整覆盖，更可靠)</label>
         </div>
       </div>` : ''}
 
@@ -846,7 +848,7 @@ function platActionPanel(pa, par, c, terms){
         禁止USB存储设备
       </div>
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:10px">
-        对选中的 <strong>${selTerms.length}</strong> 台在线终端禁止 USB 存储设备（U盘、移动硬盘等），不影响 USB 键鼠。
+        对选中的 <strong>${selTerms.length}</strong> 台在线终端禁止 USB 存储设备 (U盘、移动硬盘等)，不影响 USB 键鼠。
       </div>
       ${par?.done?`<div style="padding:8px 12px;background:rgba(34,197,94,.06);border-radius:6px;margin-bottom:10px">
         <span class="text-ok" style="font-size:.85rem">✓ 已对 ${par.count} 台终端禁止 USB 存储</span>
@@ -999,15 +1001,22 @@ function alertHtml(a, showNav){
   const t=getTerm(s(),a.terminalId);
   const c=showNav?getClassroom(s(),a.classroomId):null;
   const levelLabel={high:'高',medium:'中',low:'低'};
-  return `<div class="alert-row ${a.level}">
-    <div style="display:flex;align-items:baseline;gap:6px;flex:1;min-width:0;flex-wrap:wrap">
+  /* Source line: classroom + terminal as distinct clickable chips */
+  let sourceLine='';
+  if(c||t){
+    const parts=[];
+    if(c) parts.push(`<a class="clickable" data-nav-cr-tab="${c.id}" data-tab-target="alerts" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;background:rgba(59,130,246,.08);color:var(--c-brand);font-size:.78rem;font-weight:500;text-decoration:none;border:1px solid rgba(59,130,246,.15)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>${esc(c.name)}</a>`);
+    if(t&&t.seat) parts.push(`<a class="clickable" data-nav-term="${t.id}" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,.08);color:#6366f1;font-size:.78rem;font-weight:500;text-decoration:none;border:1px solid rgba(99,102,241,.15)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>座位 ${esc(t.seat)}</a>`);
+    sourceLine=`<div style="display:flex;align-items:center;gap:6px;margin-top:4px">${parts.join('<span style="color:var(--c-text3);font-size:.7rem">›</span>')}</div>`;
+  }
+  return `<div class="alert-row ${a.level}" style="flex-direction:column;align-items:stretch;gap:4px">
+    <div style="display:flex;align-items:center;gap:6px">
       <span>${pill(levelLabel[a.level]||a.level,a.level==='high'?'err':a.level==='medium'?'warn':'muted')}</span>
-      <strong style="font-size:.88rem">${esc(a.title)}</strong>
-      <span style="font-size:.82rem;color:var(--c-text2)">${esc(a.detail)}</span>
-      ${c?`<a class="clickable" data-nav-cr-tab="${c.id}" data-tab-target="alerts" style="cursor:pointer;color:var(--c-brand);font-size:.8rem">${esc(c.name)}</a>`:''}
-      ${t&&t.seat?`<a class="clickable" data-nav-term="${t.id}" style="cursor:pointer;color:var(--c-brand);font-size:.8rem">${esc(t.seat)}</a>`:''}
+      <strong style="font-size:.88rem;flex:1">${esc(a.title)}</strong>
+      <span class="al-time">${relTime(a.at)}</span>
     </div>
-    <div class="al-time">${relTime(a.at)}</div>
+    <div style="font-size:.82rem;color:var(--c-text2);padding-left:2px">${esc(a.detail)}</div>
+    ${sourceLine}
   </div>`;
 }
 
@@ -1131,12 +1140,12 @@ function terminalDetailPage(){
           </div>
           <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">
             <span style="font-weight:600;font-size:.88rem">${dtSize} GB</span>
+            ${dataDisks.length?`<span style="display:inline-block;width:1px;height:12px;background:var(--c-border);margin:0 2px"></span><span style="font-size:.78rem;color:var(--c-text2)">${dataDisks.map(dd=>`数据盘 ${esc(dd.drive||'D:')} ${esc(dd.size||'')}`).join(' · ')}</span>`
+              :(d.dataDisk?`<span style="display:inline-block;width:1px;height:12px;background:var(--c-border);margin:0 2px"></span><span style="font-size:.78rem;color:var(--c-text2)">数据盘 ${esc(d.dataDisk)}</span>`
+              :'')}
             <span style="display:inline-block;width:1px;height:12px;background:var(--c-border);margin:0 2px"></span>
-            <span style="font-size:.78rem;color:var(--c-text2)">${isPhysical?'物理部署（独立分区）':'虚拟部署（VHD）'}</span>
+            <span style="font-size:.78rem;color:var(--c-text2)">${isPhysical?'物理部署 (独立分区)':'虚拟部署 (VHD)'}</span>
           </div>
-          ${dataDisks.length?`<div style="font-size:.78rem;color:var(--c-text2);margin-bottom:6px">${dataDisks.map(dd=>`数据盘 ${esc(dd.drive||'D:')} ${esc(dd.size||'')}`).join(' · ')}</div>`
-            :(d.dataDisk?`<div style="font-size:.78rem;color:var(--c-text2);margin-bottom:6px">数据盘 ${esc(d.dataDisk)}</div>`
-            :`<div style="font-size:.78rem;color:var(--c-text3);margin-bottom:6px">无数据盘</div>`)}
           <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
             ${isDefault?pill('默认启动','info'):''}
             ${!uploaded?pill('未同步','err'):''}
@@ -1246,12 +1255,12 @@ function assetsPage(){
               ${pill(g.classroomCount+' 教室引用','muted')}
               ${unreferenced?`<span style="font-size:.78rem;color:var(--c-warn);font-weight:500">空闲</span>`:''}
             </div>
-            <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.85rem;color:var(--c-text2);margin-bottom:4px">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.85rem;color:var(--c-text2);margin-bottom:4px;align-items:center">
               ${g.entries.map(e=>`<a class="clickable" data-nav-cr="${e.classroomId}" style="cursor:pointer;color:var(--c-brand);font-size:.82rem">${esc(e.classroomName)}</a>`).join('<span style="color:var(--c-text3)">·</span>')}
+              <span style="display:inline-block;width:1px;height:14px;background:var(--c-border)"></span>
+              <span style="font-size:.82rem;color:var(--c-text2)">终端引用：<strong>${g.totalTerms}</strong> 台</span>
             </div>
             <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:.85rem;color:var(--c-text2)">
-              <span>终端引用：<strong>${g.totalTerms}</strong> 台</span>
-              <span style="display:inline-block;width:1px;height:14px;background:var(--c-border)"></span>
               <span style="font-weight:600">${g.diskSize||'--'} GB</span>
               ${g.dataDisk?`<span style="display:inline-block;width:1px;height:14px;background:var(--c-border)"></span><span>数据盘：${esc(g.dataDisk)}</span>`:''}
             </div>
@@ -1356,9 +1365,9 @@ function serverChangePage(){
       <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:16px">
         <strong>变更流程说明：</strong>
         <ol style="margin:8px 0;padding-left:20px;font-size:.85rem;line-height:1.8">
-          <li>输入新服务器地址（IP 或域名）</li>
+          <li>输入新服务器地址 (IP 或域名)</li>
           <li>系统向所有<strong>在线终端</strong>推送地址变更指令，在线终端自动更新本地配置</li>
-          <li>物理修改服务器网络 / 重新签发 SSL 证书（如启用 HTTPS）</li>
+          <li>物理修改服务器网络 / 重新签发 SSL 证书 (如启用 HTTPS)</li>
           <li><strong>离线终端</strong>需工程师到现场，通过终端侧"网络与服务器"页面手动修改，或由母机在教室维护流程中批量修改</li>
         </ol>
       </div>

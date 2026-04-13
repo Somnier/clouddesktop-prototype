@@ -80,7 +80,7 @@ function page(){
         <button class="dir-btn" data-act="all-online" title="所有终端上线">全员上线</button>
         <button class="dir-btn" data-act="randomize-metrics" title="随机化终端指标">随机化指标</button>
       </div>
-      <p style="margin-top:8px">⚠ 重置将丢弃全部会话修改，恢复 seed.json 原始状态。四端（导演台、母机、受控、平台）共享同一 JSON 状态源，实时同步。</p>
+      <p style="margin-top:8px">⚠ 重置将丢弃全部会话修改，恢复 seed.json 原始状态。四端 (导演台、母机、受控、平台)共享同一 JSON 状态源，实时同步。</p>
     </div>
 
     <!-- ═══ 各教室数据速查 ═══ -->
@@ -148,7 +148,7 @@ function page(){
 
     <!-- ═══ 测试流程：教室接管与部署 ═══ -->
     <div class="dir-card">
-      <h3>测试流程 B：网络同传（教室接管 → 布局 → 维护）</h3>
+      <h3>测试流程 B：网络同传 (教室接管 → 布局 → 维护)</h3>
       <p>首页 → 网络同传 → 设置布局(接管+网格) → 教室维护(部署/IP修改) → 释放管理</p>
       <div class="dir-btn-group">
         <button class="dir-btn" data-act="go-home">首页</button>
@@ -176,7 +176,7 @@ function page(){
 
     <!-- ═══ 测试流程：独立部署向导 ═══ -->
     <div class="dir-card">
-      <h3>测试流程 C：独立部署向导（4步）</h3>
+      <h3>测试流程 C：独立部署向导 (4步)</h3>
       <p>需已接管教室。工作台 → 进入部署 → 4步完成</p>
       <div class="dir-btn-group">
         <button class="dir-btn" data-act="open-deployment">进入部署向导</button>
@@ -186,7 +186,7 @@ function page(){
         <button class="dir-btn" data-deploy-step="3">步骤3:部署传输</button>
         <button class="dir-btn" data-act="start-deployment">启动分发</button>
       </div>
-      <h4>教室维护（独立页面）</h4>
+      <h4>教室维护 (独立页面)</h4>
       <div class="dir-btn-group">
         <button class="dir-btn" data-act="open-maint-ip">IP/服务器修改</button>
       </div>

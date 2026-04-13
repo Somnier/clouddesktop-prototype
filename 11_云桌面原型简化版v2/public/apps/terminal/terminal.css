@@ -77,21 +77,16 @@
 .dt-card.dt-unsync { border-color: var(--t-err) !important; background: var(--t-err-bg) !important; }
 .dt-card.dt-unsync .dt-name { color: var(--t-err); }
 
-/* ── sync-to-server CTA button (prominent, pulsing) ── */
+/* ── sync-to-server CTA button (inline, red, same size as 编辑桌面) ── */
 .dt-sync-btn {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  width: 100%; margin-top: 10px; padding: 8px 0;
-  font-size: .85rem; font-weight: 700; font-family: inherit; letter-spacing: .03em;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px;
+  font-size: .78rem; font-weight: 600; font-family: inherit;
   color: #fff; background: var(--t-err); border: none; border-radius: var(--radius);
   cursor: pointer; transition: background .15s, box-shadow .15s;
-  animation: dt-sync-pulse 2s ease-in-out infinite;
 }
-.dt-sync-btn:hover { background: #d32f2f; box-shadow: 0 0 12px rgba(244,67,54,.45); animation: none; }
+.dt-sync-btn:hover { background: #d32f2f; box-shadow: 0 0 8px rgba(244,67,54,.35); }
 .dt-sync-btn:active { background: #c62828; }
-@keyframes dt-sync-pulse {
-  0%,100% { box-shadow: 0 0 0 0 rgba(244,67,54,.4); }
-  50%     { box-shadow: 0 0 0 6px rgba(244,67,54,0); }
-}
 
 /* ── unsync warning banner ── */
 .dt-unsync-banner {
@@ -138,7 +133,7 @@
 .dt-add-card { border-style: dashed !important; }
 .dt-add-card:hover { border-color: var(--t-accent); background: var(--t-accent-bg); }
 .dt-card { padding: 14px 16px; border-radius: var(--radius); background: var(--t-panel); border: 1px solid var(--t-border);
-  cursor: pointer; transition: all .15s; overflow: visible; }
+  cursor: pointer; transition: all .15s; overflow: visible; display: flex; flex-direction: column; }
 .dt-card:hover { border-color: var(--t-accent); }
 .dt-card.selected { border-color: var(--t-accent); background: var(--t-accent-bg); }
 .dt-card .dt-name { font-weight: 600; font-size: .95rem; }

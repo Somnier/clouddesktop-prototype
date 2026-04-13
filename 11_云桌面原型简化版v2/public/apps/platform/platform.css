@@ -98,15 +98,15 @@
 @media (max-width: 960px) { .detail-grid { grid-template-columns: 1fr; } }
 
 /* ── alert list ── */
-.alert-row { display: flex; align-items: center; gap: 12px; padding: 7px 12px; background: #fff; border-radius: var(--radius);
-  border-left: 4px solid var(--c-border); margin-bottom: 4px; box-shadow: var(--shadow); }
+.alert-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #fff; border-radius: var(--radius);
+  border-left: 4px solid var(--c-border); margin-bottom: 6px; box-shadow: var(--shadow); }
 .alert-row.high { border-left-color: var(--c-err); }
 .alert-row.medium { border-left-color: var(--c-warn); }
 .alert-row .al-title { font-weight: 500; font-size: .9rem; }
 .alert-row .al-detail { font-size: .82rem; color: var(--c-text2); }
 .alert-row .al-source { font-size: .85rem; color: var(--c-text1); margin-top: 2px; }
 .alert-row .al-source strong { color: var(--c-brand); font-weight: 600; }
-.alert-row .al-time { font-size: .78rem; color: var(--c-text3); margin-left: auto; white-space: nowrap; flex-shrink: 0; }
+.alert-row .al-time { font-size: .78rem; color: var(--c-text3); white-space: nowrap; flex-shrink: 0; }
 
 /* ── desktop asset cards ── */
 .asset-card { background: #fff; padding: 14px; border-radius: var(--radius); box-shadow: var(--shadow);

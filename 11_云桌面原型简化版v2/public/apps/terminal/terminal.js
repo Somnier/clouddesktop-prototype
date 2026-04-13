@@ -61,7 +61,7 @@ ${dtList}
 <div style="border-top:1px solid var(--t-border);margin-top:8px;padding-top:6px;font-size:.82rem;display:flex;justify-content:space-between"><strong>合计</strong><span>${dts.length} 个桌面 · ${totalSize} GB</span></div>
 <div style="margin-top:10px;padding:8px 12px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--t-accent)">E:\\desktop-export-${new Date().toISOString().slice(0,10)}.cdpkg</div>`;
   showTermConfirm('导出桌面',body,()=>{
-    showTermAlert(`已导出 ${dts.length} 个桌面（共 ${totalSize} GB）`);
+    showTermAlert(`已导出 ${dts.length} 个桌面 (共 ${totalSize} GB)`);
   },{danger:false});
 }
 
@@ -97,8 +97,8 @@ function showCreateDesktopDialog(defaultName){
     <div class="t-modal-msg">请配置桌面信息：</div>
     <div class="prep-field"><label>桌面名称</label><input type="text" id="cd-name" value="${esc(defaultName)}" placeholder="桌面名称"></div>
     <div class="prep-field"><label>部署方式</label><select id="cd-physical">
-      <option value="false">虚拟部署（VHD）</option>
-      <option value="true">物理部署（独立分区）</option>
+      <option value="false">虚拟部署 (VHD)</option>
+      <option value="true">物理部署 (独立分区)</option>
     </select></div>
     <div class="prep-field"><label>数据盘</label><select id="cd-disk-sel">
       <option value="">不添加数据盘</option>
@@ -148,6 +148,7 @@ function showCreateDesktopDialog(defaultName){
 const _inputCache = {};
 let _lastScreen = null;
 let _isRendering = false; /* guard: prevents blur handlers firing during innerHTML replacement */
+let _serverAutoCheckedAddr = null; /* tracks last auto-checked server address to avoid repeat */
 
 function _cacheAllInputs(){
   root.querySelectorAll('input, textarea, select').forEach(el=>{
@@ -444,9 +445,9 @@ function localDesktopScreen(){
         const isPhysical = d.physicalDeploy;
         const dtSize = d.diskSize || 25;
         return `
-        <div class="dt-card ${isDefault?'selected':''} ${!uploaded?'dt-unsync':''}" data-dt-id="${d.id}" style="position:relative;overflow:hidden">
+        <div class="dt-card ${isDefault?'selected':''} ${!uploaded?'dt-unsync':''}" data-dt-id="${d.id}" style="position:relative">
           <div class="dt-card-fill"></div>
-          <div style="position:relative;z-index:1">
+          <div style="position:relative;z-index:1;display:flex;flex-direction:column;flex:1">
             <div class="dt-name">${esc(d.name)}</div>
             <div class="dt-meta" style="display:flex;align-items:baseline;gap:6px;margin-top:6px">
               <span>${esc(d.baseImageName||d.os)}</span>
@@ -459,14 +460,14 @@ function localDesktopScreen(){
               ${isHidden?'<span class="pill muted pill-sm" style="opacity:.65">已隐藏</span>':''}
               ${isDefault?'<span class="pill info pill-sm" style="opacity:.55;font-size:.7rem">默认启动</span>':''}
             </div>
-            <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center">
+            <div style="display:flex;gap:6px;margin-top:auto;padding-top:10px;flex-wrap:wrap;align-items:center">
               <button class="btn btn-sm btn-primary" data-dt-edit="${d.id}">编辑桌面</button>
+              ${!uploaded?`<button class="dt-sync-btn" data-dt-upload="${d.id}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                同步到服务器
+              </button>`:''}
               <button class="btn btn-sm btn-ghost dt-overflow-btn" data-dt-overflow="${d.id}" style="margin-left:auto;padding:2px 8px">···</button>
             </div>
-            ${!uploaded?`<button class="dt-sync-btn" data-dt-upload="${d.id}">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              同步到服务器
-            </button>`:''}
           </div>
           <div class="dt-overflow-menu" data-dt-menu="${d.id}">
             <button data-dt-copy="${d.id}">复制桌面</button>
@@ -527,14 +528,17 @@ function workbenchScreen(){
   /* Default tab: if not takeover yet → layout, else → maint */
   const defaultTab = m.controlState!=='mother' ? 'layout' : 'maint';
   const wbTab = demo().flags?.wbTab || defaultTab;
-  /* If a task is actively running (not completed), force maint tab */
-  const activeTab = (tk && tk.phase!=='completed') ? 'maint' : wbTab;
   const opsMode = demo().flags?.opsMode || 'deploy';
   const isRunning = tk && tk.phase!=='completed';
 
   /* Display name: use takeover name if blank, otherwise classroom name */
   const displayName = isBlank ? (demo().takeover?.classroomName || c.name || '未命名教室') : c.name;
   const isTakenOver = m.controlState==='mother';
+
+  /* If a task is actively running (not completed), force maint tab;
+     Otherwise use wbTab, but guard: if maint tab would be disabled, fall back to layout */
+  const maintDisabled = (isBlank && !isTakenOver) || isRunning;
+  const activeTab = (tk && tk.phase!=='completed') ? 'maint' : (wbTab==='maint' && maintDisabled ? 'layout' : wbTab);
 
   return `<div class="page">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -752,8 +756,8 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
       </div>`:''}
       </div>
       <div style="padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0">
-        ${opsMode==='deploy'?`<button class="btn btn-primary" ${!isRunning&&deploySelectedCount>=1?'':'disabled'} data-act="start-deployment">开始部署（${deploySelectedCount} 台）</button>`:''}
-        ${opsMode==='maint-ip'?`<button class="btn btn-primary" ${isRunning||maintIpSelectedCount<1?'disabled':''} data-act="start-maint-ip">开始执行（${maintIpSelectedCount} 台）</button>`:''}
+        ${opsMode==='deploy'?`<button class="btn btn-primary" ${!isRunning&&deploySelectedCount>=1?'':'disabled'} data-act="start-deployment">开始部署 (${deploySelectedCount} 台)</button>`:''}
+        ${opsMode==='maint-ip'?`<button class="btn btn-primary" ${isRunning||maintIpSelectedCount<1?'disabled':''} data-act="start-maint-ip">开始执行 (${maintIpSelectedCount} 台)</button>`:''}
       </div>
     </div>
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
@@ -1094,8 +1098,8 @@ function deployPrepScreen(){
     <div class="prep-field">
       <label>部署方式</label>
       <select id="deploy-mode-sel">
-        <option value="incremental" ${(d.deployMode||'incremental')==='incremental'?'selected':''}>增量更新（仅同步差异，更快）</option>
-        <option value="full" ${d.deployMode==='full'?'selected':''}>全量部署（完整覆盖，更可靠）</option>
+        <option value="incremental" ${(d.deployMode||'incremental')==='incremental'?'selected':''}>增量更新 (仅同步差异，更快)</option>
+        <option value="full" ${d.deployMode==='full'?'selected':''}>全量部署 (完整覆盖，更可靠)</option>
       </select>
     </div>
   </div>
@@ -1201,8 +1205,8 @@ function deployGridScreen(){
         </div>
         <div style="font-size:.78rem;color:var(--t-text2);margin-left:8px">编号排布</div>
         <div style="display:flex;gap:4px">
-          <button class="btn ${flow==='col'?'btn-primary':'btn-ghost'}" data-rule-flow="col">列优先（纵向）</button>
-          <button class="btn ${flow==='row'?'btn-primary':'btn-ghost'}" data-rule-flow="row">行优先（横向）</button>
+          <button class="btn ${flow==='col'?'btn-primary':'btn-ghost'}" data-rule-flow="col">列优先 (纵向)</button>
+          <button class="btn ${flow==='row'?'btn-primary':'btn-ghost'}" data-rule-flow="row">行优先 (横向)</button>
         </div>
       </div>
       <div class="deploy-grid" style="display:grid;grid-template-columns:repeat(${grid.cols},1fr);gap:6px">
@@ -1237,7 +1241,7 @@ function deployGridScreen(){
   <div style="display:flex;gap:10px;margin-top:16px">
     <button class="btn btn-ghost" data-act="return-workbench">返回工作台</button>
     <button class="btn btn-secondary" data-deploy-step="0">上一步</button>
-    <button class="btn btn-primary" ${activeCount?'':'disabled'} data-deploy-step="2">下一步：终端分配（${activeCount} 个可用位）</button>
+    <button class="btn btn-primary" ${activeCount?'':'disabled'} data-deploy-step="2">下一步：终端分配 (${activeCount} 个可用位)</button>
   </div>
 </div>`;
 }
@@ -1302,7 +1306,7 @@ function deployBindScreen(){
     ${nextUnbound?`下一个待分配位置: <strong style="color:var(--t-accent)">${esc(nextUnboundSeat)}</strong>`
       :pill('全部已分配','ok')}
     <span style="float:right;display:flex;gap:6px">
-      <button class="btn btn-ghost" data-act="deploy-bind-next">模拟占位（下一台）</button>
+      <button class="btn btn-ghost" data-act="deploy-bind-next">模拟占位 (下一台)</button>
       <button class="btn btn-ghost" data-act="deploy-bind-all">一键全部分配</button>
     </span>
     <div style="font-size:.72rem;color:var(--t-text3);margin-top:4px">💡 点击已分配方块可改为"禁用占位"，后续终端自动顺延</div>
@@ -1345,7 +1349,7 @@ function deployBindScreen(){
   <div style="display:flex;gap:10px;margin-top:16px">
     <button class="btn btn-ghost" data-act="return-workbench">返回工作台</button>
     <button class="btn btn-secondary" data-deploy-step="1">上一步</button>
-    <button class="btn btn-primary" ${boundCount>=1?'':'disabled'} data-act="start-deployment">开始部署传输（${boundCount} 台）</button>
+    <button class="btn btn-primary" ${boundCount>=1?'':'disabled'} data-act="start-deployment">开始部署传输 (${boundCount} 台)</button>
   </div>
 </div>`;
 }
@@ -1717,7 +1721,7 @@ function exportScreen(){
   <div class="page-scroll">
   <div class="section-sub">导出 Excel 文件，包含教室内所有终端的座位、机器名、IP 等信息。</div>
   ${incomplete.length?`<div class="card" style="border-color:var(--t-warn);margin-bottom:16px">
-    <div style="font-size:.85rem;color:var(--t-warn)">提示：有 ${incomplete.length} 台终端信息不完整（缺少机器名或 IP），导出内容可能不全。</div>
+    <div style="font-size:.85rem;color:var(--t-warn)">提示：有 ${incomplete.length} 台终端信息不完整 (缺少机器名或 IP)，导出内容可能不全。</div>
   </div>`:''}
   <div class="card" style="margin-bottom:16px">
     <div class="card-header">导出选项</div>
@@ -1726,7 +1730,7 @@ function exportScreen(){
     <div style="font-size:.72rem;color:var(--t-text3);margin-top:6px">教室名称将作为平台导入时生成的教室名称，修改仅影响导出文件，不影响系统内信息。</div>
   </div>
   <div class="card" style="margin-bottom:16px;padding:0">
-    <div class="card-header" style="padding:12px 14px 8px">终端列表（共 ${enriched.length} 台）</div>
+    <div class="card-header" style="padding:12px 14px 8px">终端列表 (共 ${enriched.length} 台)</div>
     <table class="data-table" style="font-size:.8rem;white-space:nowrap">
       <thead><tr><th data-sort>#</th><th data-sort>座位</th><th data-sort>机器名</th><th data-sort>IP</th><th data-sort>MAC</th><th data-sort>硬盘序列号</th></tr></thead>
       <tbody>${enriched.map((t,i)=>`<tr class="${(!t.name||!t.ip)?'conflict':''}">
@@ -1800,7 +1804,7 @@ function bindAll(){
         const crName = root.querySelector('#export-cr-name')?.value||'';
         const crRemark = root.querySelector('#export-cr-remark')?.value||'';
         act('set-flag',{exportCrName:crName, exportCrRemark:crRemark});
-        const fileName = (crName||'教室终端清单')+'_'+new Date().toISOString().slice(0,10)+'.xlsx';
+        const fileName = (crName||'教室终端清单').replace(/[\/\/:*?"<>|]/g,'-')+'.xlsx';
         if(window.electronAPI?.isElectron){
           window.electronAPI.showSaveDialog({
             title:'选择导出目录',
@@ -1812,7 +1816,7 @@ function bindAll(){
             }
           });
         } else {
-          const defaultPath='E:\\\\'+fileName;
+          const defaultPath='E:\\'+fileName;
           showTermConfirm('导出教室终端清单',
             '将导出 Excel 清单到 U 盘。<br>默认路径：<span style="font-family:monospace;font-size:.85rem;color:var(--t-accent)">'+esc(defaultPath)+'</span><br><br>点击确认模拟导出。',
             ()=>{ showTermAlert('终端清单已导出到：\n'+defaultPath); },
@@ -1824,7 +1828,7 @@ function bindAll(){
         /* Pre-check: mother terminal must have basic setup done */
         const _m = mt();
         if(!_m.seat || !_m.name){
-          showTermAlert('请先完成本机设置（设置本机 → 填写机器名和座位号）后再进入网络同传。');
+          showTermAlert('请先完成本机设置 (设置本机 → 填写机器名和座位号)后再进入网络同传。');
           return;
         }
         act('open-takeover');
@@ -1839,7 +1843,7 @@ function bindAll(){
           }, 2500);
         });
       } else if(a==='exit-to-desktop'){
-        showTermConfirm('退出管理系统','确定要退出管理系统并重启进入桌面吗？',()=>showTermAlert('系统将重启进入桌面（原型模拟）'),{danger:false});
+        showTermConfirm('退出管理系统','确定要退出管理系统并重启进入桌面吗？',()=>showTermAlert('系统将重启进入桌面 (原型模拟)'),{danger:false});
       } else if(a==='deploy-bind-next'){
         /* Simulate binding the next available online controlled terminal */
         const terms = termsInCr(s(), cr().id).filter(t=>t.id!==mt().id&&t.online&&t.controlState==='controlled');
@@ -2208,11 +2212,21 @@ function bindAll(){
       /* Show checking animation, then connected (one-shot, debounced) */
       if(srvInput._checkPending) return;
       srvInput._checkPending = true;
+      _serverAutoCheckedAddr = addr; /* mark as checked */
       setTimeout(()=>{
         act('set-flag',{serverConnStatus:'checking'});
         setTimeout(()=>{ act('set-flag',{serverConnStatus:'ok'}); srvInput._checkPending=false; }, 1800);
       }, 100);
     });
+    /* Auto-check on page entry: if server address is set and not yet checked */
+    const existingAddr = (mt()?.serverAddr || '').trim();
+    if(existingAddr && _serverAutoCheckedAddr !== existingAddr){
+      _serverAutoCheckedAddr = existingAddr;
+      setTimeout(()=>{
+        act('set-flag',{serverConnStatus:'checking'});
+        setTimeout(()=>{ act('set-flag',{serverConnStatus:'ok'}); }, 1800);
+      }, 300);
+    }
   }
 
   /* ── sortable table headers ── */

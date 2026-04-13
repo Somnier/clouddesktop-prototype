@@ -480,8 +480,8 @@ function validateAssignments(assignments){
   for(const a of assignments){
     if(!a.ip) errors.push(a.mac+': IP 地址为空');
     if(!a.name) errors.push(a.mac+': 机器名为空');
-    if(a.ip){ if(ips.has(a.ip)) errors.push(a.ip+': IP 地址冲突（'+a.mac+' 与 '+ips.get(a.ip)+')'); else ips.set(a.ip,a.mac); }
-    if(a.name){ if(names.has(a.name)) errors.push(a.name+': 机器名冲突（'+a.mac+' 与 '+names.get(a.name)+')'); else names.set(a.name,a.mac); }
+    if(a.ip){ if(ips.has(a.ip)) errors.push(a.ip+': IP 地址冲突 ('+a.mac+' 与 '+ips.get(a.ip)+')'); else ips.set(a.ip,a.mac); }
+    if(a.name){ if(names.has(a.name)) errors.push(a.name+': 机器名冲突 ('+a.mac+' 与 '+names.get(a.name)+')'); else names.set(a.name,a.mac); }
   }
   return { valid: errors.length===0, errors };
 }
@@ -757,7 +757,7 @@ function act(action, payload={}){
       groups:{main,unbound,other},
       otherGroups,
       scanInfo,
-      classroomName:cr.stage==='blank'?'未命名教室-'+new Date().toLocaleDateString('zh-CN')+' '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}):cr.name,
+      classroomName:cr.stage==='blank'?'未命名教室_'+new Date().toLocaleDateString('zh-CN')+'_'+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}):cr.name,
       confirmed: mt.controlState==='mother'};
     return {ok:true};
   }
@@ -786,6 +786,10 @@ function act(action, payload={}){
     mt.controlState='unmanaged'; cr.motherId=null;
     cr.status=cr.stage==='deployed'?'idle':cr.stage;
     demo.motherScreen='home'; mt.screen='home';
+    /* Reset workbench tab flags so re-entry defaults to layout tab with fresh scanning */
+    demo.flags.wbTab=null; demo.flags.layoutSnapshot=null;
+    demo.flags.gridBackup=null; demo.flags.layoutRescan=null;
+    demo.flags.viewLastResult=false; demo.flags.deployScope={};
     addLog('info','终端',cr.name+' 已结束管理','母机释放教室控制');
     return {ok:true};
   }
@@ -1858,6 +1862,12 @@ async function main(){
   if(existsSync(STATE_FILE)){
     try{ state=JSON.parse(readFileSync(STATE_FILE,'utf8')); }catch(e){ state=buildState(seed); }
   } else { state=buildState(seed); }
+  /* Migrate old classroom name format: "未命名教室-date time" → "未命名教室_date_time" */
+  (function migrateNames(){
+    const raw=JSON.stringify(state);
+    const fixed=raw.replace(/未命名教室-(\d{4}\/\d{1,2}\/\d{1,2})\s(\d{2}:\d{2})/g,'未命名教室_$1_$2');
+    if(fixed!==raw) state=JSON.parse(fixed);
+  })();
   /* Ensure grid blocks exist for the initial classroom */
   if(!state.demo.deployDraft.grid.blocks.length){
     const fcr=crById(state.demo.focusClassroomId);
