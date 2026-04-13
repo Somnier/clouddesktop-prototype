@@ -236,7 +236,7 @@
 .prep-group { padding: 14px; border-radius: var(--radius); background: var(--t-panel); border: 1px solid var(--t-border); }
 .prep-group h4 { font-size: .85rem; color: var(--t-text2); margin-bottom: 6px; font-weight: 600; }
 .prep-field { display: flex; align-items: center; gap: 12px; padding: 5px 0; font-size: .85rem; }
-.prep-field label { color: var(--t-text2); flex-shrink: 0; width: 80px; }
+.prep-field label { color: var(--t-text2); flex-shrink: 0; width: 96px; }
 .prep-field input, .prep-field select { flex: 1; max-width: 320px; }
 
 /* ── empty state (dark) ── */

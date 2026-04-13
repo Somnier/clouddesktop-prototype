@@ -48,10 +48,20 @@ function render(state){
   if(_isRendering) return;
   view.campusId = view.campusId || state.demo.focusCampusId;
   const saved = _saveFocus();
+  /* Save scroll positions before re-render */
+  const scrollEl = root.querySelector('.plat-content');
+  const savedScrollTop = scrollEl ? scrollEl.scrollTop : 0;
+  const asideEl = root.querySelector('.plat-aside');
+  const savedAsideScroll = asideEl ? asideEl.scrollTop : 0;
   _isRendering = true;
   root.innerHTML = shellHtml();
   bindEvents();
   _restoreFocus(saved);
+  /* Restore scroll positions */
+  const newScrollEl = root.querySelector('.plat-content');
+  if(newScrollEl && savedScrollTop) newScrollEl.scrollTop = savedScrollTop;
+  const newAsideEl = root.querySelector('.plat-aside');
+  if(newAsideEl && savedAsideScroll) newAsideEl.scrollTop = savedAsideScroll;
   _isRendering = false;
 }
 
@@ -263,23 +273,25 @@ function healthScore(state,crId){
   const alerts=alertsInCr(state,crId);
   if(!terms.length) return 100;
   const n=terms.length;
-  /* 1. Alert penalty: capped per-terminal to avoid zeroing out large classrooms
-     high=8, medium=4, low=2 — penalizes affected terminal ratio */
+  /* 1. Alert penalty: affected terminal ratio */
   const affectedByAlert=new Set(alerts.map(a=>a.terminalId).filter(Boolean));
   const alertRatio=n>0?affectedByAlert.size/n:0;
-  const alertPenalty=Math.round(alertRatio*40); /* max 40 if every terminal has alert */
+  const alertPenalty=Math.round(alertRatio*60);
   /* 2. Desktop consistency: proportion of inconsistent terminals */
   const dtSigs=terms.filter(t=>t.online&&(t.desktops||[]).length>0).map(t=>(t.desktops||[]).map(d=>d.name).sort().join('|'));
   const sigCounts={}; dtSigs.forEach(sig=>{sigCounts[sig]=(sigCounts[sig]||0)+1;});
   const majorityCount=Math.max(...Object.values(sigCounts),0);
   const inconsistent=dtSigs.length>0?dtSigs.length-majorityCount:0;
   const consistencyRatio=dtSigs.length>0?inconsistent/dtSigs.length:0;
-  const consistencyPenalty=Math.round(consistencyRatio*30); /* max 30 */
-  /* 3. Hardware alert severity bonus: extra penalty for high severity */
+  const consistencyPenalty=Math.round(consistencyRatio*40);
+  /* 3. Offline penalty */
+  const offlineCount=terms.filter(t=>!t.online).length;
+  const offlinePenalty=n>0?Math.round(offlineCount/n*30):0;
+  /* 4. Hardware alert severity bonus */
   const highAlerts=alerts.filter(a=>a.level==='high').length;
-  const severityBonus=Math.min(15,highAlerts*3); /* max 15 */
-  /* Score: 100 - penalties, floor at 15 (never truly 0 in demo) */
-  return Math.max(15,Math.min(100,100-alertPenalty-consistencyPenalty-severityBonus));
+  const severityBonus=Math.min(20,highAlerts*4);
+  /* Score: 100 - penalties, floor at 10 */
+  return Math.max(10,Math.min(100,100-alertPenalty-consistencyPenalty-offlinePenalty-severityBonus));
 }
 
 function dashboardPage(){
@@ -957,13 +969,12 @@ function alertHtml(a, showNav){
   const c=showNav?getClassroom(s(),a.classroomId):null;
   const levelLabel={high:'高',medium:'中',low:'低'};
   return `<div class="alert-row ${a.level}">
-    <div style="flex:1;min-width:0">
-      <div class="al-title">${pill(levelLabel[a.level]||a.level,a.level==='high'?'err':a.level==='medium'?'warn':'muted')} ${esc(a.title)}</div>
-      <div class="al-detail">${esc(a.detail)}</div>
-      <div class="al-source" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">
-        ${c?`<a class="clickable" data-nav-cr-tab="${c.id}" data-tab-target="alerts" style="cursor:pointer;text-decoration:underline;color:var(--c-brand);font-size:.82rem">${esc(c.name)}</a>`:''}
-        ${t&&t.seat?`<a class="clickable" data-nav-term="${t.id}" style="cursor:pointer;text-decoration:underline;color:var(--c-brand);font-size:.82rem">座位 ${esc(t.seat)}</a>`:''}
-      </div>
+    <div style="display:flex;align-items:baseline;gap:6px;flex:1;min-width:0;flex-wrap:wrap">
+      <span>${pill(levelLabel[a.level]||a.level,a.level==='high'?'err':a.level==='medium'?'warn':'muted')}</span>
+      <strong style="font-size:.88rem">${esc(a.title)}</strong>
+      <span style="font-size:.82rem;color:var(--c-text2)">${esc(a.detail)}</span>
+      ${c?`<a class="clickable" data-nav-cr-tab="${c.id}" data-tab-target="alerts" style="cursor:pointer;color:var(--c-brand);font-size:.8rem">${esc(c.name)}</a>`:''}
+      ${t&&t.seat?`<a class="clickable" data-nav-term="${t.id}" style="cursor:pointer;color:var(--c-brand);font-size:.8rem">${esc(t.seat)}</a>`:''}
     </div>
     <div class="al-time">${relTime(a.at)}</div>
   </div>`;
@@ -1025,11 +1036,11 @@ function terminalDetailPage(){
     </div>
     <div class="card">
       <div class="card-header">硬件信息</div>
+      <div class="def-row"><span class="def-label">网卡</span><span class="def-value" style="display:flex;flex-direction:column;gap:2px">${(t.macList||[t.mac]).map((m,idx)=>`<span style="font-family:var(--mono);font-size:.82rem">${esc(m||'--')}${idx===0?' '+pill('工作网卡','info'):''}</span>`).join('')}</span></div>
       ${defRow('处理器', t.hw?.cpu||'--')}
       ${defRow('显卡', t.hw?.gpu||'--')}
       ${defRow('内存', t.hw?.mem||'--')}
       ${defRow('硬盘', (t.hw?.diskModel||'--')+' ('+esc(t.hw?.diskSn||'--')+')')}
-      <div class="def-row"><span class="def-label">网卡</span><span class="def-value" style="display:flex;flex-direction:column;gap:2px">${(t.macList||[t.mac]).map((m,idx)=>`<span style="font-family:var(--mono);font-size:.82rem">${esc(m||'--')}${idx===0?' '+pill('工作网卡','info'):''}</span>`).join('')}</span></div>
     </div>
   </div>
 
@@ -1195,13 +1206,13 @@ function assetsPage(){
       const unreferenced = g.totalTerms===0;
       const isExpanded = expanded[g.name];
       const multiCr = g.classroomCount > 1;
-      return `<div class="card" style="padding:0;overflow:hidden${unreferenced?';border-left:3px solid var(--c-warn)':multiCr?';border-left:3px solid var(--c-brand)':''}">
+      return `<div class="card" style="padding:0;overflow:hidden${unreferenced?';border-left:3px solid var(--c-warn)':''}">
         <div style="padding:14px 20px;display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
           <div style="flex:1;min-width:200px">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
               <strong style="font-size:1rem">${esc(g.name)}</strong>
               <span style="font-size:.82rem;color:var(--c-text3)">${esc(g.os)}</span>
-              ${multiCr?pill(g.classroomCount+' 教室引用','info'):''}
+              ${pill(g.classroomCount+' 教室引用','muted')}
               ${unreferenced?`<span style="font-size:.78rem;color:var(--c-warn);font-weight:500">空闲</span>`:''}
             </div>
             <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.85rem;color:var(--c-text2);margin-bottom:4px">

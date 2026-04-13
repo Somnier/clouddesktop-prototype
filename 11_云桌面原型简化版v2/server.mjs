@@ -130,7 +130,56 @@ function buildState(s){
   const alerts = [];
   for(const c of classrooms){
     if(c.stage!=='deployed') continue;
+    /* Skip alerts for "优" classroom — perfectly healthy */
+    if(c.id==='yp-b207') continue;
     const crTerms = terminals.filter(t=>t.classroomId===c.id);
+    const seedCr = s.classrooms.find(x=>x.id===c.id);
+
+    /* ── "差" classroom: yp-g512 — many issues ── */
+    if(c.id==='yp-g512'){
+      /* Extra offline terminals (in addition to faultyTerminalIndex) */
+      [3,7,22].forEach(idx=>{
+        if(crTerms[idx]){ crTerms[idx].online=false; crTerms[idx].power='off'; crTerms[idx].sync='failed'; crTerms[idx].syncNote='硬件故障'; }
+      });
+      /* Generate many alerts */
+      const poorAlerts = [
+        {indices:[2,14,24], title:'键盘设备异常', detail:'终端键盘未检测到', level:'high'},
+        {indices:[5,16,28], title:'鼠标设备未检测', detail:'鼠标设备离线', level:'high'},
+        {indices:[8,19,30], title:'耳机设备未连接', detail:'耳机插孔无信号', level:'high'},
+        {indices:[10,26,32], title:'硬盘健康预警', detail:'硬盘 SMART 状态异常，剩余寿命 < 15%', level:'high'},
+        {indices:[22,7], title:'显示器信号丢失', detail:'显示器 HDMI 信号未检测', level:'high'},
+        {indices:[15], title:'内存校验错误', detail:'内存 ECC 校验异常，建议更换', level:'high'},
+        {indices:[34,20], title:'CPU 温度过高', detail:'CPU 温度达到 90°C 以上', level:'medium'},
+        {indices:[31], title:'桌面同步延迟', detail:'桌面同步超过 30 分钟未完成', level:'low'},
+        {indices:[33], title:'硬盘速率过低', detail:'硬盘顺序读取速率降至 38 MB/s', level:'medium'}
+      ];
+      poorAlerts.forEach(pa=>{
+        pa.indices.forEach(idx=>{
+          if(crTerms[idx]){
+            alerts.push({id:'alert-poor-'+c.id+'-'+idx+'-'+pa.title.slice(0,2), level:pa.level, title:pa.title,
+              detail:pa.detail, terminalId:crTerms[idx].id, classroomId:c.id, status:'open',
+              at:new Date(Date.now()-Math.random()*7*86400000).toISOString()});
+          }
+        });
+      });
+      /* Desktop inconsistency: some terminals missing the main desktop (simulating failed sync) */
+      [5,10,15,20,25,28,31].forEach(idx=>{
+        if(crTerms[idx] && crTerms[idx].desktops && crTerms[idx].desktops.length>1){
+          crTerms[idx].desktops = crTerms[idx].desktops.slice(0,1); // keep only first desktop
+          crTerms[idx].sync = 'failed'; crTerms[idx].syncNote = '桌面不一致';
+        }
+      });
+      /* Faulty terminal offline alert */
+      const faultyT = crTerms.find(t=>!t.online);
+      if(faultyT){
+        alerts.push({id:'alert-seed-offline-'+c.id, level:'medium', title:'终端离线',
+          detail:'终端持续离线，可能关机或硬件故障',
+          terminalId:faultyT.id, classroomId:c.id, status:'open', at:'2026-03-18T10:00:00Z'});
+      }
+      continue; // skip standard generation
+    }
+
+    /* ── Standard alert generation for other classrooms ── */
     // keyboard missing alert — hardware disconnect = high
     if(crTerms.length>5){
       alerts.push({id:'alert-seed-kb-'+c.id, level:'high', title:'键盘设备异常',
@@ -197,7 +246,6 @@ function buildState(s){
         terminalId:crTerms[18].id, classroomId:c.id, status:'open', at:'2026-03-19T16:45:00Z'});
     }
     // make one more terminal offline for variety (different from faulty)
-    const seedCr = s.classrooms.find(x=>x.id===c.id);
     if(crTerms.length>35 && !seedCr.faultyTerminalIndex){
       const offT = crTerms[35];
       offT.online=false; offT.power='off'; offT.sync='failed'; offT.syncNote='网络中断';
@@ -702,7 +750,7 @@ function act(action, payload={}){
       groups:{main,unbound,other},
       otherGroups,
       scanInfo,
-      classroomName:cr.stage==='blank'?'未命名教室-'+new Date().toLocaleDateString('zh-CN'):cr.name,
+      classroomName:cr.stage==='blank'?'未命名教室-'+new Date().toLocaleDateString('zh-CN')+' '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hour12:false}):cr.name,
       confirmed:false};
     return {ok:true};
   }
@@ -1588,18 +1636,23 @@ function act(action, payload={}){
 
 /* ══════════ TICK ENGINE ══════════ */
 function tickHeartbeats(){
+  const tTime=Date.now()/1000;
   state.terminals.forEach((t,i)=>{
     if(!t.online) return;
-    t.metrics.cpu=clamp(t.metrics.cpu+((i%3)-1)*2,5,94);
-    t.metrics.mem=clamp(t.metrics.mem+((i%5)-2),12,96);
-    /* Ensure memUsed never exceeds memTotal */
-    if(t.metrics.memUsed>t.metrics.memTotal) t.metrics.memUsed=t.metrics.memTotal;
+    /* CPU: sinusoidal base + per-terminal phase offset + jitter (matches server monitor pattern) */
+    const cpuBase=t.metrics.cpu;
+    t.metrics.cpu=clamp(Math.round(cpuBase+Math.sin(tTime/30+i*0.7)*3+(Math.random()-0.5)*4),5,94);
+    /* Memory: adjust memUsed with small drift (not a phantom metrics.mem field) */
+    const memDrift=Math.sin(tTime/50+i*1.1)*0.3+(Math.random()-0.5)*0.6;
+    t.metrics.memUsed=clamp(Math.round(t.metrics.memUsed+memDrift),1,t.metrics.memTotal);
+    /* Ensure constraints */
     if(t.metrics.diskUsed>t.metrics.diskTotal) t.metrics.diskUsed=t.metrics.diskTotal;
     t.heartbeat=now();
     /* Terminal-level monitor history for sparklines */
     if(!t._monitorHistory) t._monitorHistory=[];
-    const tNet=Math.round((2+Math.sin(Date.now()/1000/40+i)*1.5+Math.sin(Date.now()/1000/13+i)*0.8+(Math.random()-0.5)*0.4)*10)/10;
-    t._monitorHistory.push({cpu:t.metrics.cpu,mem:t.metrics.mem,gpu:t.metrics.gpu||0,disk:t.metrics.diskUsed||0,net:tNet});
+    const tNet=Math.round((2+Math.sin(tTime/40+i)*1.5+Math.sin(tTime/13+i)*0.8+(Math.random()-0.5)*0.4)*10)/10;
+    const memPctVal=t.metrics.memTotal?Math.round(t.metrics.memUsed/t.metrics.memTotal*100):0;
+    t._monitorHistory.push({cpu:t.metrics.cpu,mem:memPctVal,gpu:t.metrics.gpu||0,disk:t.metrics.diskUsed||0,net:tNet});
     if(t._monitorHistory.length>40) t._monitorHistory.shift();
   });
   /* update server metrics + history */

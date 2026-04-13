@@ -624,7 +624,7 @@
         },
         {
           "id": "dt-e210-exam",
-          "name": "四六级模拟考试桌面",
+          "name": "通用考试桌面",
           "version": "v1",
           "os": "Windows 11 23H2",
           "type": "考试",
@@ -889,6 +889,144 @@
           "imageId": "img-f308-win11",
           "parentId": "snap-f308-multi",
           "createdAt": "2026-02-20T08:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "yp-g512",
+      "campusId": "east",
+      "name": "G512 计算机基础教室",
+      "building": "理学楼G座",
+      "floor": "5F",
+      "remark": "计算机公共课教学用，设备较旧，问题较多",
+      "rows": 5,
+      "cols": 7,
+      "terminalCount": 36,
+      "motherIndex": 0,
+      "networkBase": "10.21.75",
+      "gateway": "10.21.75.1",
+      "dns": [
+        "10.21.0.2",
+        "114.114.114.114"
+      ],
+      "stage": "deployed",
+      "serverAddress": "10.21.0.18",
+      "desktopCatalog": [
+        {
+          "id": "dt-g512-basic",
+          "name": "计算机基础教学桌面",
+          "version": "v2",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "Office + 浏览器 + 编程入门工具",
+          "syncStatus": "synced",
+          "diskSize": 45,
+          "dataDisk": "D: 20GB VHD",
+          "createdAt": "2025-09-01T08:00:00Z",
+          "editedAt": "2026-03-10T14:00:00Z",
+          "snapshotId": "snap-g512-teach-v2"
+        },
+        {
+          "id": "dt-g512-exam",
+          "name": "通用考试桌面",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "考试",
+          "visibility": "hidden",
+          "remark": "计算机基础考试专用",
+          "syncStatus": "synced",
+          "diskSize": 22,
+          "dataDisk": "",
+          "createdAt": "2026-03-05T08:00:00Z",
+          "editedAt": "2026-03-05T08:00:00Z",
+          "snapshotId": "snap-g512-exam"
+        },
+        {
+          "id": "dt-yp-g512-teacher",
+          "name": "G512 教师桌面",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "教学",
+          "visibility": "default",
+          "remark": "教师授课专用",
+          "syncStatus": "synced",
+          "diskSize": 52,
+          "dataDisk": "D: 30GB VHD",
+          "createdAt": "2025-09-01T08:00:00Z",
+          "editedAt": "2026-03-15T10:00:00Z",
+          "snapshotId": "snap-g512-teacher"
+        },
+        {
+          "id": "dt-yp-g512-base",
+          "name": "Win11 原始镜像",
+          "version": "v1",
+          "os": "Windows 11 23H2",
+          "type": "原始",
+          "visibility": "hidden",
+          "remark": "纯净 OS 环境",
+          "syncStatus": "synced",
+          "diskSize": 18,
+          "dataDisk": "",
+          "createdAt": "2025-09-01T08:00:00Z",
+          "editedAt": "2025-09-01T08:00:00Z",
+          "snapshotId": "snap-g512-base"
+        }
+      ],
+      "defaultDesktopId": "dt-g512-basic",
+      "registeredOnServer": true,
+      "faultyTerminalIndex": 12,
+      "restoreMode": "还原系统盘，保留数据盘",
+      "imageStore": [
+        {
+          "id": "img-g512-win11",
+          "name": "Windows 11 23H2",
+          "os": "Windows 11 23H2",
+          "importedAt": "2025-08-20T10:00:00Z"
+        }
+      ],
+      "snapshotTree": [
+        {
+          "id": "snap-g512-base",
+          "name": "纯净安装",
+          "imageId": "img-g512-win11",
+          "parentId": null,
+          "createdAt": "2025-09-01T08:00:00Z"
+        },
+        {
+          "id": "snap-g512-office",
+          "name": "Office+基础软件",
+          "imageId": "img-g512-win11",
+          "parentId": "snap-g512-base",
+          "createdAt": "2025-09-10T08:00:00Z"
+        },
+        {
+          "id": "snap-g512-teach-v1",
+          "name": "教学环境v1",
+          "imageId": "img-g512-win11",
+          "parentId": "snap-g512-office",
+          "createdAt": "2025-10-01T08:00:00Z"
+        },
+        {
+          "id": "snap-g512-teach-v2",
+          "name": "教学环境v2",
+          "imageId": "img-g512-win11",
+          "parentId": "snap-g512-teach-v1",
+          "createdAt": "2026-03-10T08:00:00Z"
+        },
+        {
+          "id": "snap-g512-exam",
+          "name": "考试环境",
+          "imageId": "img-g512-win11",
+          "parentId": "snap-g512-base",
+          "createdAt": "2026-03-05T08:00:00Z"
+        },
+        {
+          "id": "snap-g512-teacher",
+          "name": "教师环境",
+          "imageId": "img-g512-win11",
+          "parentId": "snap-g512-office",
+          "createdAt": "2025-09-15T08:00:00Z"
         }
       ]
     }

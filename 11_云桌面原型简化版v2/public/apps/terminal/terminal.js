@@ -368,10 +368,7 @@ function localNetworkScreen(){
 function localDesktopScreen(){
   const m=mt(); const c=cr();
   const desktops = (m.desktops||[]).slice().sort((a,b)=>{
-    const aUp = a.uploaded || a.syncStatus==='synced' ? 1 : 0;
-    const bUp = b.uploaded || b.syncStatus==='synced' ? 1 : 0;
-    if(aUp!==bUp) return aUp-bUp;
-    return (b.editedAt||'').localeCompare(a.editedAt||'');
+    return (a.createdAt||a.editedAt||'').localeCompare(b.createdAt||b.editedAt||'');
   });
   const returnAct = demo()._desktopReturnScreen ? 'desktop-return-flow' : (m.controlState==='mother'?'return-workbench':'go-home');
   const bid = m.bios?.defaultBootId;
@@ -459,7 +456,7 @@ function localDesktopScreen(){
             </div>
             <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
               <button class="btn btn-sm btn-primary" data-dt-edit="${d.id}">编辑桌面</button>
-              ${!uploaded?`<button class="btn btn-sm" style="background:var(--t-warn);color:#fff;border-color:var(--t-warn);font-weight:600" data-dt-upload="${d.id}">▲ 同步到服务器</button>`:''}
+              ${!uploaded?`<button class="btn btn-sm btn-primary" style="font-weight:600" data-dt-upload="${d.id}">同步到服务器</button>`:''}
               <button class="btn btn-sm btn-ghost dt-overflow-btn" data-dt-overflow="${d.id}" style="margin-left:auto;padding:2px 8px">···</button>
             </div>
           </div>
@@ -613,7 +610,7 @@ function wbLayoutContent(terms, rt, c, m, d){
     ipStart:r.ipStart||20,startLetter:r.startLetter||'A',
     gridDirection:r.gridDirection||'tl',termCount:discoveredCount});
 
-  return `<div style="display:grid;grid-template-columns:280px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden">
+  return `<div style="display:grid;grid-template-columns:304px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden">
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
       <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">
       <div class="card">
@@ -706,7 +703,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
     });
   }
 
-  return `<div style="display:grid;grid-template-columns:280px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden;align-items:stretch">
+  return `<div style="display:grid;grid-template-columns:304px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden;align-items:stretch">
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
       <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">
       <div class="card">
@@ -757,7 +754,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         <div style="margin-top:4px">成功 ${tk.counts.completed||0} · 失败 ${tk.counts.failed||0} · 排队 ${tk.counts.queued||0} / 共 ${tk.counts.total||0}</div>
       </div>`:`<div style="padding:8px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.78rem;color:var(--t-text2)">
         ${opsMode==='deploy'?'点击网格方块选择/取消选择终端':
-          opsMode==='maint-ip'?'点击方块选择/取消选择终端 · 修改左侧参数后自动刷新预览':
+          opsMode==='maint-ip'?'点击方块选择/取消选择终端':
           '请从左侧选择功能'}
       </div>`}
       <div class="page-scroll" style="flex:1;min-height:0">
@@ -1677,16 +1674,15 @@ function exportScreen(){
   return `<div class="page">
   <div class="section-title"><button class="btn btn-ghost" data-act="return-workbench">←</button> 导出教室终端清单</div>
   <div class="page-scroll">
-  <div class="section-sub">导出 Excel 文件，包含教室内所有终端的座位、机器名、IP 等信息。</div>
+  <div class="section-sub">导出 Excel 文件，包含教室内所有终端的座位、机器名、IP 等信息。修改教室名称仅影响导出文件，不影响系统内信息。</div>
   ${incomplete.length?`<div class="card" style="border-color:var(--t-warn);margin-bottom:16px">
     <div style="font-size:.85rem;color:var(--t-warn)">提示：有 ${incomplete.length} 台终端信息不完整（缺少机器名或 IP），导出内容可能不全。</div>
   </div>`:''}
   <div class="card" style="margin-bottom:16px">
     <div class="card-header">导出选项</div>
-    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
-      <div class="prep-field" style="flex:1;min-width:200px"><label>教室名称（导出用）</label><input type="text" id="export-cr-name" value="${esc(exportName)}" placeholder="导出时使用的教室名称"></div>
-      <div class="prep-field" style="flex:1;min-width:200px"><label>教室备注（可选）</label><input type="text" id="export-cr-remark" value="${esc(exportRemark)}" placeholder="填写备注信息"></div>
-    </div>
+    <div class="prep-field"><label>教室名称</label><input type="text" id="export-cr-name" value="${esc(exportName)}" placeholder="导出时使用的教室名称"></div>
+    <div style="font-size:.7rem;color:var(--t-text3);margin-top:2px;padding-left:92px">此名称将作为平台导入时生成的教室名称</div>
+    <div class="prep-field"><label>教室备注 <span style="font-size:.68rem;color:var(--t-text3);font-weight:normal">可选</span></label><input type="text" id="export-cr-remark" value="${esc(exportRemark)}" placeholder="填写备注信息"></div>
   </div>
   <div class="card" style="margin-bottom:16px;padding:0">
     <div class="card-header" style="padding:12px 14px 8px">终端列表（共 ${terms.length} 台）</div>
@@ -1701,9 +1697,8 @@ function exportScreen(){
     </table>
   </div>
   </div>
-  <div style="padding-top:12px;border-top:1px solid var(--t-border);display:flex;align-items:center;gap:12px">
-    <button class="btn btn-primary" data-act="export-select-folder">选择目录并导出</button>
-    <span style="font-size:.75rem;color:var(--t-text3)">修改教室名称仅影响导出文件，不影响系统内信息</span>
+  <div style="padding-top:12px;border-top:1px solid var(--t-border)">
+    <button class="btn btn-ghost dt-export-btn" data-act="export-select-folder">导出教室终端清单</button>
   </div>
 </div>`;
 }
