@@ -151,8 +151,13 @@ function asideContent(){
       const rt=crRuntime(state,view.classroomId);
       const hs=cr?healthScore(state,cr.id):0;
       const hsColor=hs>=80?'var(--c-ok)':hs>=50?'var(--c-warn)':'var(--c-err)';
+      const barColor=hs>=80?'#22c55e':hs>=50?'#f59e0b':'#ef4444';
+      const levelLabel=hs>=80?'优':hs>=50?'良':'差';
       cards+=`<div class="aside-card"><div class="aside-title">教室概况</div>
-        <div class="aside-item" style="justify-content:space-between"><span>健康度</span><span style="font-weight:700;color:${hsColor}">${hs}/100</span></div>
+        <div class="aside-item" style="flex-direction:column;gap:4px">
+          <div style="display:flex;justify-content:space-between;align-items:center"><span>健康度</span><span style="font-weight:600;font-size:.82rem;color:${hsColor}">${levelLabel}</span></div>
+          <div style="height:6px;background:var(--c-bg2);border-radius:3px;overflow:hidden;width:100%"><div style="height:100%;width:${hs}%;background:${barColor};border-radius:3px"></div></div>
+        </div>
         <div class="aside-item" style="justify-content:space-between"><span>终端</span><span>${rt.online}/${rt.total} 在线</span></div>
       </div>`;
       if(crAlerts.length){
@@ -352,11 +357,16 @@ function dashboardPage(){
           const bg=hs>=80?'rgba(34,197,94,.06)':hs>=50?'rgba(245,158,11,.06)':'rgba(239,68,68,.06)';
           const border=hs>=80?'rgba(34,197,94,.2)':hs>=50?'rgba(245,158,11,.25)':'rgba(239,68,68,.25)';
           const color=hs>=80?'var(--c-ok)':hs>=50?'var(--c-warn)':'var(--c-err)';
+          const barColor=hs>=80?'#22c55e':hs>=50?'#f59e0b':'#ef4444';
+          const levelLabel=hs>=80?'优':hs>=50?'良':'差';
           const rt=crRuntime(state,c.id);
           return `<div class="clickable" data-nav-cr="${c.id}" style="padding:14px 18px;border-radius:8px;background:${bg};border:1px solid ${border};cursor:pointer">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
               <span style="font-weight:600;font-size:.92rem">${esc(c.name)}</span>
-              <span style="font-weight:700;font-size:1rem;color:${color}">${hs}</span>
+              <span style="font-size:.78rem;font-weight:600;color:${color};padding:2px 8px;border-radius:10px;background:${bg};border:1px solid ${border}">${levelLabel}</span>
+            </div>
+            <div style="height:6px;background:var(--c-bg2);border-radius:3px;overflow:hidden;margin-bottom:6px">
+              <div style="height:100%;width:${hs}%;background:${barColor};border-radius:3px;transition:width .3s"></div>
             </div>
             <div style="font-size:.82rem;color:var(--c-text3)">${rt.online}/${rt.total} 在线${crAlerts.length?` · <span style="color:var(--c-err)">${crAlerts.length} 告警</span>`:''}</div>
           </div>`;
@@ -439,10 +449,12 @@ function classroomListPage(){
     <tbody>${crs.filter(c=>c.stage==='deployed').map(c=>({c,hs:healthScore(state,c.id)})).sort((a,b)=>a.hs-b.hs).map(({c,hs})=>{
       const rt=crRuntime(state,c.id); const als=alertsInCr(state,c.id);
       const hsColor=hs>=80?'var(--c-ok)':hs>=50?'var(--c-warn)':'var(--c-err)';
+      const barColor=hs>=80?'#22c55e':hs>=50?'#f59e0b':'#ef4444';
+      const levelLabel=hs>=80?'优':hs>=50?'良':'差';
       return `<tr>
         <td class="clickable" data-nav-cr="${c.id}">${esc(c.name)}</td>
         <td>${esc(c.building)} ${esc(c.floor)}</td>
-        <td><span style="font-weight:700;color:${hsColor}">${hs}</span><span style="font-size:.75rem;color:var(--c-text3)">/100</span></td>
+        <td><div style="display:flex;align-items:center;gap:6px"><div style="width:48px;height:6px;background:var(--c-bg2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${hs}%;background:${barColor};border-radius:3px"></div></div><span style="font-size:.78rem;font-weight:600;color:${hsColor}">${levelLabel}</span></div></td>
         <td>${rt.total}</td><td>${pct(rt.online,rt.total)}%</td>
         <td>${als.length?`<span class="text-err">${als.length}</span>`:'-'}</td>
       </tr>`;
@@ -960,17 +972,15 @@ function terminalDetailPage(){
   const desktops = t.desktops || [];
   const defaultDt = desktops.find(d=>d.id===bios?.defaultBootId);
   const met = t.metrics || {};
-  const memPct = met.memTotal ? Math.round(met.memUsed/met.memTotal*100) : 0;
-  const diskPct = met.diskTotal ? Math.round(met.diskUsed/met.diskTotal*100) : 0;
+  const memPct = met.memTotal ? Math.round(Math.min(met.memUsed,met.memTotal)/met.memTotal*100) : 0;
+  const diskPct = met.diskTotal ? Math.round(Math.min(met.diskUsed,met.diskTotal)/met.diskTotal*100) : 0;
 
   /* Sparkline data from terminal history */
   const hist = t._monitorHistory || [];
   const cpuHist = hist.map(h=>h.cpu);
   const memHist = hist.map(h=>h.mem);
-  const gpuHist = hist.map(h=>h.gpu);
   const cpuColor = (met.cpu||0)>80?'#ef4444':(met.cpu||0)>60?'#f59e0b':'#22c55e';
   const memColor = memPct>85?'#ef4444':memPct>70?'#f59e0b':'#3b82f6';
-  const gpuColor = (met.gpu||0)>80?'#ef4444':(met.gpu||0)>60?'#f59e0b':'#22c55e';
   const diskColor = diskPct>85?'#ef4444':diskPct>70?'#f59e0b':'#3b82f6';
   const diskHist = hist.map(h=>h.disk);
 
@@ -1013,32 +1023,35 @@ function terminalDetailPage(){
     </div>
   </div>
 
-  <!-- Row 2: 实时状态 sparklines -->
+  <!-- Row 2: 实时状态 sparklines (same style as dashboard server status) -->
   <div class="section" style="margin-bottom:16px">
     <div class="section-head"><h3>实时状态</h3></div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:960px">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;max-width:640px">
       <div class="sparkline-wrap">
-        <div class="spark-label"><span class="spark-title">CPU</span><span class="spark-value" style="color:${cpuColor}">${met.cpu||0}% <span style="font-size:.72rem;opacity:.7">${met.cpuTemp||'--'}°C</span></span></div>
+        <div class="spark-label"><span class="spark-title">CPU</span><span class="spark-value" style="color:${cpuColor}">${met.cpu||0}%</span></div>
         ${sparklineSvg(cpuHist, cpuColor, 200, 48)}
       </div>
       <div class="sparkline-wrap">
-        <div class="spark-label"><span class="spark-title">内存</span><span class="spark-value" style="color:${memColor}">${met.memUsed||0}/${met.memTotal||0} GB (${memPct}%)</span></div>
+        <div class="spark-label"><span class="spark-title">内存</span><span class="spark-value" style="color:${memColor}">${memPct}%</span></div>
         ${sparklineSvg(memHist, memColor, 200, 48)}
-      </div>
-      <div class="sparkline-wrap">
-        <div class="spark-label"><span class="spark-title">GPU</span><span class="spark-value" style="color:${gpuColor}">${met.gpu||0}% <span style="font-size:.72rem;opacity:.7">${met.gpuTemp||'--'}°C</span></span></div>
-        ${sparklineSvg(gpuHist, gpuColor, 200, 48)}
       </div>
     </div>
   </div>
 
-  <!-- Row 3: 存储 -->
+  <!-- Row 3: 存储 (same style as dashboard server storage) -->
   <div class="section" style="margin-bottom:16px">
     <div class="section-head"><h3>存储</h3></div>
-    <div style="max-width:320px">
-      <div class="sparkline-wrap">
-        <div class="spark-label"><span class="spark-title">磁盘</span><span class="spark-value" style="color:${diskColor}">${met.diskUsed||0}/${met.diskTotal||0} GB (${diskPct}%)</span></div>
-        ${sparklineSvg(diskHist, diskColor, 200, 48)}
+    <div style="max-width:480px">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+        <span style="font-size:1.6rem;font-weight:700;color:${diskColor}">${diskPct}%</span>
+        <span style="font-size:.85rem;color:var(--c-text3)">已用 ${Math.min(met.diskUsed||0,met.diskTotal||0)} GB / 共 ${met.diskTotal||0} GB</span>
+      </div>
+      <div style="height:20px;background:var(--c-bg2);border-radius:10px;overflow:hidden;border:1px solid var(--c-border)">
+        <div style="height:100%;width:${diskPct}%;background:${diskColor};border-radius:10px;transition:width .3s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.78rem;color:var(--c-text3)">
+        <span>已用 ${Math.min(met.diskUsed||0,met.diskTotal||0)} GB</span>
+        <span>可用 ${Math.max(0,(met.diskTotal||0)-Math.min(met.diskUsed||0,met.diskTotal||0))} GB</span>
       </div>
     </div>
   </div>
@@ -1054,6 +1067,7 @@ function terminalDetailPage(){
         const isHidden = d.visibility==='hidden';
         const uploaded = d.uploaded || d.syncStatus==='synced';
         const dtSize = d.diskSize || 25;
+        const dataDisks = d.dataDisks || [];
         return `<div class="card" style="padding:14px 16px${isDefault?';border-left:3px solid var(--c-brand)':''}">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
             <strong style="font-size:.95rem">${esc(d.name)}</strong>
@@ -1061,16 +1075,19 @@ function terminalDetailPage(){
           </div>
           <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">
             <span style="font-weight:600;font-size:.88rem">${dtSize} GB</span>
-            ${d.dataDisk?`<span style="font-size:.78rem;color:var(--c-text3)">数据盘 ${esc(d.dataDisk)}</span>`:''}
+            <span style="display:inline-block;width:1px;height:12px;background:var(--c-border);margin:0 2px"></span>
+            <span style="font-size:.78rem;color:var(--c-text2)">${isPhysical?'物理部署（独立分区）':'虚拟部署（VHD）'}</span>
           </div>
+          ${dataDisks.length?`<div style="font-size:.78rem;color:var(--c-text2);margin-bottom:6px">${dataDisks.map(dd=>`数据盘 ${esc(dd.drive||'D:')} ${esc(dd.size||'')}`).join(' · ')}</div>`
+            :(d.dataDisk?`<div style="font-size:.78rem;color:var(--c-text2);margin-bottom:6px">数据盘 ${esc(d.dataDisk)}</div>`
+            :`<div style="font-size:.78rem;color:var(--c-text3);margin-bottom:6px">无数据盘</div>`)}
           <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
             ${isDefault?pill('默认启动','info'):''}
-            ${isPhysical?pill('物理部署','warn'):''}
             ${!uploaded?pill('未同步','err'):''}
             ${isHidden?pill('已隐藏','muted'):(!inBoot&&!isPhysical?pill('隐藏','muted'):'')}
-            ${d.restoreMode?`<span style="font-size:.75rem;color:var(--c-text3)">还原: ${esc(d.restoreMode)}</span>`:''}
           </div>
-          <div style="font-size:.72rem;color:var(--c-text3);margin-top:6px">
+          <div style="font-size:.75rem;color:var(--c-text3);margin-top:6px">还原策略: ${esc(d.restoreMode||'--')}</div>
+          <div style="font-size:.72rem;color:var(--c-text3);margin-top:4px">
             ${d.createdAt?`创建 ${fmtTime(d.createdAt)}`:''} ${d.editedAt?`· 更新 ${fmtTime(d.editedAt)}`:''}
           </div>
         </div>`;

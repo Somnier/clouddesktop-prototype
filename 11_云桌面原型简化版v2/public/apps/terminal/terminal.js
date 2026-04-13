@@ -327,7 +327,6 @@ function localInfoScreen(){
     <div class="prep-field"><label>网关</label><input type="text" id="li-gw" value="${esc(m.gateway||'')}" placeholder="10.x.x.1"></div>
     <div class="prep-field"><label>DNS</label><input type="text" id="li-dns" value="${esc((m.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
     <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn btn-ghost" data-act="go-home">取消</button>
       <button class="btn btn-primary" data-save="local-info">保存</button>
     </div>
   </div>
@@ -358,7 +357,6 @@ function localNetworkScreen(){
       ${connStatus==='fail'?'<div style="font-size:.75rem;color:var(--t-text3);margin-top:4px">请检查地址是否正确或网络是否通畅</div>':''}
     </div>
     <div style="display:flex;gap:8px;margin-top:16px">
-      <button class="btn btn-ghost" data-act="go-home">取消</button>
       <button class="btn btn-primary" data-save="local-network">保存</button>
     </div>
   </div>
@@ -697,6 +695,16 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
   const lastResult = opsMode==='deploy' ? lastDeployResult : opsMode==='maint-ip' ? lastMaintIpResult : null;
   const viewingLastResult = demo().flags?.viewLastResult;
 
+  /* Build IP change map for maint-ip mode (terminalId → {oldIp, newIp}) */
+  const ipChangeMap = {};
+  if(opsMode==='maint-ip' || (lastResult && lastMaintIpResult)){
+    const ipPreview = md.ipPreview || lastMaintIpResult?._ipPreview || [];
+    ipPreview.forEach(pv=>{
+      const t = terms.find(tt=>tt.id===pv.terminalId);
+      ipChangeMap[pv.terminalId] = { oldIp: t?.ip||'--', newIp: pv.newIp||'--' };
+    });
+  }
+
   return `<div style="display:grid;grid-template-columns:280px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden;align-items:stretch">
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
       <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">
@@ -752,8 +760,8 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
           '请从左侧选择功能'}
       </div>`}
       <div class="page-scroll" style="flex:1;min-height:0">
-        ${isRunning ? renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, m) :
-          viewingLastResult&&lastResult ? renderSeatGridProgress(grid, r, dir, bindings, lastResult._task, stateLabels, terms, m) :
+        ${isRunning ? renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, m, opsMode==='maint-ip'?ipChangeMap:null) :
+          viewingLastResult&&lastResult ? renderSeatGridProgress(grid, r, dir, bindings, lastResult._task, stateLabels, terms, m, opsMode==='maint-ip'||lastResult._ipPreview?ipChangeMap:null) :
           opsMode==='maint-ip' ? renderSeatGridMaint(terms, m, c, d, md) :
           renderSeatGridOps(grid, r, dir, bindings, deployScope, terms, m)}
       </div>
@@ -869,6 +877,16 @@ function renderSeatGridOps(grid, r, dir, bindings, deployScope, terms, m){
         html+=`<div class="gb gb-waiting"><div class="gb-seat" style="opacity:.3">${esc(seat)}</div></div>`;
         continue;
       }
+      /* Check terminal online status */
+      const t = terms.find(tt=>tt.id===binding.terminalId);
+      const offline = t && !t.online;
+      if(offline){
+        html+=`<div class="gb gb-disabled" style="opacity:.6">
+          <div class="gb-seat">${esc(seat)}</div>
+          <div class="gb-tag" style="color:var(--t-err)">离线</div>
+        </div>`;
+        continue;
+      }
       /* Selectable block — use deployScope for selection state */
       const isSelected = !!deployScope[b.idx];
       html+=`<div class="gb ${isSelected?'gb-bound':'gb-waiting'}" data-deploy-toggle-bind="${b.idx}" style="cursor:pointer">
@@ -880,10 +898,12 @@ function renderSeatGridOps(grid, r, dir, bindings, deployScope, terms, m){
   return `<div class="deploy-grid" style="display:grid;grid-template-columns:repeat(${grid.cols},1fr);gap:6px">${html}</div>`;
 }
 
-function renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, m){
+function renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, m, ipChangeMap){
   /* Both maintenance and deploy tasks now use grid-block-based layout */
-  /* This ensures blank classrooms (no terminal seats) can render progress correctly */
+  /* ipChangeMap: optional map of terminalId → {oldIp, newIp} for maint-ip results */
   let html='';
+  /* Build a set of terminal IDs that are in this task's scope */
+  const taskTermIds = new Set((tk?.items||[]).map(i=>i.terminalId));
   for(let ri=0;ri<grid.rows;ri++){
     for(let ci=0;ci<grid.cols;ci++){
       const row = (dir==='bl'||dir==='br') ? (grid.rows-1-ri) : ri;
@@ -906,18 +926,30 @@ function renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, 
         continue;
       }
       if(!binding){
-        html+=`<div class="gb gb-waiting"><div class="gb-seat">${esc(seat)}</div><div class="gb-tag">未分配</div></div>`;
+        html+=`<div class="gb gb-waiting"><div class="gb-seat">${esc(seat)}</div><div class="gb-tag" style="color:var(--t-text3)">--</div></div>`;
+        continue;
+      }
+      /* If this terminal was NOT included in the task scope, show as non-participant */
+      if(!taskTermIds.has(binding.terminalId)){
+        html+=`<div class="gb gb-waiting" style="opacity:.5">
+          <div class="gb-seat">${esc(seat)}</div>
+          <div class="gb-tag" style="color:var(--t-text3)">未传输</div>
+        </div>`;
         continue;
       }
       const item = tk?.items?.find(i=>i.terminalId===binding.terminalId);
       const itemState = item?.state||'queued';
       const pctVal = itemState==='completed'?100:itemState==='failed'?0:itemState==='transferring'?35:itemState==='applying'?70:itemState==='rebooting'?90:5;
       const fillColor = itemState==='completed'?'var(--t-ok)':itemState==='failed'?'var(--t-err)':'var(--t-accent)';
+      /* IP change info for maint-ip results */
+      const ipInfo = ipChangeMap?.[binding.terminalId];
+      const showIpChange = ipInfo && (itemState==='completed'||itemState==='failed');
       html+=`<div class="gb gb-transfer" style="position:relative;overflow:hidden">
         <div style="position:absolute;top:0;left:0;bottom:0;width:${pctVal}%;background:${fillColor};opacity:.2;transition:width .5s ease"></div>
         <div style="position:relative;z-index:1">
           <div class="gb-seat">${esc(seat)}</div>
           <div class="gb-status" style="color:${itemState==='completed'?'var(--t-ok)':itemState==='failed'?'var(--t-err)':'var(--t-text2)'}">${stateLabels[itemState]||itemState}</div>
+          ${showIpChange?`<div style="font-size:.6rem;color:var(--t-text2);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(ipInfo.oldIp)} → ${esc(ipInfo.newIp)}">${esc(ipInfo.oldIp)}→${esc(ipInfo.newIp)}</div>`:''}
         </div>
       </div>`;
     }
@@ -963,9 +995,17 @@ function renderSeatGridMaint(terms, m, c, d, md){
         }
         const t = terms.find(tt=>tt.id===binding.terminalId);
         const checked = scope.includes(binding.terminalId);
+        const offline = t && !t.online;
+        if(offline){
+          html+=`<div class="gb gb-disabled" style="opacity:.6">
+            <div class="gb-seat">${esc(seat)}</div>
+            <div class="gb-tag" style="color:var(--t-err)">离线</div>
+          </div>`;
+          continue;
+        }
         html+=`<div class="gb ${checked?'gb-bound':'gb-waiting'}" style="cursor:pointer" data-maint-toggle="${binding.terminalId}">
           <div class="gb-seat">${esc(seat)}</div>
-          ${checked?'<div class="gb-tag" style="color:var(--t-ok)">已选</div>':`<div class="gb-tag">${t?.online?'在线':'离线'}</div>`}
+          ${checked?'<div class="gb-tag" style="color:var(--t-ok)">已选</div>':'<div class="gb-tag" style="color:var(--t-text3)">未选</div>'}
         </div>`;
       }
     }
@@ -982,10 +1022,14 @@ function renderSeatGridMaint(terms, m, c, d, md){
         <div class="gb-seat">${esc(t.seat)}</div>
         <div class="gb-tag" style="color:var(--t-warn)">本机</div>
       </div>`;
+      if(!t.online) return `<div class="gb gb-disabled" style="opacity:.6">
+        <div class="gb-seat">${esc(t.seat)}</div>
+        <div class="gb-tag" style="color:var(--t-err)">离线</div>
+      </div>`;
       const checked=scope.includes(t.id);
       return `<div class="gb ${checked?'gb-bound':'gb-waiting'}" style="cursor:pointer" data-maint-toggle="${t.id}">
         <div class="gb-seat">${esc(t.seat)}</div>
-        ${checked?'<div class="gb-tag" style="color:var(--t-ok)">已选</div>':`<div class="gb-tag">${t.online?'在线':'离线'}</div>`}
+        ${checked?'<div class="gb-tag" style="color:var(--t-ok)">已选</div>':'<div class="gb-tag" style="color:var(--t-text3)">未选</div>'}
       </div>`;
     }).join('')}
   </div>`;
@@ -1328,6 +1372,7 @@ function deployTransferScreen(){
   <div class="deploy-grid" style="display:grid;grid-template-columns:repeat(${grid.cols},1fr);gap:6px">
     ${(()=>{
       const dir = d.rules?.gridDirection || 'tl';
+      const taskTermIds = new Set((tk?.items||[]).map(i=>i.terminalId));
       let html='';
       for(let ri=0;ri<grid.rows;ri++){
         for(let ci=0;ci<grid.cols;ci++){
@@ -1343,7 +1388,15 @@ function deployTransferScreen(){
           }
           const binding=bindings[b.idx];
           if(!binding){
-            html+=`<div class="gb gb-waiting"><div class="gb-seat">${esc(seat)}</div><div class="gb-tag">未分配</div></div>`;
+            html+=`<div class="gb gb-waiting"><div class="gb-seat">${esc(seat)}</div><div class="gb-tag" style="color:var(--t-text3)">--</div></div>`;
+            continue;
+          }
+          /* Not in task scope = did not participate */
+          if(!taskTermIds.has(binding.terminalId)){
+            html+=`<div class="gb gb-waiting" style="opacity:.5">
+              <div class="gb-seat">${esc(seat)}</div>
+              <div class="gb-tag" style="color:var(--t-text3)">未部署</div>
+            </div>`;
             continue;
           }
           const item = tk?.items?.find(i=>i.terminalId===binding.terminalId);
@@ -1418,10 +1471,17 @@ function maintIpScreen(){
           const checked=d.scope.includes(t.id);
           const pv = ipPreview.find(x=>x.terminalId===t.id);
           const scopeIdx = d.scope.indexOf(t.id);
-          return `<div class="dt-card ${checked?'selected':''} ${!t.online?'offline-look':''}" style="cursor:pointer;padding:8px 10px;font-size:.78rem;border-left:3px solid ${checked?'var(--t-accent)':'var(--t-border)'}" data-maint-toggle="${t.id}">
+          if(!t.online) return `<div class="dt-card offline-look" style="padding:8px 10px;font-size:.78rem;opacity:.6;border-left:3px solid var(--t-border)">
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span style="font-weight:600;font-size:.85rem">${esc(t.seat||'--')}</span>
-              <span>${t.online?pill('在线','ok'):pill('离线','err')}</span>
+              <span>${pill('离线','err')}</span>
+            </div>
+            <div class="mono" style="font-size:.72rem">${esc(t.ip||'--')}</div>
+          </div>`;
+          return `<div class="dt-card ${checked?'selected':''}" style="cursor:pointer;padding:8px 10px;font-size:.78rem;border-left:3px solid ${checked?'var(--t-accent)':'var(--t-border)'}" data-maint-toggle="${t.id}">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-weight:600;font-size:.85rem">${esc(t.seat||'--')}</span>
+              <span>${checked?pill('已选','ok'):''}</span>
             </div>
             <div class="mono" style="font-size:.72rem">${esc(t.ip||'--')}${pv?' → <span style="color:var(--t-ok)">'+esc(pv.newIp)+'</span>':''}</div>
             ${checked?`<div style="font-size:.7rem;color:var(--t-accent);margin-top:2px">#${scopeIdx+1}</div>`:''}
@@ -1432,7 +1492,6 @@ function maintIpScreen(){
   </div>
   </div>
   <div style="display:flex;gap:10px;margin-top:16px">
-    <button class="btn btn-ghost" data-act="return-workbench">取消</button>
     <button class="btn btn-primary" data-act="start-maint-ip">开始执行</button>
   </div>
 </div>`;
@@ -1589,7 +1648,6 @@ function faultResetScreen(){
   </div>
 
   <div style="display:flex;gap:10px">
-    <button class="btn btn-ghost" data-act="go-home">取消</button>
     <button class="btn btn-danger" ${serverOk?'':'disabled'} data-act="fault-reset-confirm-with-dialog">确认重置</button>
   </div>
   </div>
@@ -1644,7 +1702,6 @@ function exportScreen(){
   </div>
   <div style="padding-top:12px;border-top:1px solid var(--t-border);display:flex;align-items:center;gap:12px">
     <button class="btn btn-primary" data-act="export-select-folder">选择目录并导出</button>
-    <button class="btn btn-ghost" data-act="return-workbench">返回</button>
     <span style="font-size:.75rem;color:var(--t-text3)">修改教室名称仅影响导出文件，不影响系统内信息</span>
   </div>
 </div>`;

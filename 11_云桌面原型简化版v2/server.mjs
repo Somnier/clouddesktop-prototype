@@ -104,9 +104,9 @@ function buildState(s){
           gpu: 5+Math.floor(Math.random()*25),
           cpuTemp: 38+Math.floor(Math.random()*25),
           gpuTemp: 35+Math.floor(Math.random()*20),
-          memUsed: 4+Math.floor(Math.random()*8),
+          memUsed: (()=>{ const total=[8,16,16,32][i%4]; return Math.min(2+Math.floor(Math.random()*Math.floor(total*0.7)),total); })(),
           memTotal: [8,16,16,32][i%4],
-          diskUsed: (()=>{ const dts=isBlank?[]:(sc.desktopCatalog||[]).filter(d=>useLbl==='教师终端'||!/教师/.test(d.name)); const dtSum=dts.reduce((s,d)=>{ const ddGb=d.dataDisk?parseInt((d.dataDisk.match(/(\d+)G/)||[])[1]||'0',10):0; return s+(d.diskSize||(ddGb>0?ddGb+25:25)); },0); return dtSum+35; })(),
+          diskUsed: (()=>{ const dts=isBlank?[]:(sc.desktopCatalog||[]).filter(d=>useLbl==='教师终端'||!/教师/.test(d.name)); const dtSum=dts.reduce((s,d)=>{ const ddGb=d.dataDisk?parseInt((d.dataDisk.match(/(\d+)G/)||[])[1]||'0',10):0; return s+(d.diskSize||(ddGb>0?ddGb+25:25)); },0); const total=i===0?512:[256,512,512,1024][i%4]; return Math.min(dtSum+35,total); })(),
           diskTotal: i===0 ? 512 : [256,512,512,1024][i%4]
         },
         heartbeat: now(),
@@ -444,7 +444,7 @@ function act(action, payload={}){
   case 'clear-logs': state.logs=[]; return {ok:true};
   case 'clear-alerts': state.alerts.forEach(a=>a.status='closed'); return {ok:true};
   case 'all-online': state.terminals.forEach(t=>{t.online=true;t.power='on';t.heartbeat=now();}); return {ok:true};
-  case 'randomize-metrics': state.terminals.filter(t=>t.online).forEach(t=>{const dtMin=(t.desktops||[]).length*45+30;t.metrics={cpu:5+Math.floor(Math.random()*85),gpu:2+Math.floor(Math.random()*60),memUsed:Math.floor(t.metrics.memTotal*(.2+Math.random()*.6)),memTotal:t.metrics.memTotal,diskUsed:Math.max(dtMin,Math.floor(t.metrics.diskTotal*(.15+Math.random()*.6))),diskTotal:t.metrics.diskTotal};}); return {ok:true};
+  case 'randomize-metrics': state.terminals.filter(t=>t.online).forEach(t=>{const dtMin=(t.desktops||[]).length*45+30;t.metrics={cpu:5+Math.floor(Math.random()*85),gpu:2+Math.floor(Math.random()*60),memUsed:Math.min(Math.floor(t.metrics.memTotal*(.2+Math.random()*.6)),t.metrics.memTotal),memTotal:t.metrics.memTotal,diskUsed:Math.min(Math.max(dtMin,Math.floor(t.metrics.diskTotal*(.15+Math.random()*.6))),t.metrics.diskTotal),diskTotal:t.metrics.diskTotal};}); return {ok:true};
   case 'switch-focus':{
     const newCr=crById(payload.classroomId); if(!newCr) return {ok:false,reason:'教室不存在'};
     const terms=termsInCr(payload.classroomId); if(!terms.length) return {ok:false,reason:'教室无终端'};
@@ -1592,6 +1592,9 @@ function tickHeartbeats(){
     if(!t.online) return;
     t.metrics.cpu=clamp(t.metrics.cpu+((i%3)-1)*2,5,94);
     t.metrics.mem=clamp(t.metrics.mem+((i%5)-2),12,96);
+    /* Ensure memUsed never exceeds memTotal */
+    if(t.metrics.memUsed>t.metrics.memTotal) t.metrics.memUsed=t.metrics.memTotal;
+    if(t.metrics.diskUsed>t.metrics.diskTotal) t.metrics.diskUsed=t.metrics.diskTotal;
     t.heartbeat=now();
     /* Terminal-level monitor history for sparklines */
     if(!t._monitorHistory) t._monitorHistory=[];
@@ -1740,7 +1743,7 @@ function tickTasks(){
         state.demo.motherScreen='exam-result'; termById(state.demo.motherId).screen='exam-result';
       } else {
         /* maintenance completed — save per-mode result and stay on workbench if already there */
-        state.demo.flags.lastMaintIpResult = { completed:task.counts.completed, failed:task.counts.failed, total:task.counts.total, type:task.type, label:task.label, at:now(), _task:task };
+        state.demo.flags.lastMaintIpResult = { completed:task.counts.completed, failed:task.counts.failed, total:task.counts.total, type:task.type, label:task.label, at:now(), _task:task, _ipPreview:state.demo.maintDraft?.ipPreview||[] };
         state.demo.flags.viewLastResult = true;
         if(state.demo.motherScreen==='workbench'){
           /* stay — inline progress in maint tab will show completion */
