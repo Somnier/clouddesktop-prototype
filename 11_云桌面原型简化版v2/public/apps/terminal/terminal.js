@@ -410,7 +410,7 @@ function localDesktopScreen(){
     if(angle>=359.9) return `<circle cx="${pieCx}" cy="${pieCy}" r="${pieR}" fill="${seg.color}"/>`;
     return `<path d="M${pieCx},${pieCy} L${x1},${y1} A${pieR},${pieR} 0 ${largeArc},1 ${x2},${y2} Z" fill="${seg.color}"/>`;
   }).join('');
-  const pieLegend = dtSegments.map(seg=>`<div style="display:flex;align-items:center;gap:6px;font-size:.75rem"><span style="width:10px;height:10px;border-radius:2px;background:${seg.color};flex-shrink:0"></span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(seg.name)}</span><span style="color:var(--t-text2);flex-shrink:0">${seg.size}G</span></div>`).join('');
+  /* legend removed — color dots merged into stats panel below */
 
   /* has any unsync */
   const hasUnsync = desktops.some(d=>!(d.uploaded||d.syncStatus==='synced'));
@@ -442,8 +442,9 @@ function localDesktopScreen(){
         const isPhysical = d.physicalDeploy;
         const dtSize = d.diskSize || 25;
         return `
-        <div class="dt-card ${isDefault?'selected':''} ${!uploaded?'dt-unsync':''}" data-dt-id="${d.id}" style="position:relative">
-          <div>
+        <div class="dt-card ${isDefault?'selected':''} ${!uploaded?'dt-unsync':''}" data-dt-id="${d.id}" style="position:relative;overflow:hidden">
+          <div class="dt-card-fill"></div>
+          <div style="position:relative;z-index:1">
             <div class="dt-name">${esc(d.name)}</div>
             <div class="dt-meta" style="display:flex;align-items:baseline;gap:6px;margin-top:6px">
               <span>${esc(d.baseImageName||d.os)}</span>
@@ -458,7 +459,7 @@ function localDesktopScreen(){
             </div>
             <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
               <button class="btn btn-sm btn-primary" data-dt-edit="${d.id}">编辑桌面</button>
-              ${!uploaded?`<button class="btn btn-sm" style="border-color:var(--t-warn);color:var(--t-warn);background:rgba(245,158,11,.08)" data-dt-upload="${d.id}">同步到服务器</button>`:''}
+              ${!uploaded?`<button class="btn btn-sm" style="background:var(--t-warn);color:#fff;border-color:var(--t-warn);font-weight:600" data-dt-upload="${d.id}">▲ 同步到服务器</button>`:''}
               <button class="btn btn-sm btn-ghost dt-overflow-btn" data-dt-overflow="${d.id}" style="margin-left:auto;padding:2px 8px">···</button>
             </div>
           </div>
@@ -481,12 +482,11 @@ function localDesktopScreen(){
         <circle cx="${pieCx}" cy="${pieCy}" r="32" fill="var(--t-bg)"/>
         <text x="${pieCx}" y="${pieCy+4}" text-anchor="middle" fill="${diskColor}" font-size="16" font-weight="700">${diskPct}%</text>
       </svg>
-      <div style="width:100%;display:flex;flex-direction:column;gap:3px">${pieLegend}</div>
-      <div style="width:100%;border-top:1px solid var(--t-border);padding-top:8px;display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--t-text2)">
-        <div style="display:flex;justify-content:space-between"><span>总容量</span><strong>${diskTotal} GB</strong></div>
-        <div style="display:flex;justify-content:space-between"><span>系统</span><span>${systemUsed} GB</span></div>
-        <div style="display:flex;justify-content:space-between"><span>桌面 (${desktops.length})</span><span>${desktopUsed} GB</span></div>
-        <div style="display:flex;justify-content:space-between"><span>剩余</span><span style="color:${diskColor}">${diskFree} GB</span></div>
+      <div style="width:100%;display:flex;flex-direction:column;gap:5px;font-size:.78rem;color:var(--t-text2)">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span>总容量</span><strong style="color:var(--t-text)">${diskTotal} GB</strong></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#64748b;flex-shrink:0"></span>系统占用</span><span>${systemUsed} GB</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#3b82f6;flex-shrink:0"></span>桌面占用</span><span>${desktopUsed} GB</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#1e293b;flex-shrink:0"></span>剩余空间</span><span style="color:${diskColor}">${diskFree} GB</span></div>
       </div>
     </div>
   </div>
@@ -536,6 +536,7 @@ function workbenchScreen(){
     <div class="section-title" style="margin:0">
       <button class="btn btn-ghost" data-act="go-home">←</button>
       ${esc(displayName)}
+      ${c.stage!=='blank'?'<span class="pill ok pill-sm" style="margin-left:6px">已设置布局</span>':''}
       <span style="font-size:.78rem;color:var(--t-text2);margin-left:8px">${rt.online}/${rt.total} 在线</span>
     </div>
   </div>

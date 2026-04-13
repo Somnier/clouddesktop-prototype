@@ -134,38 +134,38 @@ function buildState(s){
     // keyboard missing alert — hardware disconnect = high
     if(crTerms.length>5){
       alerts.push({id:'alert-seed-kb-'+c.id, level:'high', title:'键盘设备异常',
-        detail:c.name+' 座位 '+crTerms[5].seat+' 终端键盘未检测到',
+        detail:'终端键盘未检测到',
         terminalId:crTerms[5].id, classroomId:c.id, status:'open', at:'2026-03-20T08:15:00Z'});
     }
     // headphone missing — hardware disconnect = high
     if(crTerms.length>12){
       alerts.push({id:'alert-seed-hp-'+c.id, level:'high', title:'耳机设备未连接',
-        detail:c.name+' 座位 '+crTerms[12].seat+' 耳机插孔无信号',
+        detail:'耳机插孔无信号',
         terminalId:crTerms[12].id, classroomId:c.id, status:'open', at:'2026-03-19T14:30:00Z'});
     }
     // offline terminal alert — offline = medium (may be powered off or broken)
     const faultyT = crTerms.find(t=>!t.online);
     if(faultyT){
       alerts.push({id:'alert-seed-offline-'+c.id, level:'medium', title:'终端离线',
-        detail:c.name+' 终端 '+faultyT.mac+' 持续离线，可能关机或硬件故障',
+        detail:'终端持续离线，可能关机或硬件故障',
         terminalId:faultyT.id, classroomId:c.id, status:'open', at:'2026-03-18T10:00:00Z'});
     }
     // disk health warning — SMART/disk = high (hardware)
     if(crTerms.length>20){
       alerts.push({id:'alert-seed-disk-'+c.id, level:'high', title:'硬盘健康预警',
-        detail:c.name+' 座位 '+crTerms[20].seat+' 硬盘 SMART 状态异常，剩余寿命 < 15%',
+        detail:'硬盘 SMART 状态异常，剩余寿命 < 15%',
         terminalId:crTerms[20].id, classroomId:c.id, status:'open', at:'2026-03-17T09:00:00Z'});
     }
     // disk speed low — performance issue = medium
     if(crTerms.length>22){
       alerts.push({id:'alert-seed-diskspd-'+c.id, level:'medium', title:'硬盘速率过低',
-        detail:c.name+' 座位 '+crTerms[22].seat+' 硬盘顺序读取速率降至 45 MB/s',
+        detail:'硬盘顺序读取速率降至 45 MB/s',
         terminalId:crTerms[22].id, classroomId:c.id, status:'open', at:'2026-03-19T14:30:00Z'});
     }
     // mouse missing — hardware disconnect = high
     if(crTerms.length>8){
       alerts.push({id:'alert-seed-ms-'+c.id, level:'high', title:'鼠标设备未检测',
-        detail:c.name+' 座位 '+crTerms[8].seat+' 鼠标设备离线',
+        detail:'鼠标设备离线',
         terminalId:crTerms[8].id, classroomId:c.id, status:'open', at:'2026-03-20T07:45:00Z'});
     }
     // sync delay warning — sync issue = low
@@ -173,13 +173,13 @@ function buildState(s){
       const st=crTerms[15];
       st.sync='syncing'; st.syncNote='同步延迟';
       alerts.push({id:'alert-seed-sync-'+c.id, level:'low', title:'桌面同步延迟',
-        detail:c.name+' 座位 '+st.seat+' 桌面同步超过 30 分钟未完成',
+        detail:'桌面同步超过 30 分钟未完成',
         terminalId:st.id, classroomId:c.id, status:'open', at:'2026-03-20T06:30:00Z'});
     }
     // monitor signal lost — hardware error = high
     if(crTerms.length>30){
       alerts.push({id:'alert-seed-mon-'+c.id, level:'high', title:'显示器信号丢失',
-        detail:c.name+' 座位 '+crTerms[30].seat+' 显示器 HDMI 信号未检测',
+        detail:'显示器 HDMI 信号未检测',
         terminalId:crTerms[30].id, classroomId:c.id, status:'open', at:'2026-03-19T11:15:00Z'});
     }
     // temperature warning — hardware abnormal = high
@@ -187,13 +187,13 @@ function buildState(s){
       crTerms[25].metrics.cpuTemp = 92;
       crTerms[25].metrics.gpuTemp = 85;
       alerts.push({id:'alert-seed-temp-'+c.id, level:'medium', title:'CPU 温度过高',
-        detail:c.name+' 座位 '+crTerms[25].seat+' CPU 温度达到 92°C',
+        detail:'CPU 温度达到 92°C',
         terminalId:crTerms[25].id, classroomId:c.id, status:'open', at:'2026-03-20T09:20:00Z'});
     }
     // memory error — hardware abnormal = high
     if(crTerms.length>18){
       alerts.push({id:'alert-seed-mem-'+c.id, level:'high', title:'内存校验错误',
-        detail:c.name+' 座位 '+crTerms[18].seat+' 内存 ECC 校验异常，建议更换',
+        detail:'内存 ECC 校验异常，建议更换',
         terminalId:crTerms[18].id, classroomId:c.id, status:'open', at:'2026-03-19T16:45:00Z'});
     }
     // make one more terminal offline for variety (different from faulty)
@@ -1598,7 +1598,8 @@ function tickHeartbeats(){
     t.heartbeat=now();
     /* Terminal-level monitor history for sparklines */
     if(!t._monitorHistory) t._monitorHistory=[];
-    t._monitorHistory.push({cpu:t.metrics.cpu,mem:t.metrics.mem,gpu:t.metrics.gpu||0,disk:t.metrics.diskUsed||0});
+    const tNet=Math.round((2+Math.sin(Date.now()/1000/40+i)*1.5+Math.sin(Date.now()/1000/13+i)*0.8+(Math.random()-0.5)*0.4)*10)/10;
+    t._monitorHistory.push({cpu:t.metrics.cpu,mem:t.metrics.mem,gpu:t.metrics.gpu||0,disk:t.metrics.diskUsed||0,net:tNet});
     if(t._monitorHistory.length>40) t._monitorHistory.shift();
   });
   /* update server metrics + history */
