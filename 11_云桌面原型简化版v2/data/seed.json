@@ -28,7 +28,8 @@
       "license": 500,
       "cpu": 32,
       "memory": 45,
-      "storage": 58
+      "storage": 58,
+      "diskTotal": 4096
     },
     {
       "id": "srv-west",
@@ -42,7 +43,8 @@
       "license": 300,
       "cpu": 28,
       "memory": 38,
-      "storage": 42
+      "storage": 42,
+      "diskTotal": 2048
     }
   ],
   "classrooms": [

@@ -181,21 +181,43 @@ function asideContent(){
       </div>`;
     }
   } else if(view.page==='assets'){
-    /* assets aside: storage summary */
-    cards+=`<div class="aside-card"><div class="aside-title">存储概况</div>
-      <div class="aside-item" style="justify-content:space-between"><span>服务器存储</span><span style="font-weight:600">${server?server.storage+'%':'--'}</span></div>
-      <div class="aside-item" style="justify-content:space-between"><span>终端总数</span><span style="font-weight:600">${stats.terminals}</span></div>
+    /* assets aside: comprehensive stats */
+    const crIds2 = state.classrooms.filter(c=>c.campusId===cId).map(c=>c.id);
+    const crsWithDesktops2 = state.classrooms.filter(c=>crIds2.includes(c.id)&&(c.desktopCatalog||[]).length>0);
+    const totalDesktops2 = crsWithDesktops2.reduce((n,c)=>(c.desktopCatalog||[]).length+n,0);
+    const totalSnaps2 = crsWithDesktops2.reduce((n,c)=>(c.snapshotTree||[]).length+n,0);
+    const totalImages2 = crsWithDesktops2.reduce((n,c)=>(c.imageStore||[]).length+n,0);
+    const estItems2 = [...crsWithDesktops2.flatMap(c=>(c.snapshotTree||[])),...crsWithDesktops2.flatMap(c=>(c.imageStore||[]))];
+    const totalStorageGB2 = estItems2.reduce((sum,item)=>{
+      let h=0;for(let i=0;i<item.id.length;i++) h=((h<<5)-h+item.id.charCodeAt(i))|0;
+      return sum+(Math.abs(h%40)+8)+((Math.abs(h>>8)%10)/10);
+    },0);
+    cards+=`<div class="aside-card"><div class="aside-title">资产统计</div>
+      <div class="aside-item" style="justify-content:space-between"><span>桌面</span><span style="font-weight:600">${totalDesktops2}</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span>教室</span><span style="font-weight:600">${crsWithDesktops2.length}</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span>镜像</span><span style="font-weight:600">${totalImages2}</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span>快照</span><span style="font-weight:600">${totalSnaps2}</span></div>
+      <div class="aside-item" style="justify-content:space-between;border-top:1px solid var(--c-border);padding-top:6px"><span>估算存储</span><span style="font-weight:700">${totalStorageGB2.toFixed(0)} GB</span></div>
+      <div class="aside-item" style="justify-content:space-between"><span>服务器占用</span><span style="font-weight:600">${server?server.storage+'%':'--'}</span></div>
     </div>`;
   } else if(view.page==='alerts'){
-    /* alerts aside: severity stats */
+    /* alerts aside: severity counts + top-affected classrooms */
     const high=campusAlerts.filter(a=>a.level==='high').length;
     const medium=campusAlerts.filter(a=>a.level==='medium').length;
     const low=campusAlerts.filter(a=>a.level==='low').length;
+    const crAlertMap2 = {};
+    campusAlerts.forEach(a=>{ crAlertMap2[a.classroomId]=(crAlertMap2[a.classroomId]||0)+1; });
+    const topCrs2 = Object.entries(crAlertMap2).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([id,cnt])=>{
+      const cr2=state.classrooms.find(c=>c.id===id);
+      return cr2 ? `<div class="aside-item" style="justify-content:space-between"><span>${esc(cr2.name)}</span><span style="font-weight:600">${cnt}</span></div>` : '';
+    }).filter(Boolean).join('');
     cards+=`<div class="aside-card"><div class="aside-title">告警统计</div>
+      <div class="aside-item" style="justify-content:space-between"><span>总计</span><span style="font-weight:700">${campusAlerts.length} 条</span></div>
       <div class="aside-item" style="justify-content:space-between"><span style="color:var(--c-err)">高严重度</span><span style="font-weight:700;color:var(--c-err)">${high}</span></div>
       <div class="aside-item" style="justify-content:space-between"><span style="color:var(--c-warn)">中严重度</span><span style="font-weight:700;color:var(--c-warn)">${medium}</span></div>
       <div class="aside-item" style="justify-content:space-between"><span>低严重度</span><span style="font-weight:700">${low}</span></div>
     </div>`;
+    if(topCrs2) cards+=`<div class="aside-card"><div class="aside-title">告警集中教室</div>${topCrs2}</div>`;
   } else if(view.page==='server-change'){
     /* server change aside: server status */
     if(server) cards+=`<div class="aside-card"><div class="aside-title">服务器状态</div>
@@ -263,11 +285,13 @@ function dashboardPage(){
   const memHist=hist.map(h=>h.memory);
   const netHist=hist.map(h=>h.net||0);
   const stoPct=server?.storage||0;
-  const stoHist=hist.map(h=>h.storage||stoPct);
+  const diskTotalGB=server?.diskTotal||0;
+  const diskUsedGB=diskTotalGB?Math.round(diskTotalGB*stoPct/100):0;
+  const diskFreeGB=diskTotalGB-diskUsedGB;
 
   const cpuColor=(server?.cpu||0)>80?'#ef4444':(server?.cpu||0)>60?'#f59e0b':'#22c55e';
   const memColor=(server?.memory||0)>80?'#ef4444':(server?.memory||0)>60?'#f59e0b':'#3b82f6';
-  const stoColor=(server?.storage||0)>85?'#ef4444':(server?.storage||0)>70?'#f59e0b':'#3b82f6';
+  const stoColor=stoPct>85?'#ef4444':stoPct>70?'#f59e0b':'#3b82f6';
 
   return `
   <div class="metric-grid">
@@ -300,10 +324,17 @@ function dashboardPage(){
   </div>
   <div class="section">
     <div class="section-head"><h3>服务器存储</h3></div>
-    <div style="max-width:320px">
-      <div class="sparkline-wrap">
-        <div class="spark-label"><span class="spark-title">存储</span><span class="spark-value" style="color:${stoColor}">${stoPct}%</span></div>
-        ${sparklineSvg(stoHist, stoColor, 200, 48)}
+    <div style="max-width:480px">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">
+        <span style="font-size:1.6rem;font-weight:700;color:${stoColor}">${stoPct}%</span>
+        <span style="font-size:.85rem;color:var(--c-text3)">已用 ${diskUsedGB>=1024?(diskUsedGB/1024).toFixed(1)+' TB':diskUsedGB+' GB'} / 共 ${diskTotalGB>=1024?(diskTotalGB/1024).toFixed(0)+' TB':diskTotalGB+' GB'}</span>
+      </div>
+      <div style="height:20px;background:var(--c-bg2);border-radius:10px;overflow:hidden;border:1px solid var(--c-border)">
+        <div style="height:100%;width:${stoPct}%;background:${stoColor};border-radius:10px;transition:width .3s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:.78rem;color:var(--c-text3)">
+        <span>已用 ${diskUsedGB} GB</span>
+        <span>可用 ${diskFreeGB} GB</span>
       </div>
     </div>
   </div>`:''}
@@ -316,18 +347,18 @@ function dashboardPage(){
       if(!scored.length) return '<div style="font-size:.85rem;color:var(--c-text3)">暂无已部署教室</div>';
       const allHealthy = scored.every(x=>x.hs>=80);
       return `${allHealthy?'<div style="padding:12px 16px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:8px;margin-bottom:12px;font-size:.88rem;color:var(--c-ok);font-weight:500">所有教室运行正常</div>':''}
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
         ${scored.map(({c,hs,alerts:crAlerts})=>{
           const bg=hs>=80?'rgba(34,197,94,.06)':hs>=50?'rgba(245,158,11,.06)':'rgba(239,68,68,.06)';
           const border=hs>=80?'rgba(34,197,94,.2)':hs>=50?'rgba(245,158,11,.25)':'rgba(239,68,68,.25)';
           const color=hs>=80?'var(--c-ok)':hs>=50?'var(--c-warn)':'var(--c-err)';
           const rt=crRuntime(state,c.id);
-          return `<div class="clickable" data-nav-cr="${c.id}" style="padding:10px 14px;border-radius:8px;background:${bg};border:1px solid ${border};cursor:pointer">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <span style="font-weight:600;font-size:.88rem">${esc(c.name)}</span>
-              <span style="font-weight:700;font-size:.92rem;color:${color}">${hs}</span>
+          return `<div class="clickable" data-nav-cr="${c.id}" style="padding:14px 18px;border-radius:8px;background:${bg};border:1px solid ${border};cursor:pointer">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <span style="font-weight:600;font-size:.92rem">${esc(c.name)}</span>
+              <span style="font-weight:700;font-size:1rem;color:${color}">${hs}</span>
             </div>
-            <div style="font-size:.78rem;color:var(--c-text3)">${rt.online}/${rt.total} 在线${crAlerts.length?` · <span style="color:var(--c-err)">${crAlerts.length} 告警</span>`:''}</div>
+            <div style="font-size:.82rem;color:var(--c-text3)">${rt.online}/${rt.total} 在线${crAlerts.length?` · <span style="color:var(--c-err)">${crAlerts.length} 告警</span>`:''}</div>
           </div>`;
         }).join('')}
       </div>`;
@@ -1020,11 +1051,13 @@ function terminalDetailPage(){
         const isDefault = d.id===bios?.defaultBootId;
         const isPhysical = d.physicalDeploy;
         const inBoot = bios?.bootEntries?.includes(d.id);
+        const isHidden = d.visibility==='hidden';
+        const uploaded = d.uploaded || d.syncStatus==='synced';
         const dtSize = d.diskSize || 25;
         return `<div class="card" style="padding:14px 16px${isDefault?';border-left:3px solid var(--c-brand)':''}">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
             <strong style="font-size:.95rem">${esc(d.name)}</strong>
-            <span style="font-size:.82rem;color:var(--c-text3)">${esc(d.os||'')}</span>
+            <span style="font-size:.82rem;color:var(--c-text3)">${esc(d.baseImageName||d.os||'')}</span>
           </div>
           <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:6px">
             <span style="font-weight:600;font-size:.88rem">${dtSize} GB</span>
@@ -1033,7 +1066,8 @@ function terminalDetailPage(){
           <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
             ${isDefault?pill('默认启动','info'):''}
             ${isPhysical?pill('物理部署','warn'):''}
-            ${!inBoot&&!isPhysical?pill('隐藏','muted'):''}
+            ${!uploaded?pill('未同步','err'):''}
+            ${isHidden?pill('已隐藏','muted'):(!inBoot&&!isPhysical?pill('隐藏','muted'):'')}
             ${d.restoreMode?`<span style="font-size:.75rem;color:var(--c-text3)">还原: ${esc(d.restoreMode)}</span>`:''}
           </div>
           <div style="font-size:.72rem;color:var(--c-text3);margin-top:6px">
@@ -1094,16 +1128,26 @@ function assetsPage(){
   const expanded = view.expandedAssets || {};
 
   return `
-  <!-- Two-column: main content (left) + stats sidebar (right) -->
-  <div style="display:flex;gap:20px;align-items:flex-start">
-  <div style="flex:1;min-width:0">
-
-  <div style="display:flex;gap:8px;margin-bottom:16px">
-    <button class="btn btn-primary btn-sm" data-asset-action="import">导入桌面</button>
-    <button class="btn btn-ghost btn-sm" data-asset-action="export">导出桌面</button>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:700px;margin-bottom:20px">
+    <div class="card" style="padding:16px 20px;cursor:pointer;border-left:3px solid var(--c-brand);display:flex;align-items:center;gap:12px" data-asset-action="import">
+      <div>
+        <div style="font-weight:600;font-size:.95rem">导入桌面</div>
+        <div style="font-size:.82rem;color:var(--c-text3)">从桌面包导入，追加到教室桌面目录</div>
+      </div>
+    </div>
+    <div class="card" style="padding:16px 20px;cursor:pointer;border-left:3px solid var(--c-text3);display:flex;align-items:center;gap:12px" data-asset-action="export">
+      <div>
+        <div style="font-weight:600;font-size:.95rem">导出桌面</div>
+        <div style="font-size:.82rem;color:var(--c-text3)">将桌面导出为桌面包，便于工程师携带至线下教室导入</div>
+      </div>
+    </div>
   </div>
 
   ${dar?.done?`<div style="color:var(--c-ok);font-size:.85rem;margin-bottom:12px;padding:8px 12px;background:rgba(34,197,94,.08);border-radius:6px">✓ ${esc(dar.message)}</div>`:''}
+
+  <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:12px">
+    ${sortBtn('name','名称')} ${sortBtn('classroom','教室')} ${sortBtn('terminals','终端数')} ${sortBtn('created','创建时间')}
+  </div>
 
   ${allDesktops.length?`
   <div style="display:flex;flex-direction:column;gap:12px">
@@ -1145,29 +1189,6 @@ function assetsPage(){
     }).join('')}
   </div>`
   :empty('当前校区无桌面资产','需从终端侧上传桌面后可见')}
-  </div>
-
-  <!-- Right sidebar: stats + sort -->
-  <div style="flex-shrink:0;width:220px;display:flex;flex-direction:column;gap:12px">
-    <div class="card" style="padding:14px">
-      <div style="font-size:.78rem;font-weight:600;color:var(--c-text2);margin-bottom:8px">资产统计</div>
-      <div style="display:flex;flex-direction:column;gap:6px;font-size:.82rem">
-        <div style="display:flex;justify-content:space-between"><span>桌面</span><strong>${totalDesktops}</strong></div>
-        <div style="display:flex;justify-content:space-between"><span>教室</span><span>${crsWithDesktops.length}</span></div>
-        <div style="display:flex;justify-content:space-between"><span>镜像</span><span>${totalImages}</span></div>
-        <div style="display:flex;justify-content:space-between"><span>快照</span><span>${totalSnaps}</span></div>
-        <div style="border-top:1px solid var(--c-border);padding-top:6px;display:flex;justify-content:space-between"><span>估算存储</span><strong>${totalStorageGB.toFixed(0)} GB</strong></div>
-        <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--c-text3)"><span>服务器占用</span><span>${server?server.storage+'%':'--'}</span></div>
-      </div>
-    </div>
-    <div class="card" style="padding:14px">
-      <div style="font-size:.78rem;font-weight:600;color:var(--c-text2);margin-bottom:8px">排序</div>
-      <div style="display:flex;flex-direction:column;gap:4px">
-        ${sortBtn('name','名称')} ${sortBtn('classroom','教室')} ${sortBtn('terminals','终端数')} ${sortBtn('created','创建时间')}
-      </div>
-    </div>
-  </div>
-  </div>
   `;
 }
 
@@ -1204,35 +1225,11 @@ function alertsPage(){
   }).filter(Boolean).join(' · ');
 
   return `
-  <!-- Two-column: alerts (left) + stats sidebar (right) -->
-  <div style="display:flex;gap:20px;align-items:flex-start">
-  <div style="flex:1;min-width:0">
-  <div style="display:flex;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-sm${sortMode==='time'?' btn-primary':' btn-ghost'}" data-alert-sort="time">按时间 ${sortMode==='time'?arrow:''}</button>
-        <button class="btn btn-sm${sortMode==='severity'?' btn-primary':' btn-ghost'}" data-alert-sort="severity">按严重度 ${sortMode==='severity'?arrow:''}</button>
-      </div>
-    </div>
+  <div style="display:flex;justify-content:flex-end;align-items:center;margin-bottom:16px;gap:6px">
+    <button class="btn btn-sm${sortMode==='time'?' btn-primary':' btn-ghost'}" data-alert-sort="time">按时间 ${sortMode==='time'?arrow:''}</button>
+    <button class="btn btn-sm${sortMode==='severity'?' btn-primary':' btn-ghost'}" data-alert-sort="severity">按严重度 ${sortMode==='severity'?arrow:''}</button>
+  </div>
   ${sorted.length ? sorted.map(a=>alertHtml(a,true)).join('') : empty('当前无活跃告警')}
-  </div>
-
-  <!-- Right sidebar: alert stats -->
-  <div style="flex-shrink:0;width:220px;display:flex;flex-direction:column;gap:12px">
-    <div class="card" style="padding:14px">
-      <div style="font-size:.78rem;font-weight:600;color:var(--c-text2);margin-bottom:8px">告警统计</div>
-      <div style="display:flex;flex-direction:column;gap:6px;font-size:.82rem">
-        <div style="display:flex;justify-content:space-between"><span>总计</span><strong>${campusAlerts.length} 条</strong></div>
-        <div style="display:flex;justify-content:space-between"><span style="color:var(--c-err)">高</span><span>${high}</span></div>
-        <div style="display:flex;justify-content:space-between"><span style="color:var(--c-warn)">中</span><span>${medium}</span></div>
-        <div style="display:flex;justify-content:space-between"><span style="color:var(--c-text3)">低</span><span>${low}</span></div>
-      </div>
-    </div>
-    ${topCrs?`<div class="card" style="padding:14px">
-      <div style="font-size:.78rem;font-weight:600;color:var(--c-text2);margin-bottom:8px">集中教室</div>
-      <div style="font-size:.82rem;color:var(--c-text2);line-height:1.6">${topCrs}</div>
-    </div>`:''}
-  </div>
-  </div>
   `;
 }
 

@@ -118,9 +118,9 @@
 .dt-card .dt-name { font-weight: 600; font-size: .95rem; }
 .dt-card .dt-meta { font-size: .78rem; color: var(--t-text2); margin-top: 6px; line-height: 1.5; }
 .dt-card .dt-sw { font-size: .75rem; color: var(--t-text3); margin-top: 6px; }
-.dt-overflow-menu { display: none; position: absolute; right: 8px; bottom: 100%; z-index: 20;
+.dt-overflow-menu { display: none; position: absolute; right: 8px; bottom: 40px; z-index: 20;
   background: var(--t-panel); border: 1px solid var(--t-border); border-radius: var(--radius);
-  box-shadow: 0 4px 12px rgba(0,0,0,.4); min-width: 150px; padding: 4px 0; margin-bottom: 4px; }
+  box-shadow: 0 4px 12px rgba(0,0,0,.4); min-width: 150px; padding: 4px 0; }
 .dt-overflow-menu.open { display: block; }
 .dt-overflow-menu button { display: block; width: 100%; text-align: left; padding: 6px 14px;
   font-size: .78rem; background: none; border: none; color: var(--t-text); cursor: pointer; font-family: inherit; }

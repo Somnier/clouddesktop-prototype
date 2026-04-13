@@ -645,9 +645,9 @@ function wbLayoutContent(terms, rt, c, m, d){
         <div style="font-size:.7rem;color:var(--t-text3);margin-top:2px">机器名 = 前缀 + "-" + 座位号，座位号 = 起始字母 + 序号</div>
       </div>
       </div>
-      <div style="padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0">
+      <div style="padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0;display:flex;align-items:center;gap:10px">
         <button class="btn btn-primary" ${layoutDirty&&activeCount>0&&totalTermCount>0&&hasRules&&!hasNewTermsBeyondGrid?'':'disabled'} data-act="complete-layout">完成布局</button>
-        <div style="font-size:.75rem;color:var(--t-text3);margin-top:4px">${hasNewTermsBeyondGrid?'终端数超出容量，请调整布局':!hasRules?'请先设置IP前缀和机器名前缀':activeCount<=0?'请先设置网格布局':totalTermCount<=0?'等待终端上线…':!layoutDirty?'布局未变更':''}</div>
+        <span style="font-size:.75rem;color:var(--t-text3)">${hasNewTermsBeyondGrid?'终端数超出容量，请调整布局':!hasRules?'请先设置IP前缀和机器名前缀':activeCount<=0?'请先设置网格布局':totalTermCount<=0?'等待终端上线…':!layoutDirty?'布局未变更':''}</span>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
@@ -1759,7 +1759,6 @@ function bindAll(){
             gridDirection:ru.gridDirection||'tl',termCount:onCnt})
         });
       } else if(a==='wb-tab-maint'){
-        saveGridRulesIfPresent();
         /* Only allow switching to maint if takeover is confirmed */
         const isMother = mt()?.controlState==='mother';
         if(!isMother) return;
@@ -1775,7 +1774,8 @@ function bindAll(){
           ipStart:ru.ipStart||20,startLetter:ru.startLetter||'A',
           gridDirection:ru.gridDirection||'tl',termCount:onlineCount});
         const snap=demo().flags?.layoutSnapshot;
-        const isDirty = !snap || snap !== curState;
+        /* Robust dirty check: if snapshot exists, compare; if missing (first visit), not dirty */
+        const isDirty = snap ? snap !== curState : false;
         if(isDirty){
           /* If terminals exceed grid, block entirely */
           if(onlineCount > activeCount){
@@ -1814,6 +1814,8 @@ function bindAll(){
           },0);
           return;
         }
+        /* Save current rules before switching (no dirty — just persist DOM state) */
+        saveGridRulesIfPresent();
         act('set-flag',{wbTab:'maint', layoutRescan:false, layoutSnapshot:null, gridBackup:null});
       } else if(a==='ops-mode-deploy'){
         act('set-flag',{opsMode:'deploy'});
