@@ -526,7 +526,7 @@ function workbenchScreen(){
   const wbTab = demo().flags?.wbTab || defaultTab;
   /* If a task is actively running (not completed), force maint tab */
   const activeTab = (tk && tk.phase!=='completed') ? 'maint' : wbTab;
-  const opsMode = demo().flags?.opsMode || 'idle';
+  const opsMode = demo().flags?.opsMode || 'deploy';
   const isRunning = tk && tk.phase!=='completed';
 
   /* Display name: use takeover name if blank, otherwise classroom name */
@@ -537,7 +537,7 @@ function workbenchScreen(){
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <div class="section-title" style="margin:0">
       <button class="btn btn-ghost" data-act="go-home">←</button>
-      ${esc(displayName)} ${pill(stageLabel(c.stage), c.stage==='deployed'?'ok':'info')}
+      ${esc(displayName)}
       <span style="font-size:.78rem;color:var(--t-text2);margin-left:8px">${rt.online}/${rt.total} 在线</span>
     </div>
   </div>
@@ -679,8 +679,10 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
   const grid=d.grid||{rows:c.rows||7,cols:c.cols||6,blocks:[]};
   const dir = r.gridDirection || 'tl';
   const bindings = d.bindings||{};
-  const boundCount = Object.values(bindings).filter(b=>b.terminalId!==m.id).length;
-  const activeBlocks = grid.blocks.filter(b=>b.state==='active');
+  /* Deploy uses deployScope (set of block indices); maint-ip uses maintDraft.scope (terminal IDs) */
+  const deployScope = demo().flags?.deployScope||{};
+  const deploySelectedCount = Object.keys(deployScope).filter(idx=>deployScope[idx]&&bindings[idx]&&bindings[idx].terminalId!==m.id).length;
+  const maintIpSelectedCount = (demo().maintDraft?.scope||[]).length;
   const done = tk?.phase==='completed';
 
   /* State labels for deploy transfer */
@@ -689,8 +691,10 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
   /* Maint IP draft */
   const md = demo().maintDraft||{};
 
-  /* Last task result (persisted until user leaves the feature) */
-  const lastResult = demo().flags?.lastTaskResult;
+  /* Per-mode last results */
+  const lastDeployResult = demo().flags?.lastDeployResult;
+  const lastMaintIpResult = demo().flags?.lastMaintIpResult;
+  const lastResult = opsMode==='deploy' ? lastDeployResult : opsMode==='maint-ip' ? lastMaintIpResult : null;
   const viewingLastResult = demo().flags?.viewLastResult;
 
   return `<div style="display:grid;grid-template-columns:280px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden;align-items:stretch">
@@ -709,11 +713,12 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
           <option value="incremental" ${(d.deployMode||'incremental')==='incremental'?'selected':''}>增量更新</option>
           <option value="full" ${d.deployMode==='full'?'selected':''}>全量部署</option>
         </select></div>
-      </div>`:''}
-      ${lastResult?`<div class="card"${isRunning?' style="opacity:.6;pointer-events:none"':''}>
+      </div>
+      <div class="card"${isRunning?' style="opacity:.6;pointer-events:none"':''}>
         <div class="card-header">上次部署结果</div>
-        <div style="font-size:.82rem;color:var(--t-ok)">成功 ${lastResult.completed||0} · 失败 ${lastResult.failed||0} / ${lastResult.total||0}</div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:6px" ${isRunning?'disabled':''} data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看详情'}</button>
+        ${lastDeployResult?`<div style="font-size:.82rem;color:var(--t-ok)">成功 ${lastDeployResult.completed||0} · 失败 ${lastDeployResult.failed||0} / ${lastDeployResult.total||0}</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" ${isRunning?'disabled':''} data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看详情'}</button>`
+        :`<div style="font-size:.82rem;color:var(--t-text3)">暂无执行结果</div>`}
       </div>`:''}
       ${opsMode==='maint-ip'?`<div class="card">
         <div class="card-header">本次修改内容</div>
@@ -724,16 +729,17 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(md.newGateway||m.gateway||c.gateway||'')}" placeholder="10.x.x.1"></div>
         <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(md.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
         <div style="font-size:.7rem;color:var(--t-text3);margin-top:4px">在右侧选择终端后点击下方执行按钮</div>
-      </div>`:''}
-      ${opsMode==='maint-ip'&&lastResult?`<div class="card"${isRunning?' style="opacity:.6;pointer-events:none"':''}>
+      </div>
+      <div class="card"${isRunning?' style="opacity:.6;pointer-events:none"':''}>
         <div class="card-header">上次执行结果</div>
-        <div style="font-size:.82rem;color:var(--t-ok)">成功 ${lastResult.completed||0} · 失败 ${lastResult.failed||0} / ${lastResult.total||0}</div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:6px" ${isRunning?'disabled':''} data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看详情'}</button>
+        ${lastMaintIpResult?`<div style="font-size:.82rem;color:var(--t-ok)">成功 ${lastMaintIpResult.completed||0} · 失败 ${lastMaintIpResult.failed||0} / ${lastMaintIpResult.total||0}</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:6px" ${isRunning?'disabled':''} data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看详情'}</button>`
+        :`<div style="font-size:.82rem;color:var(--t-text3)">暂无执行结果</div>`}
       </div>`:''}
       </div>
       <div style="padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0">
-        ${opsMode==='deploy'?`<button class="btn btn-primary" ${!isRunning&&boundCount>=1?'':'disabled'} data-act="start-deployment">开始部署（${boundCount} 台）</button>`:''}
-        ${opsMode==='maint-ip'?`<button class="btn btn-primary" ${isRunning?'disabled':''} data-act="start-maint-ip">开始执行</button>`:''}
+        ${opsMode==='deploy'?`<button class="btn btn-primary" ${!isRunning&&deploySelectedCount>=1?'':'disabled'} data-act="start-deployment">开始部署（${deploySelectedCount} 台）</button>`:''}
+        ${opsMode==='maint-ip'?`<button class="btn btn-primary" ${isRunning||maintIpSelectedCount<1?'disabled':''} data-act="start-maint-ip">开始执行（${maintIpSelectedCount} 台）</button>`:''}
       </div>
     </div>
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
@@ -749,7 +755,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
         ${isRunning ? renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, m) :
           viewingLastResult&&lastResult ? renderSeatGridProgress(grid, r, dir, bindings, lastResult._task, stateLabels, terms, m) :
           opsMode==='maint-ip' ? renderSeatGridMaint(terms, m, c, d, md) :
-          renderSeatGridOps(grid, r, dir, bindings, terms, m)}
+          renderSeatGridOps(grid, r, dir, bindings, deployScope, terms, m)}
       </div>
       <div style="border-top:1px solid var(--t-border);padding-top:10px;flex-shrink:0">
         <button class="btn btn-ghost dt-export-btn" ${isRunning?'disabled':''} data-act="open-export">
@@ -835,7 +841,7 @@ function renderSeatGridLayout(grid, r, dir, previewMap, termBlockMap, isTakenOve
   return `<div class="deploy-grid" style="display:grid;grid-template-columns:repeat(${grid.cols},1fr);gap:6px">${html}</div>`;
 }
 
-function renderSeatGridOps(grid, r, dir, bindings, terms, m){
+function renderSeatGridOps(grid, r, dir, bindings, deployScope, terms, m){
   let html='';
   for(let ri=0;ri<grid.rows;ri++){
     for(let ci=0;ci<grid.cols;ci++){
@@ -858,11 +864,16 @@ function renderSeatGridOps(grid, r, dir, bindings, terms, m){
         </div>`;
         continue;
       }
-      /* Selectable block — selected=bound, unselected=waiting */
-      const isSelected = !!binding;
+      if(!binding){
+        /* No terminal bound — empty slot */
+        html+=`<div class="gb gb-waiting"><div class="gb-seat" style="opacity:.3">${esc(seat)}</div></div>`;
+        continue;
+      }
+      /* Selectable block — use deployScope for selection state */
+      const isSelected = !!deployScope[b.idx];
       html+=`<div class="gb ${isSelected?'gb-bound':'gb-waiting'}" data-deploy-toggle-bind="${b.idx}" style="cursor:pointer">
         <div class="gb-seat">${esc(seat)}</div>
-        ${isSelected?'<div class="gb-tag" style="color:var(--t-ok)">已选</div>':''}
+        ${isSelected?'<div class="gb-tag" style="color:var(--t-ok)">已选</div>':'<div class="gb-tag" style="color:var(--t-text3)">未选</div>'}
       </div>`;
     }
   }
@@ -1600,7 +1611,7 @@ function desktopEditorScreen(){
 }
 
 function exportScreen(){
-  const c=cr(); const terms=termsInCr(s(), c.id);
+  const m=mt(); const c=cr(); const terms=termsInCr(s(), c.id);
   const incomplete = terms.filter(t=>!t.name||!t.ip);
   const exportName = demo().flags?.exportCrName || c.name;
   const exportRemark = demo().flags?.exportCrRemark || '';
@@ -1608,25 +1619,32 @@ function exportScreen(){
   <div class="section-title"><button class="btn btn-ghost" data-act="return-workbench">←</button> 导出教室终端清单</div>
   <div class="page-scroll">
   <div class="section-sub">导出 Excel 文件，包含教室内所有终端的座位、机器名、IP 等信息。</div>
-  ${incomplete.length?`<div class="card mb-16" style="border-color:var(--t-warn)">
+  ${incomplete.length?`<div class="card" style="border-color:var(--t-warn);margin-bottom:16px">
     <div style="font-size:.85rem;color:var(--t-warn)">提示：有 ${incomplete.length} 台终端信息不完整（缺少机器名或 IP），导出内容可能不全。</div>
   </div>`:''}
-  <div class="card mb-16" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
-    <div class="prep-field" style="flex:1;min-width:200px"><label style="white-space:nowrap">教室名称（导出用）</label><input type="text" id="export-cr-name" value="${esc(exportName)}" placeholder="导出时使用的教室名称"></div>
-    <div class="prep-field" style="flex:1;min-width:200px"><label style="white-space:nowrap">教室备注（可选）</label><input type="text" id="export-cr-remark" value="${esc(exportRemark)}" placeholder="填写备注信息"></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header">导出选项</div>
+    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+      <div class="prep-field" style="flex:1;min-width:200px"><label>教室名称（导出用）</label><input type="text" id="export-cr-name" value="${esc(exportName)}" placeholder="导出时使用的教室名称"></div>
+      <div class="prep-field" style="flex:1;min-width:200px"><label>教室备注（可选）</label><input type="text" id="export-cr-remark" value="${esc(exportRemark)}" placeholder="填写备注信息"></div>
+    </div>
   </div>
-  <table class="data-table" style="font-size:.8rem;white-space:nowrap">
-    <thead><tr><th>#</th><th>座位</th><th>机器名</th><th>IP</th><th>MAC</th><th>硬盘序列号</th></tr></thead>
-    <tbody>${terms.map((t,i)=>`<tr class="${(!t.name||!t.ip)?'conflict':''}">
-      <td>${i+1}</td>
-      <td>${esc(t.seat||'--')}</td><td>${esc(t.name||'--')}</td>
-      <td class="mono">${esc(t.ip||'--')}</td>
-      <td class="mono">${esc(t.mac||'--')}</td>
-      <td class="mono">${esc(t.hw?.diskSn||'--')}</td></tr>`).join('')}</tbody>
-  </table>
+  <div class="card" style="margin-bottom:16px;padding:0">
+    <div class="card-header" style="padding:12px 14px 8px">终端列表（共 ${terms.length} 台）</div>
+    <table class="data-table" style="font-size:.8rem;white-space:nowrap">
+      <thead><tr><th data-sort>#</th><th data-sort>座位</th><th data-sort>机器名</th><th data-sort>IP</th><th data-sort>MAC</th><th data-sort>硬盘序列号</th></tr></thead>
+      <tbody>${terms.map((t,i)=>`<tr class="${(!t.name||!t.ip)?'conflict':''}">
+        <td>${i+1}</td>
+        <td>${esc(t.seat||'--')}</td><td>${esc(t.name||'--')}</td>
+        <td class="mono">${esc(t.ip||'--')}</td>
+        <td class="mono">${esc(t.mac||'--')}</td>
+        <td class="mono">${esc(t.hw?.diskSn||'--')}</td></tr>`).join('')}</tbody>
+    </table>
   </div>
-  <div style="margin-top:16px;display:flex;align-items:center;gap:12px">
+  </div>
+  <div style="padding-top:12px;border-top:1px solid var(--t-border);display:flex;align-items:center;gap:12px">
     <button class="btn btn-primary" data-act="export-select-folder">选择目录并导出</button>
+    <button class="btn btn-ghost" data-act="return-workbench">返回</button>
     <span style="font-size:.75rem;color:var(--t-text3)">修改教室名称仅影响导出文件，不影响系统内信息</span>
   </div>
 </div>`;
@@ -1658,7 +1676,7 @@ function bindAll(){
           act('confirm-takeover',nm?{classroomName:nm.value}:{});
           setTimeout(()=>{
             act('deploy-bind-all-terminals');
-            act('set-flag',{wbTab:'maint', layoutRescan:false});
+            setTimeout(()=>act('set-flag',{wbTab:'maint', layoutRescan:false, opsMode:'deploy'}), 50);
           }, 100);
         }, 80);
       } else if(a==='confirm-takeover'){
@@ -1794,7 +1812,7 @@ function bindAll(){
             saveGridRulesIfPresent();
             setTimeout(()=>{
               act('confirm-takeover',nm?{classroomName:nm.value}:{});
-              setTimeout(()=>{ act('deploy-bind-all-terminals'); act('set-flag',{wbTab:'maint',layoutRescan:false,layoutSnapshot:null,gridBackup:null}); },100);
+              setTimeout(()=>{ act('deploy-bind-all-terminals'); setTimeout(()=>act('set-flag',{wbTab:'maint',layoutRescan:false,layoutSnapshot:null,gridBackup:null,opsMode:'deploy'}),50); },100);
             },80);
           },{danger:false});
           /* Add a discard option by modifying the modal */
@@ -1816,7 +1834,7 @@ function bindAll(){
         }
         /* Save current rules before switching (no dirty — just persist DOM state) */
         saveGridRulesIfPresent();
-        act('set-flag',{wbTab:'maint', layoutRescan:false, layoutSnapshot:null, gridBackup:null});
+        act('set-flag',{wbTab:'maint', layoutRescan:false, layoutSnapshot:null, gridBackup:null, opsMode:'deploy'});
       } else if(a==='ops-mode-deploy'){
         act('set-flag',{opsMode:'deploy'});
       } else if(a==='ops-mode-maint-ip'){

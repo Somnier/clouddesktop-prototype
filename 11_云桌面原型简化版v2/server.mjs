@@ -819,10 +819,11 @@ function act(action, payload={}){
     return {ok:true};
   }
   case 'start-deployment':{
-    /* Generate assignments from grid bindings + rules */
+    /* Generate assignments from grid bindings + deployScope selection + rules */
     const grid = demo.deployDraft.grid;
     const bindings = demo.deployDraft.bindings;
     const r = demo.deployDraft.rules;
+    const deployScope = demo.flags.deployScope||{};
     const assignable = grid.blocks.filter(b=>b.state!=='deleted');
     let ipN = r.ipStart || 20;
     const pfx = r.namePrefix || cr.id.split('-')[1].toUpperCase();
@@ -836,6 +837,9 @@ function act(action, payload={}){
       ipN++;
       if(!binding) return; /* no terminal bound to this block */
       if(b.state==='disabled') return; /* disabled = skip */
+      /* Only include blocks in deployScope (skip mother and unselected) */
+      if(binding.terminalId===mt.id) return;
+      if(!deployScope[b.idx]) return;
       const t = termById(binding.terminalId);
       if(!t||!t.online) return;
 
@@ -1189,22 +1193,20 @@ function act(action, payload={}){
     return {ok:true};
   }
   case 'deploy-toggle-bind':{
-    /* Toggle: if bound → unbind, if unbound → bind next available terminal */
+    /* Toggle deploy-scope selection — bindings are permanent, selection is toggled */
     const grid = demo.deployDraft.grid;
     const bindings = demo.deployDraft.bindings;
     const block = grid.blocks.find(b=>b.idx===payload.idx);
     if(!block || block.state!=='active') return {ok:false,reason:'块不可用'};
+    if(!bindings[block.idx]) return {ok:false,reason:'该位没有绑定终端'};
     /* Mother block — not toggleable */
-    if(bindings[block.idx] && bindings[block.idx].terminalId===mt.id) return {ok:false,reason:'本机不可操作'};
-    if(bindings[block.idx]){
-      /* Unbind */
-      delete bindings[block.idx];
+    if(bindings[block.idx].terminalId===mt.id) return {ok:false,reason:'本机不可操作'};
+    /* Toggle in deployScope */
+    if(!demo.flags.deployScope) demo.flags.deployScope={};
+    if(demo.flags.deployScope[block.idx]){
+      delete demo.flags.deployScope[block.idx];
     } else {
-      /* Bind next available terminal */
-      const allCtrl = termsInCr(cr.id).filter(t=>t.id!==mt.id&&t.online);
-      const boundIds = new Set(Object.values(bindings).map(b=>b.terminalId));
-      const next = allCtrl.find(t=>!boundIds.has(t.id));
-      if(next) bindings[block.idx]={terminalId:next.id, mac:next.mac};
+      demo.flags.deployScope[block.idx]=true;
     }
     return {ok:true};
   }
@@ -1218,6 +1220,20 @@ function act(action, payload={}){
   }
   case 'set-flag':{
     Object.assign(demo.flags, payload);
+    /* Auto-init deployScope when entering deploy mode */
+    if(payload.opsMode==='deploy'){
+      if(!demo.flags.deployScope || Object.keys(demo.flags.deployScope).length===0){
+        const bnd=demo.deployDraft?.bindings||{};
+        demo.flags.deployScope={};
+        Object.keys(bnd).forEach(idx=>{
+          if(bnd[idx].terminalId!==mt.id) demo.flags.deployScope[idx]=true;
+        });
+      }
+      demo.flags.viewLastResult=false;
+    }
+    if(payload.opsMode==='maint-ip'){
+      demo.flags.viewLastResult=false;
+    }
     return {ok:true};
   }
   case 'restore-grid-backup':{
@@ -1704,8 +1720,8 @@ function tickTasks(){
       task.phase='completed';task.completedAt=now();
       if(task.type==='deployment'){
         cr.stage='deployed'; cr.memberMacs=termsInCr(cr.id).map(t=>t.mac);
-        /* Save last task result for viewing history */
-        state.demo.flags.lastTaskResult = { completed:task.counts.completed, failed:task.counts.failed, total:task.counts.total, type:task.type, label:task.label, at:now(), _task:task };
+        /* Save last task result per mode */
+        state.demo.flags.lastDeployResult = { completed:task.counts.completed, failed:task.counts.failed, total:task.counts.total, type:task.type, label:task.label, at:now(), _task:task };
         state.demo.flags.viewLastResult = true;
         if(state.demo.motherScreen==='workbench'){
           /* Auto-switch to maint tab after deployment completes */
@@ -1723,7 +1739,9 @@ function tickTasks(){
         state.demo.examState={applied:false,restoreAvailable:false,entriesHidden:false,appliedIds:[],restored:true};
         state.demo.motherScreen='exam-result'; termById(state.demo.motherId).screen='exam-result';
       } else {
-        /* maintenance completed — stay on workbench if already there, show inline result */
+        /* maintenance completed — save per-mode result and stay on workbench if already there */
+        state.demo.flags.lastMaintIpResult = { completed:task.counts.completed, failed:task.counts.failed, total:task.counts.total, type:task.type, label:task.label, at:now(), _task:task };
+        state.demo.flags.viewLastResult = true;
         if(state.demo.motherScreen==='workbench'){
           /* stay — inline progress in maint tab will show completion */
         } else {
