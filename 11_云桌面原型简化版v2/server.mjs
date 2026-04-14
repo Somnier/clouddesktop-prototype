@@ -1886,7 +1886,11 @@ async function main(){
   app.get('/api/stream',(req,res)=>{
     res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache',Connection:'keep-alive','Access-Control-Allow-Origin':'*'});
     res.write(_broadcastCache || ('data: '+JSON.stringify(state)+'\n\n'));
-    sseClients.add(res); req.on('close',()=>sseClients.delete(res));
+    sseClients.add(res);
+    const cleanup = ()=>{ sseClients.delete(res); };
+    req.on('close', cleanup);
+    req.on('error', cleanup);
+    res.on('error', cleanup);
   });
 
   app.post('/api/action',(req,res)=>{
@@ -1925,8 +1929,12 @@ async function main(){
     tickHeartbeats();
     const r2=tickTasks();
     tickCount++;
-    /* broadcast every 5 ticks (~3s) for monitor data, or immediately if tasks/recovery changed */
-    if(r1||r2||tickCount%5===0){
+    /* Broadcast frequency: tasks/recovery changes → immediate; idle → every 15 ticks (~9s).
+       The previous 5-tick (~3s) cadence is the root cause of OOM when clients are backgrounded:
+       each broadcast serializes ~1.5MB state; backgrounded clients don't drain, causing
+       Node.js write buffers to grow unbounded (~2.7GB per client over 90 minutes). */
+    const idleCadence = 15; /* ~9s when idle — sufficient for monitor chart smoothness */
+    if(r1||r2||tickCount%idleCadence===0){
       state.meta.updatedAt=now();
       broadcast();
       /* Save to disk much less frequently: every 50 ticks (~30s) or on action-triggered changes */
@@ -1936,9 +1944,22 @@ async function main(){
 }
 
 let _broadcastCache = '';
+const SSE_BUFFER_LIMIT = 2 * 1024 * 1024; /* 2MB — disconnect client if write buffer exceeds this */
 function broadcast(){
   _broadcastCache = 'data: '+JSON.stringify(state)+'\n\n';
-  for(const c of sseClients){ try{c.write(_broadcastCache);}catch(e){sseClients.delete(c);} }
+  for(const c of sseClients){
+    try{
+      /* Check write backpressure: if client isn't draining (tab backgrounded),
+         the internal buffer grows unbounded. Force-close stale clients;
+         EventSource auto-reconnects when the tab becomes active again. */
+      if(c.writableLength > SSE_BUFFER_LIMIT){
+        try{ c.end(); }catch(_){}
+        sseClients.delete(c);
+        continue;
+      }
+      c.write(_broadcastCache);
+    }catch(e){ sseClients.delete(c); }
+  }
 }
 function save(){
   try{writeFileSync(STATE_FILE,_broadcastCache?_broadcastCache.slice(6,_broadcastCache.length-2):JSON.stringify(state),'utf8');}catch(e){console.error('保存失败:',e.message);}

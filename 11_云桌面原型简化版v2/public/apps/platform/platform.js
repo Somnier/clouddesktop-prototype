@@ -917,10 +917,10 @@ function platActionPanel(pa, par, c, terms){
       <div style="display:flex;gap:8px;margin-bottom:8px">
         <button class="btn btn-ghost btn-sm" data-plat-confirm="export-test-report" style="font-size:.78rem">导出测试报告</button>
       </div>
-      <div style="max-height:260px;overflow-y:auto">
-        <table class="data-table" style="font-size:.78rem">
-          <thead><tr><th>座位</th><th>机器名</th><th>IP</th><th>延迟</th><th>下行</th><th>上行</th><th>服务器</th><th>网关</th></tr></thead>
-          <tbody>${par.results.map(r=>`<tr>
+      <div class="plat-inner-scroll" style="max-height:260px;overflow-y:auto">
+        <table class="data-table plat-sortable" style="font-size:.78rem">
+          <thead><tr><th data-sort>座位</th><th data-sort>机器名</th><th data-sort>IP</th><th data-sort>延迟</th><th data-sort>下行</th><th data-sort>上行</th><th data-sort>服务器</th><th data-sort>网关</th></tr></thead>
+          <tbody>${par.results.map((r,ri)=>`<tr data-orig-idx="${ri}">
             <td>${esc(r.seat)}</td><td>${esc(r.name)}</td><td class="mono">${esc(r.ip)}</td>
             <td>${esc(r.latency)}</td><td>${esc(r.bandwidth)}</td><td>${esc(r.upBandwidth||'--')}</td>
             <td>${r.serverReachable?pill('可达','ok'):pill('不可达','err')}</td>
@@ -1373,7 +1373,6 @@ function serverChangePage(){
       </div>
 
       ${defRow('当前地址',server?.address||'--',{mono:true})}
-      ${defRow('域名',server?.domain||'--',{mono:true})}
       ${defRow('在线终端',onlineTerms.length+' 台')}
       ${defRow('离线终端',offlineTerms.length+' 台')}
 
@@ -1381,6 +1380,20 @@ function serverChangePage(){
       <div style="margin:12px 0;padding:10px 14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:8px;font-size:.85rem;color:var(--c-text2)">
         <strong style="color:var(--c-warn)">注意：</strong>当前有 <strong>${offlineTerms.length}</strong> 台终端未联机，这些终端不会收到本次地址变更推送。
         变更仍可继续 -- 离线终端后续可通过终端本机或母机教室维护流程补充修改。
+        <div style="margin-top:8px;padding:6px 10px;background:var(--c-bg2);border-radius:6px;font-size:.82rem;max-height:140px;overflow-y:auto">
+          ${(()=>{
+            const offByCr={};
+            offlineTerms.forEach(t=>{
+              const cr2=state.classrooms.find(c=>c.id===t.classroomId);
+              const key=cr2?cr2.name:'未知教室';
+              if(!offByCr[key]) offByCr[key]=[];
+              offByCr[key].push(t);
+            });
+            return Object.entries(offByCr).map(([crName,ts2])=>
+              '<div style="margin-bottom:4px"><strong>'+esc(crName)+'</strong>：'+ts2.map(t2=>esc(t2.seat||t2.name||t2.mac)).join('、')+'</div>'
+            ).join('');
+          })()}
+        </div>
       </div>`:''}
 
       <div class="prep-field" style="margin-top:12px"><label style="width:90px;font-weight:600;font-size:.85rem">新地址</label><input type="text" data-server-new-addr placeholder="输入新服务器 IP 或域名" value="${esc(view.newServerAddr||'')}" style="width:280px"></div>
@@ -1396,7 +1409,7 @@ function serverChangePage(){
     </div>
 
     <div class="section-head"><h3>各教室变更结果</h3></div>
-    <div style="display:flex;flex-direction:column;gap:12px;max-width:800px">
+    <div class="plat-inner-scroll" style="display:flex;flex-direction:column;gap:12px;max-width:800px">
       ${crGroups.map(({cr,terms:ts,online:onCnt,offline:offCnt})=>`
       <div class="card" style="padding:0;overflow:hidden${offCnt?';border-left:3px solid var(--c-warn)':''}">
         <div style="padding:12px 18px;display:flex;justify-content:space-between;align-items:center;background:var(--c-bg2)">
@@ -1410,9 +1423,9 @@ function serverChangePage(){
           </div>
         </div>
         <div style="padding:8px 18px">
-          <table class="data-table" style="font-size:.8rem;margin:0">
-            <thead><tr><th>座位</th><th>机器名</th><th>状态</th><th>结果</th></tr></thead>
-            <tbody>${ts.map(t=>`<tr>
+          <table class="data-table plat-sortable" style="font-size:.8rem;margin:0">
+            <thead><tr><th data-sort>座位</th><th data-sort>机器名</th><th data-sort>状态</th><th data-sort>结果</th></tr></thead>
+            <tbody>${ts.map((t,ti)=>`<tr data-orig-idx="${ti}">
               <td>${esc(t.seat||'--')}</td>
               <td>${esc(t.name||'--')}</td>
               <td>${t.online?pill('在线','ok'):pill('离线','muted')}</td>

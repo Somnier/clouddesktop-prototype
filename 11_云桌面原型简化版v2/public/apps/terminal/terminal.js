@@ -341,10 +341,12 @@ function localNetworkScreen(){
   /* Display addr: prefer unsaved pending value from flags, fall back to persisted */
   const displayAddr = demo().flags?.pendingServerAddr ?? m.serverAddr ?? '';
   const hasAddr = !!displayAddr;
-  /* Derive connection status from demo flags or from classroom registration */
+  /* Derive connection status from demo flags.
+     When connFlag is null (page just entered, go-home cleared it), treat as "will check"
+     to avoid a brief "未连接" flash before the auto-check kicks in. */
   const connFlag = demo().flags?.serverConnStatus;
-  const isChecking = connFlag==='checking';
-  const connOk = connFlag==='ok' || (connFlag==null && hasAddr && cr()?.registeredOnServer);
+  const isChecking = connFlag==='checking' || (connFlag==null && hasAddr);
+  const connOk = connFlag==='ok';
   const connStatus = isChecking ? 'checking' : !hasAddr ? 'none' : connOk ? 'ok' : 'fail';
   return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
   <div style="max-width:520px;width:100%">
@@ -2222,9 +2224,10 @@ function bindAll(){
         setTimeout(()=>{ act('set-flag',{serverConnStatus:'ok'}); srvInput._checkPending=false; }, 1800);
       }, 100);
     });
-    /* Auto-check on page entry: if server address is set and not yet checked */
-    const existingAddr = (mt()?.serverAddr || '').trim();
-    if(existingAddr && _serverAutoCheckedAddr !== existingAddr){
+    /* Auto-check on page entry: always trigger if address exists.
+       go-home clears serverConnStatus, so we must re-check each time. */
+    const existingAddr = (demo().flags?.pendingServerAddr ?? mt()?.serverAddr ?? '').trim();
+    if(existingAddr){
       _serverAutoCheckedAddr = existingAddr;
       setTimeout(()=>{
         act('set-flag',{serverConnStatus:'checking'});
