@@ -317,16 +317,14 @@ function buildState(s){
   /* ── Seed demo logs (2026-04-14) ── */
   const logBase = new Date('2026-04-14T08:00:00').getTime();
   const seedLogs = [
-    { level:'info', source:'服务器',           title:'服务器启动完成',             detail:'平台服务 v3.2.1 已启动，监听端口 443', at:new Date(logBase).toISOString() },
-    { level:'info', source:'服务器',           title:'许可证验证通过',             detail:'授权终端数 500，有效期至 2027-06-30', at:new Date(logBase+120000).toISOString() },
-    { level:'info', source:focusSeedCr?.name||'A301', title:'母机上线',            detail:'终端 D301-T01 (5c:7a:xx:xx)，IP 10.21.3.20', at:new Date(logBase+300000).toISOString() },
-    { level:'info', source:focusSeedCr?.name||'A301', title:'桌面上传完成',        detail:'公共教学桌面 (65 GB) 已同步到服务器', at:new Date(logBase+600000).toISOString() },
-    { level:'info', source:focusSeedCr?.name||'A301', title:'桌面上传完成',        detail:'Win11 纯净桌面 (18 GB) 已同步到服务器', at:new Date(logBase+660000).toISOString() },
-    { level:'info', source:'服务器',           title:'存储空间检查',               detail:'已用 342 GB / 总计 2 TB，剩余 82.9%', at:new Date(logBase+900000).toISOString() },
-    { level:'warn', source:'B207 多媒体教室',  title:'终端心跳超时',               detail:'B207-T15 超过 5 分钟未响应心跳', at:new Date(logBase+1800000).toISOString() },
-    { level:'info', source:'C402 计算机教室',  title:'部署任务完成',               detail:'增量部署 57 台终端，公共教学桌面 v1', at:new Date(logBase+3600000).toISOString() },
-    { level:'info', source:'服务器',           title:'自动备份完成',               detail:'快照 snap-20260414-1200，数据库 + 配置', at:new Date(logBase+7200000).toISOString() },
-    { level:'warn', source:'D105 实训教室',    title:'磁盘空间预警',               detail:'D105-T32 磁盘使用率 92%，建议清理', at:new Date(logBase+10800000).toISOString() },
+    { level:'info', source:'服务器', terminalId:null, classroomId:null, title:'服务器启动完成', detail:'平台服务 v3.2.1 已启动，监听端口 443', at:new Date(logBase).toISOString() },
+    { level:'info', source:focusSeedCr?.name||'A301', terminalId:focusMother, classroomId:focusSeedCr?.id||null, title:'母机上线', detail:'终端 '+((terminals.find(t=>t.id===focusMother)||{}).name||'D301-T01')+' 已连接服务器', at:new Date(logBase+300000).toISOString() },
+    { level:'info', source:focusSeedCr?.name||'A301', terminalId:focusMother, classroomId:focusSeedCr?.id||null, title:'桌面上传完成', detail:'公共教学桌面 (65 GB) 已同步到服务器', at:new Date(logBase+600000).toISOString() },
+    { level:'info', source:focusSeedCr?.name||'A301', terminalId:focusMother, classroomId:focusSeedCr?.id||null, title:'桌面上传完成', detail:'Win11 纯净桌面 (18 GB) 已同步到服务器', at:new Date(logBase+660000).toISOString() },
+    { level:'info', source:'服务器', terminalId:null, classroomId:null, title:'存储空间检查', detail:'已用 342 GB / 总计 2 TB，剩余 82.9%', at:new Date(logBase+900000).toISOString() },
+    { level:'info', source:'C402 计算机教室', terminalId:null, classroomId:classrooms.find(c=>c.name?.includes('C402'))?.id||null, title:'部署任务完成', detail:'增量部署 57 台终端，公共教学桌面 v1', at:new Date(logBase+3600000).toISOString() },
+    { level:'info', source:'服务器', terminalId:null, classroomId:null, title:'自动备份完成', detail:'快照 snap-20260414-1200，数据库 + 配置', at:new Date(logBase+7200000).toISOString() },
+    { level:'info', source:'B207 多媒体教室', terminalId:null, classroomId:classrooms.find(c=>c.name?.includes('B207'))?.id||null, title:'教室 IP 段配置变更', detail:'IP 基址由 10.21.2.0/24 调整为 10.21.2.0/23', at:new Date(logBase+10800000).toISOString() },
   ];
   seedLogs.reverse().forEach(l=>{ logs.push({id:uid(), ...l}); });
 
@@ -1696,7 +1694,7 @@ function act(action, payload={}){
       syncStatus:'local', snapshotId:null, dataDisks, createdAt:now(), editedAt:now()};
     if(!state.platformDesktops) state.platformDesktops=[];
     state.platformDesktops.push(dt);
-    addLog('info','平台','桌面导入','已导入桌面 '+dt.name+'（无教室引用）');
+    addLog('info','平台','桌面导入','已导入桌面 '+dt.name+' (无教室引用)');
     return {ok:true};
   }
   case 'plat-delete-desktop-asset':{

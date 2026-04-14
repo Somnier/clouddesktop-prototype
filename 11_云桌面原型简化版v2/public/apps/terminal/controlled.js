@@ -143,7 +143,7 @@ function renderBody(t){
 /* ── Empty state: not controlled by any mother (normal terminal state) ── */
 function emptyScreen(){
   return `<div class="ctrl-center">
-    <div class="ctrl-title" style="color:var(--t-text3)">待命</div>
+    <div class="ctrl-title" style="color:var(--t-text3);font-size:2.2rem">未受控</div>
     <div class="ctrl-sub" style="color:var(--t-text3)">当前终端未被任何母机接管</div>
     <div class="ctrl-detail">进入网络同传后，本终端将自动受母机控制</div>
   </div>`;
