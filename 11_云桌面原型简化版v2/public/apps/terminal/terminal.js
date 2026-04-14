@@ -55,40 +55,80 @@ function showExportDoneDialog(){
   const m=mt();
   const dts=(m?.desktops||[]).filter(d=>d.visibility!=='hidden');
   if(!dts.length){ showTermAlert('暂无可导出桌面'); return; }
-  const dtList=dts.map(d=>`<label style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:.82rem;cursor:pointer">
-    <input type="checkbox" class="te-item" data-te-id="${d.id}" checked>
-    <span style="flex:1">${esc(d.name)}</span>
-    <span style="color:var(--t-text2)">${d.diskSize||25} GB</span>
-  </label>`).join('');
-  const body=`<div style="margin-bottom:6px;font-size:.82rem;color:var(--t-text2)">选择要导出的桌面：</div>
-<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><label style="font-size:.78rem"><input type="checkbox" id="te-all" checked> 全选</label><span id="te-count" style="font-size:.78rem;color:var(--t-text3)">${dts.length} / ${dts.length}</span></div>
-${dtList}
-<div id="te-summary" style="border-top:1px solid var(--t-border);margin-top:8px;padding-top:6px;font-size:.82rem;display:flex;justify-content:space-between"><strong>合计</strong><span>${dts.length} 个桌面 · ${dts.reduce((s2,d)=>s2+(d.diskSize||25),0)} GB</span></div>
-<div style="margin-top:10px;padding:8px 12px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--t-accent)">E:\\desktop-export-${new Date().toISOString().slice(0,10)}.cdpkg</div>`;
-  showTermConfirm('导出桌面',body,()=>{
-    const items=document.querySelectorAll('.te-item');
-    const selected=[...items].filter(i=>i.checked);
-    const selDts=dts.filter(d=>selected.some(i=>i.dataset.teId===d.id));
-    const total=selDts.reduce((s2,d)=>s2+(d.diskSize||25),0);
-    if(!selDts.length){ showTermAlert('请至少选择一个桌面'); return; }
-    showTermAlert('已导出 '+selDts.length+' 个桌面 (共 '+total+' GB)');
-  },{danger:false});
-  /* Bind select-all and count update after dialog is shown */
-  setTimeout(()=>{
-    const allCb=document.querySelector('#te-all');
-    const items=document.querySelectorAll('.te-item');
-    const countEl=document.querySelector('#te-count');
-    const summaryEl=document.querySelector('#te-summary');
-    function updateInfo(){
-      const sel=[...items].filter(i=>i.checked);
-      const selDts2=dts.filter(d=>sel.some(i=>i.dataset.teId===d.id));
-      const total2=selDts2.reduce((s2,d)=>s2+(d.diskSize||25),0);
-      if(countEl) countEl.textContent=sel.length+' / '+dts.length;
-      if(summaryEl) summaryEl.innerHTML='<strong>合计</strong><span>'+sel.length+' 个桌面 · '+total2+' GB</span>';
+  const ov=document.createElement('div'); ov.className='t-modal-overlay';
+  ov.innerHTML=`<div class="t-modal" style="max-width:520px">
+    <div class="t-modal-title">导出桌面</div>
+    <div style="font-size:.82rem;color:var(--t-text2);margin-bottom:10px">选择要导出的桌面，每个桌面将导出为独立文件</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:.78rem;color:var(--t-text2);cursor:pointer;text-decoration:underline" id="te-toggle">全选 / 取消</span>
+      <span id="te-count" style="font-size:.78rem;color:var(--t-text3)">${dts.length} / ${dts.length}</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;margin-bottom:10px">
+      ${dts.map(d=>`<div class="te-card" data-te-id="${d.id}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:2px solid var(--t-accent);border-radius:6px;background:rgba(88,166,255,.06);cursor:pointer;transition:all .15s">
+        <div style="width:20px;height:20px;border-radius:4px;background:var(--t-accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s" class="te-check"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name)}</div>
+          <div style="font-size:.72rem;color:var(--t-text3)">${esc(d.baseImageName||d.os||'')} · ${d.diskSize||25} GB</div>
+        </div>
+      </div>`).join('')}
+    </div>
+    <div id="te-summary" style="border-top:1px solid var(--t-border);padding-top:8px;font-size:.82rem;display:flex;justify-content:space-between;margin-bottom:8px"><strong>合计</strong><span>${dts.length} 个桌面 · ${dts.reduce((s2,d)=>s2+(d.diskSize||25),0)} GB</span></div>
+    <div id="te-path" style="padding:8px 12px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--t-accent);word-break:break-all"></div>
+    <div class="t-modal-actions" style="margin-top:12px">
+      <button class="btn btn-ghost" data-tm="cancel">取消</button>
+      <button class="btn btn-primary" data-tm="ok">导出</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  const cards=ov.querySelectorAll('.te-card');
+  const selected=new Set(dts.map(d=>d.id));
+  function updateCard(card,sel){
+    const id=card.dataset.teId;
+    const check=card.querySelector('.te-check');
+    if(sel){
+      card.style.borderColor='var(--t-accent)'; card.style.background='rgba(88,166,255,.06)';
+      check.style.background='var(--t-accent)'; check.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+    } else {
+      card.style.borderColor='var(--t-border)'; card.style.background='transparent';
+      check.style.background='var(--t-border)'; check.innerHTML='';
     }
-    if(allCb) allCb.addEventListener('change',()=>{ items.forEach(i=>i.checked=allCb.checked); updateInfo(); });
-    items.forEach(i=>i.addEventListener('change',()=>{ if(allCb) allCb.checked=[...items].every(i2=>i2.checked); updateInfo(); }));
-  },0);
+  }
+  function updateSummary(){
+    const selDts=dts.filter(d=>selected.has(d.id));
+    const total=selDts.reduce((s2,d)=>s2+(d.diskSize||25),0);
+    ov.querySelector('#te-count').textContent=selDts.length+' / '+dts.length;
+    ov.querySelector('#te-summary').innerHTML='<strong>合计</strong><span>'+selDts.length+' 个桌面 · '+total+' GB</span>';
+    /* Export path: per-desktop files */
+    const dateStr=new Date().toISOString().slice(0,10);
+    const pathLines=selDts.map(d=>'E:\\CloudDesktop\\'+d.name.replace(/[\\/:*?"<>|]/g,'-')+'-'+dateStr+'.cdpkg').join('<br>');
+    ov.querySelector('#te-path').innerHTML=pathLines||'<span style="color:var(--t-text3)">请选择至少一个桌面</span>';
+  }
+  cards.forEach(card=>{
+    updateCard(card,true);
+    card.addEventListener('click',()=>{
+      const id=card.dataset.teId;
+      if(selected.has(id)) selected.delete(id); else selected.add(id);
+      updateCard(card,selected.has(id));
+      updateSummary();
+    });
+  });
+  ov.querySelector('#te-toggle').addEventListener('click',()=>{
+    const allSel=selected.size===dts.length;
+    if(allSel){ selected.clear(); } else { dts.forEach(d=>selected.add(d.id)); }
+    cards.forEach(card=>updateCard(card,selected.has(card.dataset.teId)));
+    updateSummary();
+  });
+  updateSummary();
+  ov.querySelector('[data-tm="cancel"]').addEventListener('click',()=>ov.remove());
+  ov.addEventListener('click',(e)=>{if(e.target===ov)ov.remove();});
+  ov.querySelector('[data-tm="ok"]').addEventListener('click',()=>{
+    if(!selected.size){ showTermAlert('请至少选择一个桌面'); return; }
+    const selDts=dts.filter(d=>selected.has(d.id));
+    const total=selDts.reduce((s2,d)=>s2+(d.diskSize||25),0);
+    const names=selDts.map(d=>d.name).join('、');
+    ov.remove();
+    showTermAlert('已导出 '+selDts.length+' 个桌面 (共 '+total+' GB)\n'+names);
+  });
 }
 
 function showImportDialog(){
@@ -131,12 +171,8 @@ function showCreateDesktopDialog(defaultName){
       <option value="yes" selected>添加数据盘</option>
     </select></div>
     <div id="cd-disk-detail-row">
-      <div class="prep-field"><label>数据盘大小</label><select id="cd-disk-size">
-        <option value="20GB">20 GB</option>
-        <option value="50GB" selected>50 GB</option>
-        <option value="100GB">100 GB</option>
-      </select></div>
-      <div class="prep-field"><label>数据盘挂载路径</label><input type="text" id="cd-disk-drive" value="D:" placeholder="D: 或 /data"></div>
+      <div class="prep-field"><label>数据盘大小 (GB)</label><div style="display:flex;align-items:center;gap:6px"><input type="number" id="cd-disk-size" value="50" min="1" max="2000" style="width:90px"><span style="font-size:.82rem;color:var(--t-text2)">GB</span></div></div>
+      <div class="prep-field"><label>挂载盘符或路径</label><input type="text" id="cd-disk-drive" value="D" placeholder="D 或 /data"></div>
       <div id="cd-disk-preview" style="margin-top:4px;padding:8px 10px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;line-height:1.6"></div>
     </div>
     <div class="prep-field"><label>备注</label><input type="text" id="cd-remark" value="" placeholder="可选"></div>
@@ -151,18 +187,20 @@ function showCreateDesktopDialog(defaultName){
   const diskSel=ov.querySelector('#cd-disk-sel');
   const detailRow=ov.querySelector('#cd-disk-detail-row');
   const diskDriveInput=ov.querySelector('#cd-disk-drive');
-  const diskSizeSelect=ov.querySelector('#cd-disk-size');
+  const diskSizeInput=ov.querySelector('#cd-disk-size');
   const diskPreview=ov.querySelector('#cd-disk-preview');
   function updateDiskPreview(){
     if(!diskPreview) return;
     const raw=(diskDriveInput?.value||'').trim();
-    const sz=diskSizeSelect?.value||'50GB';
-    if(!raw){ diskPreview.innerHTML='<span style="color:var(--t-text3)">请输入挂载路径后预览</span>'; return; }
-    const isWinDrive=/^[A-Za-z]:?$/.test(raw);
+    const szNum=parseInt(diskSizeInput?.value||'50',10)||50;
+    const sz=szNum+'GB';
+    if(!raw){ diskPreview.innerHTML='<span style="color:var(--t-text3)">请输入盘符或路径后预览</span>'; return; }
+    const cleanRaw=raw.replace(/[:：\\]+$/,'');
+    const isWinDrive=/^[A-Za-z]$/.test(cleanRaw);
     const isUnixPath=raw.startsWith('/');
     let lines=[];
     if(isWinDrive){
-      const letter=raw.charAt(0).toUpperCase();
+      const letter=cleanRaw.toUpperCase();
       lines.push('<span style="color:var(--t-accent)">Windows</span>  '+letter+':\\ ('+sz+' NTFS)');
       lines.push('<span style="color:var(--t-text3)">Unix</span>     /mnt/'+letter.toLowerCase()+' ('+sz+' ext4)');
     } else if(isUnixPath){
@@ -170,7 +208,7 @@ function showCreateDesktopDialog(defaultName){
       lines.push('<span style="color:var(--t-text3)">Windows</span>  D:\\ ('+sz+' NTFS)');
       lines.push('<span style="color:var(--t-accent)">Unix</span>     '+pathNorm+' ('+sz+' ext4)');
     } else {
-      lines.push('<span style="color:var(--t-warn)">提示：请输入盘符（如 D:）或路径（如 /data）</span>');
+      lines.push('<span style="color:var(--t-warn)">提示：请输入盘符（如 D）或路径（如 /data）</span>');
     }
     diskPreview.innerHTML=lines.join('<br>');
   }
@@ -178,16 +216,22 @@ function showCreateDesktopDialog(defaultName){
   toggleDetail();
   diskSel.addEventListener('change',toggleDetail);
   if(diskDriveInput) diskDriveInput.addEventListener('input',updateDiskPreview);
-  if(diskSizeSelect) diskSizeSelect.addEventListener('change',updateDiskPreview);
+  if(diskSizeInput) diskSizeInput.addEventListener('input',updateDiskPreview);
   ov.querySelector('[data-tm="cancel"]').addEventListener('click',()=>ov.remove());
   ov.addEventListener('click',(e)=>{if(e.target===ov)ov.remove();});
   ov.querySelector('[data-tm="create"]').addEventListener('click',()=>{
     const name = ov.querySelector('#cd-name')?.value||defaultName;
     const hasDisk = ov.querySelector('#cd-disk-sel')?.value === 'yes';
-    const diskSize = hasDisk ? (ov.querySelector('#cd-disk-size')?.value || '') : '';
-    const diskDrive = hasDisk ? (ov.querySelector('#cd-disk-drive')?.value||'D:') : '';
+    const rawSz = parseInt(ov.querySelector('#cd-disk-size')?.value||'50',10)||50;
+    const diskSize = hasDisk ? rawSz+'GB' : '';
+    const rawDrv = (ov.querySelector('#cd-disk-drive')?.value||'').trim().replace(/[:：\\]+$/,'');
+    const diskDrive = hasDisk ? (/^[A-Za-z]$/.test(rawDrv) ? rawDrv.toUpperCase()+':' : rawDrv || '') : '';
     const physical = ov.querySelector('#cd-physical')?.value==='true';
     const remark = ov.querySelector('#cd-remark')?.value||'';
+    /* Validation */
+    if(!name.trim()){ showTermAlert('请输入桌面名称'); return; }
+    if(hasDisk && !diskDrive){ showTermAlert('已选择添加数据盘，请输入挂载盘符或路径'); return; }
+    if(hasDisk && rawSz<1){ showTermAlert('数据盘大小不能小于 1 GB'); return; }
     ov.remove();
     act('create-desktop-from-file',{
       name, os:'Windows 11 23H2', importType:'image',
@@ -523,7 +567,6 @@ function localDesktopScreen(){
               <span>${esc(d.baseImageName||d.os)}</span>
               <span style="display:inline-block;width:1px;height:12px;background:var(--t-border);margin:0 2px"></span>
               <span style="font-weight:600;font-size:.88rem;letter-spacing:.02em">${dtSize} GB</span>
-              ${(d.dataDisks||[]).length?`<span style="display:inline-block;width:1px;height:12px;background:var(--t-border);margin:0 2px"></span><span style="font-size:.78rem;color:var(--t-text2)">${(d.dataDisks||[]).map(dd=>'数据盘 '+(dd.size||'')+(dd.drive?' ('+esc(dd.drive)+')':'')).join(' · ')}</span>`:''}
             </div>
             <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:6px">
               ${isPhysical?'<span class="pill info pill-sm" style="opacity:.65">物理部署</span>':''}
@@ -833,7 +876,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
     </div>
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
       ${isRunning?`<div style="padding:10px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.82rem">
-        <div style="font-weight:600;color:${done?'var(--t-ok)':'var(--t-accent)'}">${done?'✓ 任务完成':'⏳ 任务执行中 — 功能切换已锁定'}</div>
+        <div style="font-weight:600;color:${done?'var(--t-ok)':'var(--t-accent)'}">${done?'✓ 任务完成':'⏳ 任务执行中，功能切换已锁定'}</div>
         <div style="margin-top:4px">成功 ${tk.counts.completed||0} · 失败 ${tk.counts.failed||0} · 排队 ${tk.counts.queued||0} / 共 ${tk.counts.total||0}</div>
       </div>`:`<div style="padding:8px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.78rem;color:var(--t-text2)">
         ${opsMode==='deploy'?'点击下方座位卡片选择/取消选择终端':
@@ -897,14 +940,14 @@ function renderSeatGridLayout(grid, r, dir, previewMap, termBlockMap, isTakenOve
       if(!b){ html+='<div class="gb gb-empty"></div>'; continue; }
       const seat = hasRules ? seatLabel(row, col, r) : '#'+(b.idx+1);
       if(b.state==='deleted'){
-        html+=`<div class="gb gb-deleted" data-block-idx="${b.idx}" title="已删除 — 点击恢复"><span class="gb-x">×</span></div>`;
+        html+=`<div class="gb gb-deleted" data-block-idx="${b.idx}" title="已删除 (点击恢复)"><span class="gb-x">×</span></div>`;
         continue;
       }
       const isDisabled = b.state==='disabled';
       const pv=previewMap[b.idx];
       const term=termBlockMap[b.idx];
       if(isDisabled){
-        html+=`<div class="gb gb-disabled" data-block-idx="${b.idx}" title="${seat} · 已禁用 — 点击恢复">
+        html+=`<div class="gb gb-disabled" data-block-idx="${b.idx}" title="${seat} · 已禁用 (点击恢复)">
           <div class="gb-seat">${esc(seat)}</div><div class="gb-tag">禁用</div></div>`;
         continue;
       }
@@ -1126,10 +1169,10 @@ function deployPrepScreen(){
   const labels=['母机准备','占位与规则','终端分配','部署传输'];
 
   const checks = [];
-  if(!m.serverAddr) checks.push('服务器地址未配置 — 请到首页"设置服务器"设置');
-  if(!m.ip) checks.push('本机IP未配置 — 请到首页"设置本机"设置');
-  if(!desktops.length) checks.push('本机无桌面 — 请到首页"管理桌面"添加');
-  if(!m.gateway) checks.push('网关未配置 — 请到首页"设置本机"设置');
+  if(!m.serverAddr) checks.push('服务器地址未配置，请到首页「设置服务器」设置');
+  if(!m.ip) checks.push('本机IP未配置，请到首页「设置本机」设置');
+  if(!desktops.length) checks.push('本机无桌面，请到首页「管理桌面」添加');
+  if(!m.gateway) checks.push('网关未配置，请到首页「设置本机」设置');
   const ready = checks.length === 0;
 
   return `<div class="page">
@@ -1668,7 +1711,7 @@ function faultReplaceScreen(){
       </div>
     </div>
     <div class="card">
-      <div class="card-header">❷ 选择终端座位 ${selectedCr?'— '+esc(selectedCr.name):''}</div>
+      <div class="card-header">❷ 选择终端座位${selectedCr?' · '+esc(selectedCr.name):''}</div>
       ${!selectedCr?'<div style="font-size:.88rem;color:var(--t-text3);padding:16px 0;text-align:center">← 请先选择教室</div>'
         :crTerms.length?`<div style="display:grid;grid-template-rows:repeat(${selectedCr.rows||7},auto);grid-template-columns:repeat(${Math.min(selectedCr.cols||8, 10)},minmax(0,1fr));grid-auto-flow:column;gap:8px;max-width:100%">
           ${crTerms.map(t=>`

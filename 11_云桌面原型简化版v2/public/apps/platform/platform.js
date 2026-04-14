@@ -155,12 +155,14 @@ function asideContent(){
   let cards='';
   if(view.page==='dashboard'){
     /* dashboard aside: recent logs (30%) + alerts (70%) */
-    const logLimit = Math.min(recentLogs.length, 4);
+    const logLimit = Math.min(recentLogs.length, 6);
     cards+=`<div class="aside-card" style="flex:3;min-height:0"><div class="aside-title">最近日志</div>
-      ${recentLogs.length?recentLogs.slice(0,logLimit).map(l=>`<div class="aside-item" title="${esc(l.title+(l.detail?' — '+l.detail:''))}" style="cursor:default">
-        ${pill(logLevelLabel[l.level]||l.level,tone(l.level==='warn'?'warning':l.level==='info'?'ok':'offline'))}
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.title)}</span>
-        <span style="color:var(--c-text3);font-size:.72rem;white-space:nowrap">${relTime(l.at)}</span>
+      ${recentLogs.length?recentLogs.slice(0,logLimit).map(l=>`<div class="aside-item" title="${esc((l.detail||'')+(l.source?' [来源: '+l.source+']':''))}" style="cursor:default;flex-direction:column;align-items:flex-start;gap:1px;padding:5px 8px">
+        <div style="display:flex;align-items:center;gap:6px;width:100%">
+          <span style="font-size:.72rem;font-weight:600;color:${l.level==='warn'?'var(--c-warn)':l.level==='error'?'var(--c-err)':'var(--c-text2)'};flex-shrink:0;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.source||'系统')}</span>
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem">${esc(l.title)}</span>
+          <span style="color:var(--c-text3);font-size:.7rem;white-space:nowrap;flex-shrink:0">${relTime(l.at)}</span>
+        </div>
       </div>`).join(''):'<div style="font-size:.8rem;color:var(--c-text3)">暂无日志</div>'}
     </div>`;
     const alertLimit = Math.min(campusAlerts.length, 12);
@@ -464,7 +466,7 @@ function classroomListPage(){
       </div>
       `:''}
 
-      ${ir?.done?`<div style="color:var(--c-ok);font-size:.85rem;margin:12px 0;padding:8px 12px;background:rgba(34,197,94,.08);border-radius:6px">✓ 已成功导入终端清单${ir.count?' — '+ir.count+' 台终端':''}</div>`:''}
+      ${ir?.done?`<div style="color:var(--c-ok);font-size:.85rem;margin:12px 0;padding:8px 12px;background:rgba(34,197,94,.08);border-radius:6px">✓ 已成功导入终端清单${ir.count?'（'+ir.count+' 台终端）':''}</div>`:''}
       <div style="display:flex;gap:8px;margin-top:16px">
         <button class="btn btn-primary" data-plat-confirm="import-list"${ir?.done||!view.importFileReady||!importName?' disabled':''}>确认导入</button>
         <button class="btn btn-ghost" data-toggle-import>取消</button>
@@ -1193,6 +1195,15 @@ function assetsPage(){
       groupMap.get(key).entries.push({...d, classroomId:c.id, classroomName:c.name, termsUsing:tUsing});
     });
   });
+  /* Also include platform-level imported desktops (unreferenced) */
+  (state.platformDesktops||[]).forEach(d=>{
+    const key=d.name;
+    const dDisks=d.dataDisks||[];
+    if(!groupMap.has(key)){
+      groupMap.set(key,{name:d.name, os:d.os||'', type:d.type||'', diskSize:d.diskSize||0, dataDisks:dDisks, physicalDeploy:!!d.physicalDeploy, restoreMode:d.restoreMode||'--', entries:[]});
+    }
+    groupMap.get(key).entries.push({...d, classroomId:null, classroomName:'(未分配教室)', termsUsing:[]});
+  });
   const allGroups = [...groupMap.values()].map(g=>{
     const totalTerms = g.entries.reduce((n,e)=>n+e.termsUsing.length,0);
     const latestEdit = g.entries.reduce((d,e)=>(!d||e.editedAt>d?e.editedAt:d),null);
@@ -1235,7 +1246,7 @@ function assetsPage(){
     <div class="card" style="padding:16px 20px;cursor:pointer;border-left:3px solid var(--c-brand);display:flex;align-items:center;gap:12px" data-asset-action="import">
       <div>
         <div style="font-weight:600;font-size:.95rem">导入桌面</div>
-        <div style="font-size:.82rem;color:var(--c-text3)">从桌面包导入，追加到教室桌面目录</div>
+        <div style="font-size:.82rem;color:var(--c-text3)">从桌面包导入，导入后无教室引用，需通过部署分发</div>
       </div>
     </div>
     <div class="card" style="padding:16px 20px;cursor:pointer;border-left:3px solid var(--c-text3);display:flex;align-items:center;gap:12px" data-asset-action="export">
@@ -1374,13 +1385,12 @@ function serverChangePage(){
     </div>
 
     ${sr.done?'':`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:900px;align-items:start">
-      <!-- Left: input & action (always visible) -->
-      <div class="card" style="position:sticky;top:0">
+    <div style="max-width:640px">
+      <div class="card">
         <div style="font-weight:600;font-size:.92rem;margin-bottom:12px">变更配置</div>
         ${defRow('当前地址',server?.address||'--',{mono:true})}
-        ${defRow('在线终端',onlineTerms.length+' 台 — 将自动接收新地址')}
-        ${defRow('离线终端',offlineTerms.length+' 台 — 需手动修改')}
+        ${defRow('在线终端',onlineTerms.length+' 台（将自动接收新地址）')}
+        ${defRow('离线终端',offlineTerms.length+' 台（需手动修改）')}
 
         <div class="prep-field" style="margin-top:16px"><label style="width:80px;font-weight:600;font-size:.85rem">新地址</label><input type="text" data-server-new-addr placeholder="输入新 IP 或域名" value="${esc(view.newServerAddr||'')}" style="width:100%;box-sizing:border-box"></div>
 
@@ -1391,44 +1401,36 @@ function serverChangePage(){
         <div style="margin-top:12px;font-size:.78rem;color:var(--c-text3);line-height:1.6">
           推送完成后，请物理修改服务器网络配置。<br>离线终端可由工程师到场手动修改，或通过母机教室维护批量修改。
         </div>
-      </div>
 
-      <!-- Right: offline terminal status (no expand needed) -->
-      <div>
         ${offlineTerms.length?`
-        <div style="margin-bottom:8px;padding:8px 12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:8px;font-size:.82rem;color:var(--c-text2)">
-          <strong style="color:var(--c-warn)">注意：</strong>${offlineTerms.length} 台终端不在线，不会收到推送。
-        </div>
-        <div style="display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto">
-          ${(()=>{
-            const offByCr={};
-            offlineTerms.forEach(t=>{
-              const cr2=state.classrooms.find(c=>c.id===t.classroomId);
-              const key=cr2?cr2.id:'unknown';
-              if(!offByCr[key]) offByCr[key]={cr:cr2,terms:[]};
-              offByCr[key].terms.push(t);
-            });
-            return Object.entries(offByCr).map(([crId,{cr:crObj,terms:ts2}])=>{
-              const crName=crObj?crObj.name:'未知教室';
-              return '<div class="card" style="padding:0;overflow:hidden;border-left:3px solid var(--c-warn)">'+
-                '<div style="padding:8px 14px;display:flex;justify-content:space-between;align-items:center;background:var(--c-bg2);font-size:.85rem">'+
-                  '<strong>'+esc(crName)+'</strong>'+
-                  '<span style="font-size:.78rem;color:var(--c-warn)">'+ts2.length+' 台离线</span>'+
-                '</div>'+
-                '<div style="padding:6px 14px">'+
-                  ts2.map(t2=>'<div style="display:flex;gap:12px;font-size:.78rem;padding:3px 0;color:var(--c-text2)">'+
-                    '<span style="min-width:40px">'+esc(t2.seat||'--')+'</span>'+
-                    '<span style="flex:1">'+esc(t2.name||'--')+'</span>'+
-                    '<span class="mono">'+esc(t2.ip||'--')+'</span>'+
-                  '</div>').join('')+
-                '</div>'+
-              '</div>';
-            }).join('');
-          })()}
-        </div>`:`
-        <div class="card" style="text-align:center;padding:24px;color:var(--c-ok);font-size:.88rem">
-          所有终端均在线，地址变更将推送到全部 ${onlineTerms.length} 台终端。
-        </div>`}
+        <div style="margin-top:16px;border-top:1px solid var(--c-border);padding-top:12px">
+          <div style="margin-bottom:8px;padding:8px 12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:6px;font-size:.82rem;color:var(--c-text2)">
+            <strong style="color:var(--c-warn)">注意：</strong>${offlineTerms.length} 台终端不在线，不会收到推送
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto">
+            ${(()=>{
+              const offByCr={};
+              offlineTerms.forEach(t=>{
+                const cr2=state.classrooms.find(c=>c.id===t.classroomId);
+                const key=cr2?cr2.id:'unknown';
+                if(!offByCr[key]) offByCr[key]={cr:cr2,terms:[]};
+                offByCr[key].terms.push(t);
+              });
+              return Object.entries(offByCr).map(([crId,{cr:crObj,terms:ts2}])=>{
+                const crName=crObj?crObj.name:'未知教室';
+                return '<div style="padding:6px 10px;border:1px solid var(--c-border);border-radius:4px;border-left:3px solid var(--c-warn)">'+
+                  '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+                    '<strong style="font-size:.82rem">'+esc(crName)+'</strong>'+
+                    '<span style="font-size:.75rem;color:var(--c-warn)">'+ts2.length+' 台离线</span>'+
+                  '</div>'+
+                  '<div style="display:flex;flex-wrap:wrap;gap:4px">'+
+                    ts2.map(t2=>'<span style="font-size:.75rem;padding:2px 6px;background:var(--c-bg2);border-radius:3px;color:var(--c-text2)">'+esc(t2.seat||'--')+' '+esc(t2.name||'')+'</span>').join('')+
+                  '</div>'+
+                '</div>';
+              }).join('');
+            })()}
+          </div>
+        </div>`:''}
       </div>
     </div>
     `}
@@ -1499,15 +1501,39 @@ function showPlatAlert(msg){
 }
 
 function showPlatImportDesktopDialog(){
-  const state=s();
-  const crs=state.classrooms.filter(c=>c.campusId===view.campusId);
-  const crOptions=crs.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  /* Step 1: Simulate file/folder selection (matching terminal side flow) */
+  const defaultDir = 'D:\\CloudDesktop\\Import';
+  const filters = '.cdpkg / .vhd / .img';
+  const step1Ov=document.createElement('div'); step1Ov.className='plat-modal-overlay';
+  step1Ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999';
+  step1Ov.innerHTML=`<div style="background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:24px 28px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.15)">
+    <div style="font-weight:700;font-size:1.05rem;margin-bottom:12px">导入桌面</div>
+    <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:16px;line-height:1.6">
+      将通过系统文件对话框选择桌面包文件。<br>
+      默认目录：<span style="font-family:monospace;font-size:.82rem;color:var(--c-brand)">${esc(defaultDir)}</span><br>
+      支持格式：<span style="font-size:.82rem;color:var(--c-text2)">${esc(filters)}</span>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" data-pm="cancel">取消</button>
+      <button class="btn btn-primary" data-pm="select">选择文件</button>
+    </div>
+  </div>`;
+  document.body.appendChild(step1Ov);
+  step1Ov.querySelector('[data-pm="cancel"]').addEventListener('click',()=>step1Ov.remove());
+  step1Ov.addEventListener('click',(e)=>{if(e.target===step1Ov)step1Ov.remove();});
+  step1Ov.querySelector('[data-pm="select"]').addEventListener('click',()=>{
+    step1Ov.remove();
+    showPlatImportConfigDialog();
+  });
+}
+
+function showPlatImportConfigDialog(){
   const ov=document.createElement('div'); ov.className='plat-modal-overlay';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999';
   ov.innerHTML=`<div style="background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:24px 28px;max-width:520px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.15)">
-    <div style="font-weight:700;font-size:1.05rem;margin-bottom:16px">导入桌面</div>
+    <div style="font-weight:700;font-size:1.05rem;margin-bottom:4px">导入桌面</div>
+    <div style="font-size:.82rem;color:var(--c-text3);margin-bottom:16px">导入后桌面为无人引用状态，需通过部署分发到教室终端</div>
     <div style="display:flex;flex-direction:column;gap:12px">
-      <div><label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">目标教室</label><select id="pi-cr" style="width:100%;padding:6px 10px;border:1px solid var(--c-border);border-radius:4px;font-size:.88rem">${crOptions}</select></div>
       <div><label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">桌面名称</label><input type="text" id="pi-name" value="导入的桌面" placeholder="桌面名称" style="width:100%;padding:6px 10px;border:1px solid var(--c-border);border-radius:4px;font-size:.88rem;box-sizing:border-box"></div>
       <div><label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">部署方式</label><select id="pi-physical" style="width:100%;padding:6px 10px;border:1px solid var(--c-border);border-radius:4px;font-size:.88rem">
         <option value="false">虚拟部署 (VHD)</option><option value="true">物理部署 (独立分区)</option></select></div>
@@ -1515,9 +1541,8 @@ function showPlatImportDesktopDialog(){
         <option value="">不添加数据盘</option><option value="yes" selected>添加数据盘</option></select></div>
       <div id="pi-disk-detail">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div><label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">数据盘大小</label><select id="pi-disk-size" style="width:100%;padding:6px 10px;border:1px solid var(--c-border);border-radius:4px;font-size:.88rem">
-            <option value="20GB">20 GB</option><option value="50GB" selected>50 GB</option><option value="100GB">100 GB</option></select></div>
-          <div><label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">挂载路径</label><input type="text" id="pi-disk-drive" value="D:" placeholder="D: 或 /data" style="width:100%;padding:6px 10px;border:1px solid var(--c-border);border-radius:4px;font-size:.88rem;box-sizing:border-box"></div>
+          <div><label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">数据盘大小 (GB)</label><div style="display:flex;align-items:center;gap:6px"><input type="number" id="pi-disk-size" value="50" min="1" max="2000" style="width:90px;padding:6px 10px;border:1px solid var(--c-border);border-radius:4px;font-size:.88rem"><span style="font-size:.82rem;color:var(--c-text2)">GB</span></div></div>
+          <div><label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">挂载盘符或路径</label><input type="text" id="pi-disk-drive" value="D" placeholder="D 或 /data" style="width:100%;padding:6px 10px;border:1px solid var(--c-border);border-radius:4px;font-size:.88rem;box-sizing:border-box"></div>
         </div>
         <div id="pi-disk-preview" style="margin-top:6px;padding:8px 10px;background:var(--c-bg2);border:1px solid var(--c-border);border-radius:4px;font-size:.78rem;font-family:monospace;line-height:1.6"></div>
       </div>
@@ -1532,17 +1557,19 @@ function showPlatImportDesktopDialog(){
   const diskSel=ov.querySelector('#pi-disk-sel');
   const detailRow=ov.querySelector('#pi-disk-detail');
   const driveInput=ov.querySelector('#pi-disk-drive');
-  const sizeSelect=ov.querySelector('#pi-disk-size');
+  const sizeInput=ov.querySelector('#pi-disk-size');
   const previewEl=ov.querySelector('#pi-disk-preview');
   function updatePreview(){
     const raw=(driveInput?.value||'').trim();
-    const sz=sizeSelect?.value||'50GB';
-    if(!raw){ previewEl.innerHTML='<span style="color:var(--c-text3)">请输入挂载路径后预览</span>'; return; }
-    const isWinDrive=/^[A-Za-z]:?$/.test(raw);
+    const szNum=parseInt(sizeInput?.value||'50',10)||50;
+    const sz=szNum+'GB';
+    if(!raw){ previewEl.innerHTML='<span style="color:var(--c-text3)">请输入盘符或路径后预览</span>'; return; }
+    const cleanRaw=raw.replace(/[:：\\]+$/,'');
+    const isWinDrive=/^[A-Za-z]$/.test(cleanRaw);
     const isUnixPath=raw.startsWith('/');
     let lines=[];
     if(isWinDrive){
-      const letter=raw.charAt(0).toUpperCase();
+      const letter=cleanRaw.toUpperCase();
       lines.push('<span style="color:var(--c-brand)">Windows</span>  '+letter+':\\ ('+sz+' NTFS)');
       lines.push('<span style="color:var(--c-text3)">Unix</span>     /mnt/'+letter.toLowerCase()+' ('+sz+' ext4)');
     } else if(isUnixPath){
@@ -1550,7 +1577,7 @@ function showPlatImportDesktopDialog(){
       lines.push('<span style="color:var(--c-text3)">Windows</span>  D:\\ ('+sz+' NTFS)');
       lines.push('<span style="color:var(--c-brand)">Unix</span>     '+pathNorm+' ('+sz+' ext4)');
     } else {
-      lines.push('<span style="color:var(--c-warn)">提示：请输入盘符（如 D:）或路径（如 /data）</span>');
+      lines.push('<span style="color:var(--c-warn)">提示：请输入盘符（如 D）或路径（如 /data）</span>');
     }
     previewEl.innerHTML=lines.join('<br>');
   }
@@ -1558,76 +1585,151 @@ function showPlatImportDesktopDialog(){
   toggleDetail();
   diskSel.addEventListener('change',toggleDetail);
   driveInput.addEventListener('input',updatePreview);
-  sizeSelect.addEventListener('change',updatePreview);
+  sizeInput.addEventListener('input',updatePreview);
   ov.querySelector('[data-pm="cancel"]').addEventListener('click',()=>ov.remove());
   ov.addEventListener('click',(e)=>{if(e.target===ov)ov.remove();});
   ov.querySelector('[data-pm="create"]').addEventListener('click',async()=>{
-    const crId=ov.querySelector('#pi-cr')?.value;
     const name=ov.querySelector('#pi-name')?.value||'导入的桌面';
     const hasDisk=diskSel.value==='yes';
-    const diskSize=hasDisk?(sizeSelect.value||''):'';
-    const diskDrive=hasDisk?(driveInput.value||'D:'):'';
+    const rawSz=parseInt(sizeInput?.value||'50',10)||50;
+    const diskSize=hasDisk?rawSz+'GB':'';
+    const rawDrv=(driveInput?.value||'').trim().replace(/[:\uff1a\\]+$/,'');
+    const diskDrive=hasDisk?(/^[A-Za-z]$/.test(rawDrv)?rawDrv.toUpperCase()+':':rawDrv||''):'';
     const physical=ov.querySelector('#pi-physical')?.value==='true';
     const remark=ov.querySelector('#pi-remark')?.value||'';
+    /* Validation */
+    if(!name.trim()){ showPlatAlert('请输入桌面名称'); return; }
+    if(hasDisk && !diskDrive){ showPlatAlert('已选择添加数据盘，请输入挂载盘符或路径'); return; }
+    if(hasDisk && rawSz<1){ showPlatAlert('数据盘大小不能小于 1 GB'); return; }
     ov.remove();
     try{
-      await client.send('plat-import-desktop',{classroomId:crId, name, os:'Windows 11 23H2', importType:'image',
+      await client.send('plat-import-desktop',{name, os:'Windows 11 23H2', importType:'image',
         dataDiskSize:diskSize, dataDiskDrive:diskDrive, physicalDeploy:physical,
         restoreMode:'还原系统盘，保留数据盘', remark});
-      view.deleteAssetResult={done:true,message:'已导入桌面「'+name+'」到目标教室'};
+      view.deleteAssetResult={done:true,message:'已导入桌面「'+name+'」，当前无教室引用'};
     }catch(e){ console.error(e); }
     render(s());
   });
 }
 
 function showPlatExportDesktopDialog(){
-  const state=s();
-  const crsWithDesktops=state.classrooms.filter(c=>c.campusId===view.campusId&&(c.desktopCatalog||[]).length>0);
-  const allDesktops=[];
-  crsWithDesktops.forEach(c=>{
-    (c.desktopCatalog||[]).forEach(d=>{
-      if(!allDesktops.find(e=>e.name===d.name)) allDesktops.push({name:d.name, os:d.os||'', diskSize:d.diskSize||25, classroomName:c.name, classroomId:c.id, id:d.id});
-    });
-  });
-  if(!allDesktops.length){ showPlatAlert('当前校区无可导出桌面'); return; }
-  const ov=document.createElement('div'); ov.className='plat-modal-overlay';
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999';
-  ov.innerHTML=`<div style="background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:24px 28px;max-width:560px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.15);max-height:80vh;display:flex;flex-direction:column">
-    <div style="font-weight:700;font-size:1.05rem;margin-bottom:4px">导出桌面</div>
-    <div style="font-size:.82rem;color:var(--c-text3);margin-bottom:12px">选择要导出的桌面，导出为桌面包 (.cdpkg)</div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <label style="font-size:.82rem;color:var(--c-text2)"><input type="checkbox" id="pe-all" checked> 全选</label>
-      <span id="pe-count" style="font-size:.82rem;color:var(--c-text3)">${allDesktops.length} 个桌面</span>
-    </div>
-    <div style="flex:1;overflow-y:auto;border:1px solid var(--c-border);border-radius:4px;margin-bottom:16px">
-      ${allDesktops.map(d=>`<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--c-border);font-size:.85rem;cursor:pointer">
-        <input type="checkbox" class="pe-item" data-pe-name="${esc(d.name)}" checked>
-        <span style="flex:1">${esc(d.name)}</span>
-        <span style="color:var(--c-text3);font-size:.78rem">${d.diskSize} GB</span>
-        <span style="color:var(--c-text3);font-size:.78rem">${esc(d.classroomName)}</span>
-      </label>`).join('')}
+  /* Step 1: Folder selection */
+  const defaultDir='D:\\CloudDesktop\\Export';
+  const fs1=document.createElement('div'); fs1.className='plat-modal-overlay';
+  fs1.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999';
+  fs1.innerHTML=`<div style="background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:24px 28px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.15)">
+    <div style="font-weight:700;font-size:1.05rem;margin-bottom:12px">导出桌面</div>
+    <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:16px;line-height:1.6">
+      将通过系统对话框选择导出目标文件夹。<br>
+      默认目录：<span style="font-family:monospace;font-size:.82rem;color:var(--c-brand)">${esc(defaultDir)}</span><br>
+      每个桌面将导出为独立桌面包 (.cdpkg)
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn btn-ghost" data-pm="cancel">取消</button>
-      <button class="btn btn-primary" data-pm="export">导出选中桌面</button>
+      <button class="btn btn-primary" data-pm="select">选择文件夹</button>
+    </div>
+  </div>`;
+  document.body.appendChild(fs1);
+  fs1.querySelector('[data-pm="cancel"]').addEventListener('click',()=>fs1.remove());
+  fs1.addEventListener('click',(e)=>{if(e.target===fs1)fs1.remove();});
+  fs1.querySelector('[data-pm="select"]').addEventListener('click',()=>{
+    fs1.remove();
+    showPlatExportSelectionDialog();
+  });
+}
+
+function showPlatExportSelectionDialog(){
+  const state=s();
+  const crsWithDesktops=state.classrooms.filter(c=>c.campusId===view.campusId&&(c.desktopCatalog||[]).length>0);
+  /* Aggregate desktops, collecting ALL referencing classrooms per desktop name */
+  const deskMap=new Map();
+  crsWithDesktops.forEach(c=>{
+    (c.desktopCatalog||[]).forEach(d=>{
+      const key=d.name;
+      if(!deskMap.has(key)) deskMap.set(key,{name:d.name, os:d.os||'', diskSize:d.diskSize||25, id:d.id, classrooms:[]});
+      const entry=deskMap.get(key);
+      if(!entry.classrooms.find(cr=>cr.id===c.id)) entry.classrooms.push({id:c.id, name:c.name});
+    });
+  });
+  const allDesktops=[...deskMap.values()];
+  if(!allDesktops.length){ showPlatAlert('当前校区无可导出桌面'); return; }
+
+  const ov=document.createElement('div'); ov.className='plat-modal-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999';
+  ov.innerHTML=`<div style="background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:24px 28px;max-width:580px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.15);max-height:80vh;display:flex;flex-direction:column">
+    <div style="font-weight:700;font-size:1.05rem;margin-bottom:4px">导出桌面</div>
+    <div style="font-size:.82rem;color:var(--c-text3);margin-bottom:10px">选择要导出的桌面，每个桌面将导出为独立桌面包 (.cdpkg)</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-size:.78rem;color:var(--c-text2);cursor:pointer;text-decoration:underline" id="pe-toggle">全选 / 取消</span>
+      <span id="pe-count" style="font-size:.78rem;color:var(--c-text3)">${allDesktops.length} / ${allDesktops.length}</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;flex:1;overflow-y:auto;margin-bottom:10px">
+      ${allDesktops.map(d=>{
+        const crLabel=d.classrooms.length<=2?d.classrooms.map(c=>esc(c.name)).join('、'):(esc(d.classrooms[0].name)+' 等共 '+d.classrooms.length+' 教室引用');
+        return `<div class="pe-card" data-pe-name="${esc(d.name)}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:2px solid var(--c-brand);border-radius:6px;background:rgba(59,130,246,.06);cursor:pointer;transition:all .15s">
+        <div style="width:20px;height:20px;border-radius:4px;background:var(--c-brand);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s" class="pe-check"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name)}</div>
+          <div style="font-size:.72rem;color:var(--c-text3)">${esc(d.os)} · ${d.diskSize} GB · ${crLabel}</div>
+        </div>
+      </div>`;
+      }).join('')}
+    </div>
+    <div id="pe-summary" style="border-top:1px solid var(--c-border);padding-top:8px;font-size:.82rem;display:flex;justify-content:space-between;margin-bottom:8px"><strong>合计</strong><span>${allDesktops.length} 个桌面 · ${allDesktops.reduce((t,d)=>t+(d.diskSize||25),0)} GB</span></div>
+    <div id="pe-path" style="padding:8px 12px;background:var(--c-bg2);border:1px solid var(--c-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--c-brand);word-break:break-all"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn btn-ghost" data-pm="cancel">取消</button>
+      <button class="btn btn-primary" data-pm="export">导出</button>
     </div>
   </div>`;
   document.body.appendChild(ov);
-  const allCb=ov.querySelector('#pe-all');
-  const items=ov.querySelectorAll('.pe-item');
-  const countEl=ov.querySelector('#pe-count');
-  function updateCount(){ const n=[...items].filter(i=>i.checked).length; countEl.textContent=n+' / '+allDesktops.length+' 个桌面'; }
-  allCb.addEventListener('change',()=>{ items.forEach(i=>i.checked=allCb.checked); updateCount(); });
-  items.forEach(i=>i.addEventListener('change',()=>{ allCb.checked=[...items].every(i2=>i2.checked); updateCount(); }));
+  const cards=ov.querySelectorAll('.pe-card');
+  const selected=new Set(allDesktops.map(d=>d.name));
+  function updateCard(card,sel){
+    const check=card.querySelector('.pe-check');
+    if(sel){
+      card.style.borderColor='var(--c-brand)'; card.style.background='rgba(59,130,246,.06)';
+      check.style.background='var(--c-brand)'; check.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
+    } else {
+      card.style.borderColor='var(--c-border)'; card.style.background='transparent';
+      check.style.background='var(--c-border)'; check.innerHTML='';
+    }
+  }
+  function updateSummary(){
+    const selDts=allDesktops.filter(d=>selected.has(d.name));
+    const total=selDts.reduce((t,d)=>t+(d.diskSize||25),0);
+    ov.querySelector('#pe-count').textContent=selDts.length+' / '+allDesktops.length;
+    ov.querySelector('#pe-summary').innerHTML='<strong>合计</strong><span>'+selDts.length+' 个桌面 · '+total+' GB</span>';
+    const dateStr=new Date().toISOString().slice(0,10);
+    const pathLines=selDts.map(d=>'D:\\CloudDesktop\\Export\\'+d.name.replace(/[\\/:*?"<>|]/g,'-')+'-'+dateStr+'.cdpkg').join('<br>');
+    ov.querySelector('#pe-path').innerHTML=pathLines||'<span style="color:var(--c-text3)">请选择至少一个桌面</span>';
+  }
+  cards.forEach(card=>{
+    updateCard(card,true);
+    card.addEventListener('click',()=>{
+      const name=card.dataset.peName;
+      if(selected.has(name)) selected.delete(name); else selected.add(name);
+      updateCard(card,selected.has(name));
+      updateSummary();
+    });
+  });
+  ov.querySelector('#pe-toggle').addEventListener('click',()=>{
+    const allSel=selected.size===allDesktops.length;
+    if(allSel){ selected.clear(); } else { allDesktops.forEach(d=>selected.add(d.name)); }
+    cards.forEach(card=>updateCard(card,selected.has(card.dataset.peName)));
+    updateSummary();
+  });
+  updateSummary();
   ov.querySelector('[data-pm="cancel"]').addEventListener('click',()=>ov.remove());
   ov.addEventListener('click',(e)=>{if(e.target===ov)ov.remove();});
   ov.querySelector('[data-pm="export"]').addEventListener('click',()=>{
-    const selected=[...items].filter(i=>i.checked).map(i=>i.dataset.peName);
-    if(!selected.length){ showPlatAlert('请至少选择一个桌面'); return; }
-    const totalSize=allDesktops.filter(d=>selected.includes(d.name)).reduce((s,d)=>s+(d.diskSize||25),0);
+    if(!selected.size){ showPlatAlert('请至少选择一个桌面'); return; }
+    const selDts=allDesktops.filter(d=>selected.has(d.name));
+    const total=selDts.reduce((t,d)=>t+(d.diskSize||25),0);
+    const names=selDts.map(d=>d.name).join('、');
     ov.remove();
-    showPlatAlert('已导出 '+selected.length+' 个桌面 (共 '+totalSize+' GB)');
-    view.deleteAssetResult={done:true,message:'已导出 '+selected.length+' 个桌面 (共 '+totalSize+' GB)'};
+    showPlatAlert('已导出 '+selDts.length+' 个桌面 (共 '+total+' GB)\n'+names);
+    view.deleteAssetResult={done:true,message:'已导出 '+selDts.length+' 个桌面 (共 '+total+' GB)：'+names};
     render(s());
   });
 }

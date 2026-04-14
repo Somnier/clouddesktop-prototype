@@ -278,19 +278,19 @@ function buildState(s){
     /* 3) 桌面 — simulate user having created desktops via "管理桌面" */
     const demoDts = [
       { id:'dt-demo-teach', name:'公共教学桌面', version:'v1', os:'Windows 11 23H2', type:'教学',
-        visibility:'default', remark:'已装 Office 全家桶 + Python 3.12 + VS Code', syncStatus:'local',
+        visibility:'default', remark:'已装 Office 全家桶 + Python 3.12 + VS Code', syncStatus:'synced',
         diskSize:65, dataDisk:'D: 40GB VHD', createdAt:now(), editedAt:now(), snapshotId:null,
-        restoreMode:'还原系统盘，保留数据盘', uploaded:false, physicalDeploy:false, baseImageName:'Windows 11 23H2',
+        restoreMode:'还原系统盘，保留数据盘', uploaded:true, physicalDeploy:false, baseImageName:'Windows 11 23H2',
         dataDisks:[{id:'dd-demo-teach',name:'数据盘',drive:'D:',size:'40GB',sharedWith:[]}] },
       { id:'dt-demo-exam', name:'期末考试桌面', version:'v1', os:'Windows 11 23H2', type:'考试',
         visibility:'default', remark:'考试专用，已锁定 USB 和网络', syncStatus:'local',
         diskSize:45, dataDisk:'D: 20GB VHD', createdAt:now(), editedAt:now(), snapshotId:null,
-        restoreMode:'还原系统盘和数据盘', uploaded:false, physicalDeploy:false, baseImageName:'Windows 11 23H2',
+        restoreMode:'还原系统盘和数据盘', uploaded:false, physicalDeploy:true, baseImageName:'Windows 11 23H2',
         dataDisks:[{id:'dd-demo-exam',name:'数据盘',drive:'D:',size:'20GB',sharedWith:[]}] },
       { id:'dt-demo-base', name:'Win11 纯净桌面', version:'v1', os:'Windows 11 23H2', type:'原始',
-        visibility:'default', remark:'基础系统镜像，仅含驱动', syncStatus:'local',
+        visibility:'default', remark:'基础系统镜像，仅含驱动', syncStatus:'synced',
         diskSize:18, dataDisk:'', createdAt:now(), editedAt:now(), snapshotId:null,
-        restoreMode:'还原系统盘，保留数据盘', uploaded:false, physicalDeploy:false, baseImageName:'Windows 11 23H2',
+        restoreMode:'还原系统盘，保留数据盘', uploaded:true, physicalDeploy:false, baseImageName:'Windows 11 23H2',
         dataDisks:[] },
       { id:'dt-demo-teacher', name:'教师桌面', version:'v1', os:'Windows 11 23H2', type:'教学',
         visibility:'default', remark:'教师授课专用，含课件管理工具', syncStatus:'local',
@@ -314,6 +314,22 @@ function buildState(s){
     motherTerm.metrics.diskTotal = 512;
   }
 
+  /* ── Seed demo logs (2026-04-14) ── */
+  const logBase = new Date('2026-04-14T08:00:00').getTime();
+  const seedLogs = [
+    { level:'info', source:'服务器',           title:'服务器启动完成',             detail:'平台服务 v3.2.1 已启动，监听端口 443', at:new Date(logBase).toISOString() },
+    { level:'info', source:'服务器',           title:'许可证验证通过',             detail:'授权终端数 500，有效期至 2027-06-30', at:new Date(logBase+120000).toISOString() },
+    { level:'info', source:focusSeedCr?.name||'A301', title:'母机上线',            detail:'终端 D301-T01 (5c:7a:xx:xx)，IP 10.21.3.20', at:new Date(logBase+300000).toISOString() },
+    { level:'info', source:focusSeedCr?.name||'A301', title:'桌面上传完成',        detail:'公共教学桌面 (65 GB) 已同步到服务器', at:new Date(logBase+600000).toISOString() },
+    { level:'info', source:focusSeedCr?.name||'A301', title:'桌面上传完成',        detail:'Win11 纯净桌面 (18 GB) 已同步到服务器', at:new Date(logBase+660000).toISOString() },
+    { level:'info', source:'服务器',           title:'存储空间检查',               detail:'已用 342 GB / 总计 2 TB，剩余 82.9%', at:new Date(logBase+900000).toISOString() },
+    { level:'warn', source:'B207 多媒体教室',  title:'终端心跳超时',               detail:'B207-T15 超过 5 分钟未响应心跳', at:new Date(logBase+1800000).toISOString() },
+    { level:'info', source:'C402 计算机教室',  title:'部署任务完成',               detail:'增量部署 57 台终端，公共教学桌面 v1', at:new Date(logBase+3600000).toISOString() },
+    { level:'info', source:'服务器',           title:'自动备份完成',               detail:'快照 snap-20260414-1200，数据库 + 配置', at:new Date(logBase+7200000).toISOString() },
+    { level:'warn', source:'D105 实训教室',    title:'磁盘空间预警',               detail:'D105-T32 磁盘使用率 92%，建议清理', at:new Date(logBase+10800000).toISOString() },
+  ];
+  seedLogs.reverse().forEach(l=>{ logs.push({id:uid(), ...l}); });
+
   return {
     meta: { version: 3, updatedAt: now() },
     school: s.school, campuses: [...s.campuses], servers: s.servers.map(sv=>{
@@ -325,6 +341,7 @@ function buildState(s){
       return {...sv, monitorHistory:hist};
     }),
     classrooms, terminals, tasks, alerts, logs,
+    platformDesktops: [], /* Imported desktops not yet assigned to any classroom */
     demo: {
       focusCampusId: s.demo.focusCampusId, focusClassroomId: focusCr,
       motherId, controlledId,
@@ -1665,15 +1682,7 @@ function act(action, payload={}){
     return {ok:true};
   }
   case 'plat-import-desktop':{
-    const crId=payload.classroomId;
-    const cr=crById(crId); if(!cr) return {ok:false,reason:'教室不存在'};
-    const dtId='dt-'+cr.id+'-'+uid();
-    const imgId='img-'+cr.id+'-'+uid();
-    if(!cr.imageStore) cr.imageStore=[];
-    cr.imageStore.push({id:imgId, name:payload.os||'Windows 11 23H2', os:payload.os||'Windows 11 23H2', importedAt:now()});
-    const snapId='snap-'+cr.id+'-'+uid();
-    if(!cr.snapshotTree) cr.snapshotTree=[];
-    cr.snapshotTree.push({id:snapId, name:(payload.name||'导入桌面')+' 初始快照', imageId:imgId, parentId:null, createdAt:now()});
+    const dtId='dt-plat-'+uid();
     const dataDisks=[];
     if(payload.dataDiskSize){
       dataDisks.push({id:'dd-'+dtId, name:'数据盘', drive:payload.dataDiskDrive||'D:', size:payload.dataDiskSize, sharedWith:[]});
@@ -1684,10 +1693,10 @@ function act(action, payload={}){
       visibility:'default', restoreMode:payload.restoreMode||'还原系统盘，保留数据盘',
       physicalDeploy:payload.physicalDeploy||false, uploaded:false,
       baseImageName:payload.os||'Windows 11 23H2', diskSize, remark:payload.remark||'',
-      syncStatus:'local', snapshotId:snapId, dataDisks, createdAt:now(), editedAt:now()};
-    if(!cr.desktopCatalog) cr.desktopCatalog=[];
-    cr.desktopCatalog.push({...dt});
-    addLog('info','平台','桌面导入',`${cr.name}: 已导入桌面 ${dt.name}`);
+      syncStatus:'local', snapshotId:null, dataDisks, createdAt:now(), editedAt:now()};
+    if(!state.platformDesktops) state.platformDesktops=[];
+    state.platformDesktops.push(dt);
+    addLog('info','平台','桌面导入','已导入桌面 '+dt.name+'（无教室引用）');
     return {ok:true};
   }
   case 'plat-delete-desktop-asset':{
