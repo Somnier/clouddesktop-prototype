@@ -168,21 +168,21 @@
 
 /* ── inputs (dark) ── */
 .term-app input[type="text"], .term-app input[type="number"], .term-app select, .term-app textarea {
-  background: #0d1117; color: var(--t-text); border-color: var(--t-border); font-family: var(--font); }
+  background: #0d1117; color: var(--t-text); border-color: var(--t-border); font-family: var(--font); color-scheme: dark; }
 .term-app input:focus, .term-app select:focus { border-color: var(--t-accent); box-shadow: 0 0 0 2px rgba(88,166,255,.15); }
 /* Force dark styling on number input steppers (Chrome/Edge) */
 .term-app input[type="number"]::-webkit-inner-spin-button,
 .term-app input[type="number"]::-webkit-outer-spin-button {
-  opacity: 0; transition: opacity .2s; }
+  opacity: 0; transition: opacity .2s; filter: invert(1); }
 .term-app input[type="number"]:hover::-webkit-inner-spin-button,
 .term-app input[type="number"]:hover::-webkit-outer-spin-button,
 .term-app input[type="number"]:focus::-webkit-inner-spin-button,
 .term-app input[type="number"]:focus::-webkit-outer-spin-button {
-  opacity: 1; filter: invert(1); }
+  opacity: 1; }
 .term-app input[type="checkbox"] { accent-color: var(--t-accent); }
 
 /* ── data-table (dark) ── */
-.term-app .data-table th { background: rgba(255,255,255,.04); color: var(--t-text2); border-bottom-color: var(--t-border); }
+.term-app .data-table th { background: rgba(255,255,255,.04); color: var(--t-text2); border-bottom-color: var(--t-border); position: sticky; top: 0; z-index: 2; }
 .term-app .data-table th:hover { background: rgba(255,255,255,.08); }
 .term-app .data-table td { border-bottom-color: var(--t-border); }
 .term-app .data-table tr:hover td { background: rgba(255,255,255,.03); }

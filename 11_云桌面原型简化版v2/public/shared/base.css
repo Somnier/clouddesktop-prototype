@@ -88,7 +88,8 @@ body { font-family: var(--font); color: var(--c-text); background: var(--c-bg); 
 /* ── data tables ── */
 .data-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
 .data-table th { background: #f8f9fb; text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--c-border);
-  color: var(--c-text2); font-weight: 600; white-space: nowrap; user-select: none; cursor: pointer; }
+  color: var(--c-text2); font-weight: 600; white-space: nowrap; user-select: none; cursor: pointer;
+  position: sticky; top: 0; z-index: 2; }
 .data-table th:hover { background: #eef0f4; }
 .data-table td { padding: 7px 10px; border-bottom: 1px solid var(--c-border); vertical-align: middle; }
 .data-table tr:hover td { background: #f8f9fb; }

@@ -134,7 +134,7 @@ function page(){
     <!-- ═══ 测试流程：单机功能 ═══ -->
     <div class="dir-card">
       <h3>测试流程 A：单机功能</h3>
-      <p>终端首页 → 本机配置 → 服务器连接 → 桌面管理 → 一键替换 → 一键重置 → 本机测试</p>
+      <p>终端首页 → 本机配置 → 服务器连接 → 桌面管理 → 一键替换 → 一键重置</p>
       <div class="dir-btn-group">
         <button class="dir-btn" data-act="go-home">首页</button>
         <button class="dir-btn" data-act="open-local-info">本机配置</button>
@@ -142,7 +142,6 @@ function page(){
         <button class="dir-btn" data-act="open-local-desktop">桌面管理</button>
         <button class="dir-btn" data-act="open-fault-replace">一键替换</button>
         <button class="dir-btn" data-act="open-fault-reset">一键重置</button>
-        <button class="dir-btn" data-act="open-selftest">本机测试</button>
       </div>
     </div>
 
@@ -165,8 +164,8 @@ function page(){
       </div>
       <h4>部署操作</h4>
       <div class="dir-btn-group">
-        <button class="dir-btn" data-act="deploy-bind-next">模拟绑定下一台</button>
-        <button class="dir-btn" data-act="deploy-bind-all">一键全绑定</button>
+        <button class="dir-btn" data-dir-bind-next>模拟绑定下一台</button>
+        <button class="dir-btn" data-act="deploy-bind-all-terminals">一键全绑定</button>
         <button class="dir-btn" data-act="start-deployment">启动部署</button>
       </div>
       <div class="dir-btn-group">
@@ -275,6 +274,18 @@ function bind(){
     el.addEventListener('click',()=>{
       const [key,val] = el.dataset.setFlag.split(':');
       act('set-flag',{[key]:val});
+    });
+  });
+  /* Bind-next: find the next unbound online controlled terminal and bind it */
+  root.querySelectorAll('[data-dir-bind-next]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const state = s();
+      const bindings = state.demo?.deployDraft?.bindings || {};
+      const boundIds = new Set(Object.values(bindings).map(b=>b.terminalId));
+      const terms = termsInCr(state, state.demo.focusClassroomId);
+      const motherId = state.demo.motherId;
+      const next = terms.find(t=>t.id!==motherId && t.online && !boundIds.has(t.id));
+      if(next){ act('deploy-bind-terminal',{terminalId:next.id}); }
     });
   });
   root.querySelectorAll('[data-maint-step]').forEach(el=>{

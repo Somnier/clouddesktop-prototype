@@ -341,7 +341,7 @@ function dashboardPage(){
   <div class="metric-grid">
     <div class="metric-card"><div class="mc-label">教室</div><div class="mc-value">${activeCrs.length}</div>
       <div class="mc-sub">${esc(campus?.name||'')}${(()=>{const w=activeCrs.filter(c2=>healthScore(state,c2.id)<80).length;return w?` · ${w} 间需关注`:(activeCrs.length?' · 全部正常':'');})()}</div></div>
-    <div class="metric-card"><div class="mc-label">终端 / 在线</div><div class="mc-value">${stats.terminals} <span style="font-size:.7em;color:var(--c-text3)">/</span> ${stats.online}</div>
+    <div class="metric-card"><div class="mc-label">在线 / 终端</div><div class="mc-value">${stats.online} <span style="font-size:.7em;color:var(--c-text3)">/</span> ${stats.terminals}</div>
       <div class="mc-sub">在线率 ${pct(stats.online,stats.terminals)}%</div></div>
     <div class="metric-card"><div class="mc-label">桌面资产</div><div class="mc-value">${totalDesktops}</div>
       <div class="mc-sub">占用 ${totalDiskGB} GB</div></div>
@@ -726,7 +726,7 @@ function platActionPanel(pa, par, c, terms){
 
       <div>
         <div style="font-size:.82rem;font-weight:600;margin-bottom:6px">选择要部署的桌面 (可多选)</div>
-        ${catalog.length?`<div style="display:flex;flex-direction:column;gap:4px">
+        ${catalog.length?`<div style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto;padding-right:4px">
           ${catalog.map(d=>{
             const chk=selDts.includes(d.id);
             return `<label style="display:flex;align-items:center;gap:8px;font-size:.82rem;cursor:pointer;padding:6px 10px;border:1px solid ${chk?'var(--c-brand)':'var(--c-border)'};border-radius:6px;background:${chk?'rgba(59,130,246,.06)':'#fff'}">
@@ -1387,21 +1387,44 @@ function serverChangePage(){
       <div style="margin:12px 0;padding:10px 14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:8px;font-size:.85rem;color:var(--c-text2)">
         <strong style="color:var(--c-warn)">注意：</strong>当前有 <strong>${offlineTerms.length}</strong> 台终端未联机，这些终端不会收到本次地址变更推送。
         变更仍可继续 -- 离线终端后续可通过终端本机或母机教室维护流程补充修改。
-        <div style="margin-top:8px;padding:6px 10px;background:var(--c-bg2);border-radius:6px;font-size:.82rem;max-height:140px;overflow-y:auto">
+        <div style="margin-top:4px"><a class="clickable" style="cursor:pointer;color:var(--c-brand);font-size:.82rem" data-toggle-offline-detail>${view.showOfflineDetail?'收起离线终端列表 ▴':'查看离线终端详情 ('+offlineTerms.length+' 台) ▾'}</a></div>
+      </div>
+      ${view.showOfflineDetail?`<div style="margin-bottom:16px">
+        <div style="display:flex;flex-direction:column;gap:12px;max-width:800px">
           ${(()=>{
             const offByCr={};
             offlineTerms.forEach(t=>{
               const cr2=state.classrooms.find(c=>c.id===t.classroomId);
-              const key=cr2?cr2.name:'未知教室';
-              if(!offByCr[key]) offByCr[key]=[];
-              offByCr[key].push(t);
+              const key=cr2?cr2.id:'unknown';
+              if(!offByCr[key]) offByCr[key]={cr:cr2,terms:[]};
+              offByCr[key].terms.push(t);
             });
-            return Object.entries(offByCr).map(([crName,ts2])=>
-              '<div style="margin-bottom:4px"><strong>'+esc(crName)+'</strong>：'+ts2.map(t2=>esc(t2.seat||t2.name||t2.mac)).join('、')+'</div>'
-            ).join('');
+            return Object.entries(offByCr).map(([crId,{cr:crObj,terms:ts2}])=>{
+              const crName=crObj?crObj.name:'未知教室';
+              return '<div class="card" style="padding:0;overflow:hidden;border-left:3px solid var(--c-warn)">'+
+                '<div style="padding:10px 16px;display:flex;justify-content:space-between;align-items:center;background:var(--c-bg2)">'+
+                  '<div><strong>'+esc(crName)+'</strong><span style="font-size:.82rem;color:var(--c-text3);margin-left:8px">'+(crObj?esc(crObj.building||'')+' '+esc(crObj.floor||''):'')+'</span></div>'+
+                  '<div style="font-size:.82rem;color:var(--c-warn)">'+ts2.length+' 台离线</div>'+
+                '</div>'+
+                '<div style="padding:8px 16px;max-height:240px;overflow-y:auto">'+
+                  '<table class="data-table" style="font-size:.78rem;margin:0">'+
+                    '<thead><tr><th>座位</th><th>机器名</th><th>IP</th><th>用途</th><th>操作</th></tr></thead>'+
+                    '<tbody>'+ts2.map(t2=>{
+                      return '<tr>'+
+                        '<td>'+esc(t2.seat||'--')+'</td>'+
+                        '<td>'+esc(t2.name||'--')+'</td>'+
+                        '<td class="mono">'+esc(t2.ip||'--')+'</td>'+
+                        '<td>'+esc(t2.use||'--')+'</td>'+
+                        '<td><a class="clickable" data-nav-term="'+t2.id+'" style="cursor:pointer">查看详情</a></td>'+
+                      '</tr>';
+                    }).join('')+'</tbody>'+
+                  '</table>'+
+                '</div>'+
+              '</div>';
+            }).join('');
           })()}
         </div>
-      </div>`:''}
+      </div>`:''}`:''}
 
       <div class="prep-field" style="margin-top:12px"><label style="width:90px;font-weight:600;font-size:.85rem">新地址</label><input type="text" data-server-new-addr placeholder="输入新服务器 IP 或域名" value="${esc(view.newServerAddr||'')}" style="width:280px"></div>
 
@@ -1745,6 +1768,12 @@ function bindEvents(){
   });
 
   /* ── Server address change page actions ── */
+  root.querySelectorAll('[data-toggle-offline-detail]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      view.showOfflineDetail=!view.showOfflineDetail;
+      render(s());
+    });
+  });
   root.querySelectorAll('[data-settings-action]').forEach(el=>{
     el.addEventListener('click',async()=>{
       const act=el.dataset.settingsAction;
