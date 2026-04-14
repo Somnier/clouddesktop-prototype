@@ -64,27 +64,31 @@ function showExportDoneDialog(){
   const m=mt();
   const dts=(m?.desktops||[]).filter(d=>d.visibility!=='hidden');
   if(!dts.length){ showTermAlert('暂无可导出桌面'); return; }
-  let step=1;
   let exportDir='E:\\CloudDesktop';
   const selected=new Set(dts.map(d=>d.id));
   const ov=document.createElement('div'); ov.className='t-modal-overlay';
+
+  function normalizePath(raw){
+    return raw.replace(/\\/g,'/').replace(/\/+/g,'/').replace(/\/$/,'');
+  }
+  function pathSeparator(raw){
+    /* Detect Windows path (drive letter or backslash) */
+    return /^[A-Za-z]:/.test(raw)||raw.includes('\\')?'\\':'/';
+  }
 
   function renderDialog(){
     const selDts=dts.filter(d=>selected.has(d.id));
     const total=selDts.reduce((s2,d)=>s2+(d.diskSize||25),0);
     const dateStr=new Date().toISOString().slice(0,10);
-    ov.innerHTML=`<div class="t-modal" style="max-width:540px;max-height:80vh;display:flex;flex-direction:column">
-      <div class="t-modal-title" style="margin-bottom:4px">导出桌面</div>
-      <div style="display:flex;gap:6px;margin-bottom:14px;font-size:.82rem">
-        <span style="padding:3px 10px;border-radius:12px;${step>=1?'background:var(--t-accent);color:#fff':'background:var(--t-panel)'}">① 选择桌面</span>
-        <span style="padding:3px 10px;border-radius:12px;${step>=2?'background:var(--t-accent);color:#fff':'background:var(--t-panel)'}">② 选择导出位置</span>
-      </div>
-      ${step===1?`
+    const sep=pathSeparator(exportDir);
+    const dirDisplay=sep==='\\'?exportDir.replace(/\//g,'\\'):exportDir;
+    ov.innerHTML=`<div class="t-modal" style="max-width:560px;max-height:80vh;display:flex;flex-direction:column">
+      <div class="t-modal-title" style="margin-bottom:12px">导出桌面</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:.78rem;color:var(--t-text2);cursor:pointer;text-decoration:underline" id="te-toggle">全选 / 取消</span>
         <span id="te-count" style="font-size:.78rem;color:var(--t-text3)">${selDts.length} / ${dts.length}</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;margin-bottom:10px;flex:1;min-height:0">
+      <div style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;margin-bottom:12px;flex:1;min-height:0">
         ${dts.map(d=>{const sel=selected.has(d.id);return `<div class="te-card" data-te-id="${d.id}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:2px solid ${sel?'var(--t-accent)':'var(--t-border)'};border-radius:6px;background:${sel?'rgba(88,166,255,.06)':'transparent'};cursor:pointer;transition:all .15s">
           <div style="width:20px;height:20px;border-radius:4px;background:${sel?'var(--t-accent)':'var(--t-border)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s" class="te-check">${sel?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>':''}</div>
           <div style="flex:1;min-width:0">
@@ -93,76 +97,62 @@ function showExportDoneDialog(){
           </div>
         </div>`;}).join('')}
       </div>
-      <div style="border-top:1px solid var(--t-border);padding-top:8px;font-size:.82rem;display:flex;justify-content:space-between;margin-bottom:8px"><strong>合计</strong><span>${selDts.length} 个桌面 · ${total} GB</span></div>
-      <div class="t-modal-actions">
-        <button class="btn btn-ghost" data-tm="cancel">取消</button>
-        <button class="btn btn-primary" data-tm="next"${!selDts.length?' disabled':''}>下一步 →</button>
-      </div>
-      `:`
-      <div style="font-size:.85rem;color:var(--t-text2);margin-bottom:12px">已选择 <strong>${selDts.length}</strong> 个桌面 (共 ${total} GB)，选择导出目标文件夹</div>
-      <div style="margin-bottom:12px">
+      <div style="border-top:1px solid var(--t-border);padding-top:10px;margin-bottom:10px">
         <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">导出文件夹</label>
         <div style="display:flex;gap:6px;align-items:center">
           <input type="text" id="te-dir" value="${esc(exportDir)}" style="flex:1;padding:6px 10px;border:1px solid var(--t-border);border-radius:4px;font-size:.85rem;font-family:monospace;background:var(--t-panel);color:var(--t-text);box-sizing:border-box">
           <button class="btn btn-ghost btn-sm" id="te-browse" style="white-space:nowrap">浏览…</button>
         </div>
       </div>
-      <div style="margin-bottom:10px">
+      ${selDts.length?`<div style="margin-bottom:10px">
         <div style="font-size:.82rem;font-weight:600;margin-bottom:4px">导出文件预览</div>
-        <div id="te-path" style="padding:8px 12px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--t-accent);word-break:break-all;max-height:120px;overflow-y:auto;line-height:1.6">
-          ${selDts.map(d=>esc(exportDir)+'\\'+esc(d.name.replace(/[\\/:*?"<>|]/g,'-'))+'-'+dateStr+'.cdpkg').join('<br>')}
+        <div id="te-path" style="padding:8px 12px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--t-accent);word-break:break-all;max-height:90px;overflow-y:auto;line-height:1.6">
+          ${selDts.map(d=>esc(dirDisplay)+sep+esc(d.name.replace(/[\\/:*?"<>|]/g,'-'))+'-'+dateStr+'.cdpkg').join('<br>')}
         </div>
-      </div>
+      </div>`:''}
+      <div style="border-top:1px solid var(--t-border);padding-top:8px;font-size:.82rem;display:flex;justify-content:space-between;margin-bottom:8px"><strong>合计</strong><span>${selDts.length} 个桌面 · ${total} GB</span></div>
       <div class="t-modal-actions">
-        <button class="btn btn-ghost" data-tm="back">← 上一步</button>
-        <button class="btn btn-primary" data-tm="ok">导出</button>
+        <button class="btn btn-ghost" data-tm="cancel">取消</button>
+        <button class="btn btn-primary" data-tm="ok"${!selDts.length?' disabled':''}>导出</button>
       </div>
-      `}
     </div>`;
     bindDialogEvents();
   }
 
   function bindDialogEvents(){
-    if(step===1){
-      ov.querySelectorAll('.te-card').forEach(card=>{
-        card.addEventListener('click',()=>{
-          const id=card.dataset.teId;
-          if(selected.has(id)) selected.delete(id); else selected.add(id);
-          renderDialog();
-        });
-      });
-      const toggle=ov.querySelector('#te-toggle');
-      if(toggle) toggle.addEventListener('click',()=>{
-        if(selected.size===dts.length) selected.clear(); else dts.forEach(d=>selected.add(d.id));
+    ov.querySelectorAll('.te-card').forEach(card=>{
+      card.addEventListener('click',()=>{
+        const id=card.dataset.teId;
+        if(selected.has(id)) selected.delete(id); else selected.add(id);
         renderDialog();
       });
-      const nextBtn=ov.querySelector('[data-tm="next"]');
-      if(nextBtn) nextBtn.addEventListener('click',()=>{ step=2; renderDialog(); });
-    } else {
-      const dirInput=ov.querySelector('#te-dir');
-      if(dirInput) dirInput.addEventListener('change',()=>{ exportDir=dirInput.value; renderDialog(); });
-      const browseBtn=ov.querySelector('#te-browse');
-      if(browseBtn) browseBtn.addEventListener('click',()=>{
-        if(window.electronAPI?.isElectron){
-          window.electronAPI.showOpenDialog({title:'选择导出文件夹',defaultPath:exportDir,properties:['openDirectory']}).then(r=>{
-            if(!r.canceled&&r.filePaths?.length){ exportDir=r.filePaths[0]; renderDialog(); }
-          });
-        } else {
-          showTermAlert('模拟浏览：已选择 '+exportDir);
-        }
-      });
-      const backBtn=ov.querySelector('[data-tm="back"]');
-      if(backBtn) backBtn.addEventListener('click',()=>{ step=1; renderDialog(); });
-      const okBtn=ov.querySelector('[data-tm="ok"]');
-      if(okBtn) okBtn.addEventListener('click',()=>{
-        const selDts=dts.filter(d=>selected.has(d.id));
-        if(!selDts.length){ showTermAlert('请至少选择一个桌面'); return; }
-        const total=selDts.reduce((s2,d)=>s2+(d.diskSize||25),0);
-        const names=selDts.map(d=>d.name).join('、');
-        ov.remove();
-        showTermAlert('已导出 '+selDts.length+' 个桌面 (共 '+total+' GB) 到 '+exportDir+'\n'+names);
-      });
-    }
+    });
+    const toggle=ov.querySelector('#te-toggle');
+    if(toggle) toggle.addEventListener('click',()=>{
+      if(selected.size===dts.length) selected.clear(); else dts.forEach(d=>selected.add(d.id));
+      renderDialog();
+    });
+    const dirInput=ov.querySelector('#te-dir');
+    if(dirInput) dirInput.addEventListener('input',()=>{ exportDir=dirInput.value; renderDialog(); });
+    const browseBtn=ov.querySelector('#te-browse');
+    if(browseBtn) browseBtn.addEventListener('click',()=>{
+      if(window.electronAPI?.isElectron){
+        window.electronAPI.showOpenDialog({title:'选择导出文件夹',defaultPath:exportDir,properties:['openDirectory']}).then(r=>{
+          if(!r.canceled&&r.filePaths?.length){ exportDir=r.filePaths[0]; renderDialog(); }
+        });
+      } else {
+        showTermAlert('模拟浏览：已选择 '+exportDir);
+      }
+    });
+    const okBtn=ov.querySelector('[data-tm="ok"]');
+    if(okBtn) okBtn.addEventListener('click',()=>{
+      const selDts=dts.filter(d=>selected.has(d.id));
+      if(!selDts.length){ showTermAlert('请至少选择一个桌面'); return; }
+      const total=selDts.reduce((s2,d)=>s2+(d.diskSize||25),0);
+      const names=selDts.map(d=>d.name).join('、');
+      ov.remove();
+      showTermAlert('已导出 '+selDts.length+' 个桌面 (共 '+total+' GB) 到 '+exportDir+'\n'+names);
+    });
     const cancelBtn=ov.querySelector('[data-tm="cancel"]');
     if(cancelBtn) cancelBtn.addEventListener('click',()=>ov.remove());
     ov.addEventListener('click',(e)=>{if(e.target===ov)ov.remove();});
@@ -917,7 +907,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
     </div>
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
       ${isRunning?`<div style="padding:10px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.82rem">
-        <div style="font-weight:600;color:${done?'var(--t-ok)':'var(--t-accent)'}">${done?'✓ 任务完成':'⏳ 任务执行中，功能切换已锁定'}</div>
+        <div style="font-weight:600;color:${done?'var(--t-ok)':'var(--t-accent)'}">${done?'✓ 任务完成':'任务执行中，功能切换已锁定…'}</div>
         <div style="margin-top:4px">成功 ${tk.counts.completed||0} · 失败 ${tk.counts.failed||0} · 排队 ${tk.counts.queued||0} / 共 ${tk.counts.total||0}</div>
       </div>`:`<div style="padding:8px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.78rem;color:var(--t-text2)">
         ${opsMode==='deploy'?'点击下方座位卡片选择/取消选择终端':

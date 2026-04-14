@@ -167,10 +167,14 @@ function asideContent(){
     const logLimit = Math.min(recentLogs.length, 6);
     cards+=`<div class="aside-card" style="flex:3;min-height:0"><div class="aside-title">最近日志</div>
       ${recentLogs.length?recentLogs.slice(0,logLimit).map(l=>{
-        const isServer=!l.classroomId&&!l.terminalId;
-        const navAttr=l.classroomId?` class="clickable" data-nav-cr="${l.classroomId}" style="cursor:pointer"`:'';
-        return `<div${navAttr} title="${esc((l.detail||''))}" style="${navAttr?'':'cursor:default;'}display:flex;align-items:center;gap:6px;padding:5px 8px;font-size:.82rem;border-bottom:1px solid var(--c-bg2)">
-          <span style="font-size:.72rem;font-weight:600;color:${isServer?'var(--c-text2)':'var(--c-brand)'};flex-shrink:0;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.source||'系统')}</span>
+        const lTerm=l.terminalId?getTerm(state,l.terminalId):null;
+        const lCr=l.classroomId?state.classrooms.find(c=>c.id===l.classroomId):null;
+        const hoverParts=[l.source||'系统',l.title,l.detail||''].filter(Boolean);
+        const sourceHtml=lTerm
+          ?`<a class="clickable" data-nav-term="${lTerm.id}" style="cursor:pointer;font-size:.72rem;font-weight:600;color:var(--c-brand);flex-shrink:0;white-space:nowrap" title="${esc((lCr?lCr.name+' ':'')+'座位 '+(lTerm.seat||''))}">${esc('座位 '+(lTerm.seat||'--'))}</a>`
+          :`<span style="font-size:.72rem;font-weight:600;color:${lCr?'var(--c-brand)':'var(--c-text2)'};flex-shrink:0;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lCr?lCr.name:(l.source||'系统'))}</span>`;
+        return `<div title="${esc(hoverParts.join(' — '))}" style="cursor:default;display:flex;align-items:center;gap:6px;padding:5px 8px;font-size:.82rem;border-bottom:1px solid var(--c-bg2)">
+          ${sourceHtml}
           <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.title)}</span>
           <span style="color:var(--c-text3);font-size:.7rem;white-space:nowrap;flex-shrink:0;text-align:right">${relTime(l.at)}</span>
         </div>`;
@@ -181,11 +185,17 @@ function asideContent(){
       ${campusAlerts.slice(0,alertLimit).map(a=>{
         const t=getTerm(state,a.terminalId);
         const crObj=state.classrooms.find(c=>c.id===a.classroomId);
-        return `<div class="aside-item" style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--c-bg2);cursor:pointer" data-nav-cr="${a.classroomId}">
-          <span style="flex-shrink:0">${pill(a.level==='high'?'高':a.level==='medium'?'中':'低',a.level==='high'?'err':a.level==='medium'?'warn':'muted')}</span>
-          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem;font-weight:500" title="${esc(a.title)}">${esc(a.title)}</span>
-          ${t?`<a class="clickable" data-nav-term="${a.terminalId}" style="flex-shrink:0;font-size:.75rem;color:var(--c-brand);cursor:pointer;white-space:nowrap" title="${esc((crObj?crObj.name+' ':'')+(t.seat||'')+(t.name?' '+t.name:''))}">${esc(t.seat||'--')}</a>`:''}
-          <span style="flex-shrink:0;color:var(--c-text3);font-size:.7rem;white-space:nowrap;text-align:right">${relTime(a.at)}</span>
+        const hoverDetail=[crObj?crObj.name:'',t?'座位 '+(t.seat||'--'):'',a.title,a.detail||''].filter(Boolean).join(' — ');
+        return `<div class="aside-item" title="${esc(hoverDetail)}" style="display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-bottom:1px solid var(--c-bg2)">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="flex-shrink:0">${pill(a.level==='high'?'高':a.level==='medium'?'中':'低',a.level==='high'?'err':a.level==='medium'?'warn':'muted')}</span>
+            <span style="flex:1;font-size:.78rem;color:var(--c-text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(crObj?crObj.name:'')}</span>
+            <span style="flex-shrink:0;color:var(--c-text3);font-size:.7rem;white-space:nowrap">${relTime(a.at)}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;padding-left:2px">
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem;font-weight:500">${esc(a.title)}</span>
+            ${t?`<a class="clickable" data-nav-term="${a.terminalId}" style="flex-shrink:0;font-size:.75rem;padding:1px 6px;background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.15);border-radius:3px;color:var(--c-brand);cursor:pointer;white-space:nowrap">${esc(t.seat||'--')}</a>`:''}
+          </div>
         </div>`;
       }).join('')}
     </div>`;
@@ -211,10 +221,11 @@ function asideContent(){
         cards+=`<div class="aside-card" style="flex:1;min-height:0;overflow-y:auto"><div class="aside-title">教室告警 (${crAlerts.length})</div>
           ${crAlerts.slice(0,alertLimit2).map(a=>{
             const t=getTerm(state,a.terminalId);
-            return `<div class="aside-item" style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--c-bg2)">
+            const crAlertHover=[a.title,t?'座位 '+(t.seat||'--'):'',a.detail||''].filter(Boolean).join(' — ');
+            return `<div class="aside-item" title="${esc(crAlertHover)}" style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--c-bg2)">
               <span style="flex-shrink:0">${pill(a.level==='high'?'高':a.level==='medium'?'中':'低',a.level==='high'?'err':a.level==='medium'?'warn':'muted')}</span>
-              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem;font-weight:500" title="${esc(a.title)}">${esc(a.title)}</span>
-              ${t?`<a class="clickable" data-nav-term="${a.terminalId}" style="flex-shrink:0;font-size:.75rem;color:var(--c-brand);cursor:pointer;white-space:nowrap" title="${esc((t.seat||'')+(t.name?' '+t.name:''))}">${esc(t.seat||'--')}</a>`:''}
+              <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem;font-weight:500">${esc(a.title)}</span>
+              ${t?`<a class="clickable" data-nav-term="${a.terminalId}" style="flex-shrink:0;font-size:.75rem;color:var(--c-brand);cursor:pointer;white-space:nowrap">${esc(t.seat||'--')}</a>`:''}
               <span style="flex-shrink:0;color:var(--c-text3);font-size:.7rem;white-space:nowrap;text-align:right">${relTime(a.at)}</span>
             </div>`;
           }).join('')}
@@ -775,7 +786,7 @@ function platActionPanel(pa, par, c, terms){
           const pct2=pg.length?Math.round(done3/pg.length*100):0;
           return `<div style="margin-bottom:10px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:.82rem;font-weight:500;color:var(--c-brand)">
-              <span>⏳ 部署进行中</span><span>${done3}/${pg.length} 完成</span>
+              <span>部署进行中…</span><span>${done3}/${pg.length} 完成</span>
             </div>
             <div style="height:16px;background:var(--c-bg2);border-radius:8px;overflow:hidden;border:1px solid var(--c-border)">
               <div style="height:100%;width:${pct2}%;background:var(--c-brand);border-radius:8px;transition:width .3s;display:flex;align-items:center;justify-content:center;font-size:.65rem;color:#fff;font-weight:600;min-width:${pct2>5?'0':'28px'}">${pct2}%</div>
@@ -1201,10 +1212,137 @@ function terminalDetailPage(){
 }
 
 
+/* ── Assets import flow (exclusive page) ── */
+function assetsImportFlow(state){
+  const ir = view.importDesktopResult || null;
+  return `
+  <div style="margin-bottom:12px">
+    <button class="btn btn-ghost btn-sm" data-asset-flow-back>← 返回桌面资产</button>
+  </div>
+  <div style="max-width:700px">
+    <div class="card" style="border-left:3px solid var(--c-brand);margin-bottom:20px">
+      <div class="card-header" style="font-size:1.05rem">导入桌面</div>
+      <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:16px">
+        选择桌面包文件 (.cdpkg / .vhd / .img)，导入后桌面为无教室引用状态，需通过部署分发到教室终端。
+      </div>
+
+      <div style="margin-bottom:16px;padding:20px;background:var(--c-bg2);border-radius:8px;border:2px dashed var(--c-border);text-align:center;cursor:pointer" data-import-desktop-file-area>
+        <div style="font-size:.9rem;font-weight:600;margin-bottom:4px">${view.importDesktopFileReady?'✓ 已读取桌面包文件':'点击选择或拖拽桌面包文件到此处'}</div>
+        <div style="font-size:.82rem;color:var(--c-text3)">支持 .cdpkg / .vhd / .img 格式</div>
+      </div>
+
+      ${view.importDesktopFileReady?`
+      <div style="border:1px solid var(--c-border);border-radius:8px;padding:14px 18px;margin-bottom:16px;background:#fff">
+        <div style="font-size:.85rem;font-weight:600;color:var(--c-text2);margin-bottom:10px">桌面信息</div>
+        <div class="prep-field" style="margin-bottom:8px"><label style="width:80px;font-size:.85rem">桌面名称</label>
+          <input type="text" data-pif-name value="${esc(view.importDesktopName||'导入的桌面')}" placeholder="桌面名称" style="width:280px"></div>
+        <div class="prep-field" style="margin-bottom:8px"><label style="width:80px;font-size:.85rem">部署方式</label>
+          <select data-pif-physical style="width:200px">
+            <option value="false"${(view.importDesktopPhysical||'false')==='false'?' selected':''}>虚拟部署 (VHD)</option>
+            <option value="true"${view.importDesktopPhysical==='true'?' selected':''}>物理部署 (独立分区)</option>
+          </select></div>
+        <div class="prep-field" style="margin-bottom:8px"><label style="width:80px;font-size:.85rem">数据盘</label>
+          <select data-pif-disk style="width:200px">
+            <option value=""${!view.importDesktopDisk?' selected':''}>不添加数据盘</option>
+            <option value="yes"${view.importDesktopDisk==='yes'?' selected':''}>添加数据盘</option>
+          </select></div>
+        ${view.importDesktopDisk==='yes'?`
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+          <div class="prep-field"><label style="font-size:.82rem">大小 (GB)</label><div style="display:flex;align-items:center;gap:6px"><input type="number" data-pif-disk-size value="${view.importDesktopDiskSize||50}" min="1" max="2000" style="width:90px"><span style="font-size:.82rem;color:var(--c-text2)">GB</span></div></div>
+          <div class="prep-field"><label style="font-size:.82rem">挂载盘符或路径</label><input type="text" data-pif-disk-drive value="${esc(view.importDesktopDiskDrive||'D')}" placeholder="D 或 /data" style="width:100%;box-sizing:border-box"></div>
+        </div>`:''}
+        <div class="prep-field" style="margin-bottom:8px;margin-top:8px"><label style="width:80px;font-size:.85rem">备注</label>
+          <input type="text" data-pif-remark value="${esc(view.importDesktopRemark||'')}" placeholder="可选" style="width:380px"></div>
+      </div>`:''}
+
+      ${ir?.done?`<div style="color:var(--c-ok);font-size:.85rem;margin:12px 0;padding:8px 12px;background:rgba(34,197,94,.08);border-radius:6px">✓ ${esc(ir.message)}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-primary" data-pif-confirm${ir?.done||!view.importDesktopFileReady?' disabled':''}>确认导入</button>
+        <button class="btn btn-ghost" data-asset-flow-back>取消</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ── Assets export flow (exclusive page) ── */
+function assetsExportFlow(state, crsWithDesktops){
+  const deskMap=new Map();
+  crsWithDesktops.forEach(c=>{
+    (c.desktopCatalog||[]).forEach(d=>{
+      const key=d.name;
+      if(!deskMap.has(key)) deskMap.set(key,{name:d.name, os:d.os||'', diskSize:d.diskSize||25, id:d.id, classrooms:[]});
+      const entry=deskMap.get(key);
+      if(!entry.classrooms.find(cr=>cr.id===c.id)) entry.classrooms.push({id:c.id, name:c.name});
+    });
+  });
+  const allDesktops=[...deskMap.values()];
+  const selected=view.exportSelectedDesktops||new Set(allDesktops.map(d=>d.name));
+  const selDts=allDesktops.filter(d=>selected.has(d.name));
+  const total=selDts.reduce((t,d)=>t+(d.diskSize||25),0);
+  const exportDir=view.exportDir||'D:\\CloudDesktop\\Export';
+  const dateStr=new Date().toISOString().slice(0,10);
+  const sep=/^[A-Za-z]:/.test(exportDir)||exportDir.includes('\\')?'\\':'/';
+  const dirDisplay=sep==='\\'?exportDir.replace(/\//g,'\\'):exportDir;
+  const er = view.exportDesktopResult || null;
+
+  return `
+  <div style="margin-bottom:12px">
+    <button class="btn btn-ghost btn-sm" data-asset-flow-back>← 返回桌面资产</button>
+  </div>
+  <div style="max-width:700px">
+    <div class="card" style="border-left:3px solid var(--c-text3);margin-bottom:20px">
+      <div class="card-header" style="font-size:1.05rem">导出桌面</div>
+      <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:12px">将桌面导出为桌面包，便于工程师携带至线下教室导入。</div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:.78rem;color:var(--c-text2);cursor:pointer;text-decoration:underline" data-pef-toggle>全选 / 取消</span>
+        <span style="font-size:.78rem;color:var(--c-text3)">${selDts.length} / ${allDesktops.length}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;margin-bottom:12px">
+        ${allDesktops.map(d=>{const sel=selected.has(d.name);
+          const crLabel=d.classrooms.length<=2?d.classrooms.map(c2=>esc(c2.name)).join('、'):(esc(d.classrooms[0].name)+' 等共 '+d.classrooms.length+' 教室引用');
+          return `<div class="clickable" data-pef-dt="${esc(d.name)}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:2px solid ${sel?'var(--c-brand)':'var(--c-border)'};border-radius:6px;background:${sel?'rgba(59,130,246,.06)':'transparent'};cursor:pointer;transition:all .15s">
+          <div style="width:20px;height:20px;border-radius:4px;background:${sel?'var(--c-brand)':'var(--c-border)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s">${sel?'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>':''}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(d.name)}</div>
+            <div style="font-size:.72rem;color:var(--c-text3)">${esc(d.os)} · ${d.diskSize} GB · ${crLabel}</div>
+          </div>
+        </div>`;}).join('')}
+      </div>
+
+      <div style="border-top:1px solid var(--c-border);padding-top:10px;margin-bottom:10px">
+        <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">导出文件夹</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" data-pef-dir value="${esc(exportDir)}" style="flex:1;padding:6px 10px;border:1px solid var(--c-border);border-radius:4px;font-size:.85rem;font-family:monospace;box-sizing:border-box">
+          <button class="btn btn-ghost btn-sm" data-pef-browse style="white-space:nowrap">浏览…</button>
+        </div>
+      </div>
+      ${selDts.length?`<div style="margin-bottom:10px">
+        <div style="font-size:.82rem;font-weight:600;margin-bottom:4px">导出文件预览</div>
+        <div style="padding:8px 12px;background:var(--c-bg2);border:1px solid var(--c-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--c-brand);word-break:break-all;max-height:90px;overflow-y:auto;line-height:1.6">
+          ${selDts.map(d=>esc(dirDisplay)+sep+esc(d.name.replace(/[\\/:*?"<>|]/g,'-'))+'-'+dateStr+'.cdpkg').join('<br>')}
+        </div>
+      </div>`:''}
+      <div style="font-size:.82rem;margin-bottom:12px"><strong>合计</strong> ${selDts.length} 个桌面 · ${total} GB</div>
+
+      ${er?.done?`<div style="color:var(--c-ok);font-size:.85rem;margin:12px 0;padding:8px 12px;background:rgba(34,197,94,.08);border-radius:6px">✓ ${esc(er.message)}</div>`:''}
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" data-pef-confirm${!selDts.length||er?.done?' disabled':''}>导出 (${selDts.length})</button>
+        <button class="btn btn-ghost" data-asset-flow-back>取消</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function assetsPage(){
   const state=s(); const campus=getCampus(state,view.campusId); const server=serverFor(state,view.campusId);
   const crIds = state.classrooms.filter(c=>c.campusId===view.campusId).map(c=>c.id);
   const crsWithDesktops = state.classrooms.filter(c=>crIds.includes(c.id)&&(c.desktopCatalog||[]).length>0);
+
+  /* ── Import flow (exclusive) ── */
+  if(view.assetFlowMode==='import') return assetsImportFlow(state);
+  /* ── Export flow (exclusive) ── */
+  if(view.assetFlowMode==='export') return assetsExportFlow(state, crsWithDesktops);
 
   /* Group desktops by name across classrooms */
   const groupMap = new Map();
@@ -1240,7 +1378,8 @@ function assetsPage(){
     const totalTerms = g.entries.reduce((n,e)=>n+e.termsUsing.length,0);
     const latestEdit = g.entries.reduce((d,e)=>(!d||e.editedAt>d?e.editedAt:d),null);
     const latestCreate = g.entries.reduce((d,e)=>(!d||e.createdAt>d?e.createdAt:d),null);
-    return {...g, totalTerms, latestEdit, latestCreate, classroomCount:g.entries.length};
+    const classroomCount = g.entries.filter(e=>e.classroomId!=null).length;
+    return {...g, totalTerms, latestEdit, latestCreate, classroomCount};
   });
 
   /* sorting */
@@ -1307,17 +1446,20 @@ function assetsPage(){
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
               <strong style="font-size:1rem">${esc(g.name)}</strong>
               <span style="font-size:.82rem;color:var(--c-text3)">${esc(g.os)}</span>
-              ${pill(g.classroomCount+' 教室引用','muted')}
-              ${unreferenced?`<span style="font-size:.78rem;color:var(--c-warn);font-weight:500">空闲</span>`:''}
+              ${g.classroomCount>0?pill(g.classroomCount+' 教室引用','muted'):pill('无教室引用','warn')}
+              ${unreferenced&&g.classroomCount===0?`<span style="font-size:.78rem;color:var(--c-warn);font-weight:500">空闲</span>`:''}
             </div>
             <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.85rem;color:var(--c-text2);margin-bottom:4px;align-items:center">
-              ${g.entries.map(e=>`<a class="clickable" data-nav-cr="${e.classroomId}" style="cursor:pointer;color:var(--c-brand);font-size:.82rem">${esc(e.classroomName)}</a>`).join('<span style="color:var(--c-text3)">·</span>')}
+              ${g.entries.filter(e=>e.classroomId!=null).map(e=>`<a class="clickable" data-nav-cr="${e.classroomId}" style="cursor:pointer;color:var(--c-brand);font-size:.82rem">${esc(e.classroomName)}</a>`).join('<span style="color:var(--c-text3)">·</span>')}
+              ${g.classroomCount===0?'<span style="font-size:.82rem;color:var(--c-text3)">(无教室引用)</span>':''}
               <span style="display:inline-block;width:1px;height:14px;background:var(--c-border)"></span>
               <span style="font-size:.82rem;color:var(--c-text2)">终端引用：<strong>${g.totalTerms}</strong> 台</span>
             </div>
-            <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:.85rem;color:var(--c-text2)">
+            <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:.85rem;color:var(--c-text2);align-items:center">
               <span style="font-weight:600">${g.diskSize||'--'} GB</span>
               ${(g.dataDisks||[]).length?`<span style="display:inline-block;width:1px;height:14px;background:var(--c-border)"></span><span>${(g.dataDisks||[]).map(dd=>'数据盘 '+(esc(dd.size)||'')+(dd.drive?' ('+esc(dd.drive)+')':'')).join(' · ')}</span>`:''}
+              <span style="display:inline-block;width:1px;height:14px;background:var(--c-border)"></span>
+              <span style="font-size:.78rem">${g.physicalDeploy?'物理部署 (独立分区)':'虚拟部署 (VHD)'}</span>
             </div>
             <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:.78rem;color:var(--c-text3);margin-top:4px">
               ${g.latestCreate?`<span>创建 ${fmtTime(g.latestCreate)}</span>`:''}
@@ -1390,12 +1532,14 @@ function alertsPage(){
 
 function serverChangePage(){
   const state=s(); const server=serverFor(state,view.campusId); const campus=getCampus(state,view.campusId);
-  const stats=campusStats(state,view.campusId);
-  const sr = view.settingsResult || {};
   const crIdsSet=new Set(state.classrooms.filter(c=>c.campusId===view.campusId).map(c=>c.id));
   const campusTerms=state.terminals.filter(t=>crIdsSet.has(t.classroomId));
   const offlineTerms = campusTerms.filter(t=>!t.online);
   const onlineTerms = campusTerms.filter(t=>t.online);
+  const hasAddr = !!view.newServerAddr;
+
+  /* Persisted result from last push (survives page switches) */
+  const hist = view.serverChangeHistory || null;
 
   /* group terminals by classroom for result display */
   const crGroups=[];
@@ -1404,101 +1548,101 @@ function serverChangePage(){
     if(ts.length) crGroups.push({cr,terms:ts,online:ts.filter(t=>t.online).length,offline:ts.filter(t=>!t.online).length});
   });
 
-  const hasAddr = !!view.newServerAddr;
-  const step = sr.done ? 2 : 1;
+  /* Group offline terminals by classroom */
+  const offByCr={};
+  offlineTerms.forEach(t=>{
+    const cr2=state.classrooms.find(c=>c.id===t.classroomId);
+    const key=cr2?cr2.id:'unknown';
+    if(!offByCr[key]) offByCr[key]={cr:cr2,terms:[]};
+    offByCr[key].terms.push(t);
+  });
+  const offlineGroups = Object.entries(offByCr);
 
   return `
   <div class="section">
     <div class="section-head"><h3>服务器地址变更</h3></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
 
-    <div style="display:flex;gap:8px;margin-bottom:20px;font-size:.85rem">
-      <span style="padding:4px 12px;border-radius:12px;${step>=1?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">\u2460 确认并推送</span>
-      <span style="padding:4px 12px;border-radius:12px;${step>=2?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">\u2461 完成</span>
-    </div>
+      <!-- Left: Input + Confirm -->
+      <div>
+        <div class="card">
+          <div style="font-weight:600;font-size:.92rem;margin-bottom:12px">变更配置</div>
+          ${defRow('当前地址',server?.address||'--',{mono:true})}
+          ${defRow('在线终端',onlineTerms.length+' 台')}
+          ${defRow('离线终端',offlineTerms.length+' 台')}
 
-    ${sr.done?'':`
-    <div style="max-width:640px">
-      <div class="card">
-        <div style="font-weight:600;font-size:.92rem;margin-bottom:12px">变更配置</div>
-        ${defRow('当前地址',server?.address||'--',{mono:true})}
-        ${defRow('在线终端',onlineTerms.length+' 台 (将自动接收新地址)')}
-        ${defRow('离线终端',offlineTerms.length+' 台 (需手动修改)')}
+          <div class="prep-field" style="margin-top:16px"><label style="width:80px;font-weight:600;font-size:.85rem">新地址</label><input type="text" data-server-new-addr placeholder="输入新 IP 或域名" value="${esc(view.newServerAddr||'')}" style="width:100%;box-sizing:border-box"></div>
 
-        <div class="prep-field" style="margin-top:16px"><label style="width:80px;font-weight:600;font-size:.85rem">新地址</label><input type="text" data-server-new-addr placeholder="输入新 IP 或域名" value="${esc(view.newServerAddr||'')}" style="width:100%;box-sizing:border-box"></div>
-
-        <div style="display:flex;gap:8px;margin-top:16px">
-          <button class="btn btn-primary" data-settings-action="server-ip"${!hasAddr?' disabled':''}>确认变更并推送 (${onlineTerms.length} 台)</button>
-        </div>
-
-        <div style="margin-top:12px;font-size:.78rem;color:var(--c-text3);line-height:1.6">
-          推送完成后，请物理修改服务器网络配置。<br>离线终端可由工程师到场手动修改，或通过母机教室维护批量修改。
-        </div>
-
-        ${offlineTerms.length?`
-        <div style="margin-top:16px;border-top:1px solid var(--c-border);padding-top:12px">
-          <div style="margin-bottom:8px;padding:8px 12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:6px;font-size:.82rem;color:var(--c-text2)">
+          ${offlineTerms.length?`
+          <div style="margin-top:12px;padding:8px 12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:6px;font-size:.82rem;color:var(--c-text2)">
             <strong style="color:var(--c-warn)">注意：</strong>${offlineTerms.length} 台终端不在线，不会收到推送
           </div>
-          <div style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto">
-            ${(()=>{
-              const offByCr={};
-              offlineTerms.forEach(t=>{
-                const cr2=state.classrooms.find(c=>c.id===t.classroomId);
-                const key=cr2?cr2.id:'unknown';
-                if(!offByCr[key]) offByCr[key]={cr:cr2,terms:[]};
-                offByCr[key].terms.push(t);
-              });
-              return Object.entries(offByCr).map(([crId,{cr:crObj,terms:ts2}])=>{
-                const crName=crObj?crObj.name:'未知教室';
-                return '<div style="padding:6px 10px;border:1px solid var(--c-border);border-radius:4px;border-left:3px solid var(--c-warn)">'+
-                  '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
-                    '<a class="clickable" data-nav-cr="'+crId+'" style="font-size:.82rem;color:var(--c-brand);cursor:pointer;font-weight:600">'+esc(crName)+'</a>'+
-                    '<span style="font-size:.75rem;color:var(--c-warn)">'+ts2.length+' 台离线</span>'+
-                  '</div>'+
-                  '<div style="display:flex;flex-wrap:wrap;gap:4px">'+
-                    ts2.map(t2=>'<a class="clickable" data-nav-term="'+t2.id+'" style="font-size:.75rem;padding:2px 6px;background:var(--c-bg2);border-radius:3px;color:var(--c-brand);cursor:pointer;white-space:nowrap" title="'+esc((t2.seat||'')+(t2.name?' '+t2.name:''))+'">'+esc(t2.seat||'--')+'</a>').join('')+
-                  '</div>'+
-                '</div>';
-              }).join('');
-            })()}
+          <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;margin-top:8px">
+            ${offlineGroups.map(([crId,{cr:crObj,terms:ts2}])=>{
+              const crName=crObj?crObj.name:'未知教室';
+              return '<div style="padding:4px 8px;border:1px solid var(--c-border);border-radius:4px;border-left:3px solid var(--c-warn)">'+
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">'+
+                  '<span style="font-size:.82rem;font-weight:600;color:var(--c-text2)">'+esc(crName)+'</span>'+
+                  '<span style="font-size:.72rem;color:var(--c-warn)">'+ts2.length+' 台离线</span>'+
+                '</div>'+
+                '<div style="display:flex;flex-wrap:wrap;gap:3px">'+
+                  ts2.map(t2=>'<a class="clickable" data-nav-term="'+t2.id+'" style="font-size:.72rem;padding:1px 5px;background:var(--c-bg2);border-radius:3px;color:var(--c-brand);cursor:pointer;white-space:nowrap" title="'+esc(crName+' 座位 '+(t2.seat||''))+'">'+esc(t2.seat||'--')+'</a>').join('')+
+                '</div>'+
+              '</div>';
+            }).join('')}
+          </div>`:''}
+
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button class="btn btn-primary" data-settings-action="server-ip"${!hasAddr?' disabled':''}>确认变更并推送 (${onlineTerms.length} 台)</button>
           </div>
-        </div>`:''}
+
+          <div style="margin-top:12px;font-size:.78rem;color:var(--c-text3);line-height:1.6">
+            推送完成后，请物理修改服务器网络配置。<br>离线终端可由工程师到场手动修改，或通过母机教室维护批量修改。
+          </div>
+        </div>
       </div>
-    </div>
-    `}
 
-    ${sr.done?`
-    <div style="padding:12px 16px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:8px;margin-bottom:16px;font-size:.88rem;color:var(--c-ok);font-weight:500">
-      已完成地址变更推送，${sr.serverIpCount||onlineTerms.length} 台在线终端已收到新地址
-    </div>
+      <!-- Right: Result history -->
+      <div>
+        ${hist?`
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="padding:12px 18px;display:flex;justify-content:space-between;align-items:center;background:var(--c-bg2);border-bottom:1px solid var(--c-border)">
+            <div>
+              <span style="font-weight:600;font-size:.92rem">上次变更结果</span>
+              <span style="font-size:.78rem;color:var(--c-text3);margin-left:8px">${hist.at?fmtTime(hist.at):''}</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" style="font-size:.72rem;color:var(--c-text3)" data-clear-server-history>清除历史</button>
+          </div>
+          <div style="padding:12px 18px">
+            <div style="padding:8px 12px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:6px;margin-bottom:12px;font-size:.85rem;color:var(--c-ok);font-weight:500">
+              已推送 ${hist.onlineCount||0} 台在线终端${offlineTerms.length?' · '+offlineTerms.length+' 台待手动处理':''}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;max-height:480px;overflow-y:auto" class="plat-inner-scroll">
+              ${crGroups.map(({cr,terms:ts,online:onCnt,offline:offCnt})=>`
+              <div style="border:1px solid var(--c-border);border-radius:6px;overflow:hidden${offCnt?';border-left:3px solid var(--c-warn)':''}">
+                <div style="padding:8px 14px;display:flex;justify-content:space-between;align-items:center;background:var(--c-bg2)">
+                  <span style="font-weight:600;font-size:.85rem">${esc(cr.name)}</span>
+                  <div style="font-size:.78rem">
+                    <span style="color:var(--c-ok)">${onCnt} 已推送</span>
+                    ${offCnt?`<span style="color:var(--c-warn);margin-left:6px">${offCnt} 待处理</span>`:''}
+                  </div>
+                </div>
+                <div style="padding:6px 14px">
+                  <div style="display:flex;flex-wrap:wrap;gap:4px">
+                    ${ts.map(t=>`<a class="clickable" data-nav-term="${t.id}" style="font-size:.75rem;padding:2px 8px;background:${t.online?'rgba(34,197,94,.06)':'rgba(245,158,11,.06)'};border:1px solid ${t.online?'rgba(34,197,94,.2)':'rgba(245,158,11,.2)'};border-radius:3px;color:var(--c-brand);cursor:pointer;white-space:nowrap" title="${esc(cr.name+' 座位 '+(t.seat||''))}">${esc(t.seat||'--')}</a>`).join('')}
+                  </div>
+                </div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </div>`:`
+        <div class="card" style="text-align:center;padding:40px 20px;color:var(--c-text3)">
+          <div style="font-size:.92rem;margin-bottom:6px">暂无变更记录</div>
+          <div style="font-size:.78rem">确认变更推送后，结果将显示在此处</div>
+        </div>`}
+      </div>
 
-    <div class="section-head"><h3>各教室变更结果</h3></div>
-    <div class="plat-inner-scroll" style="display:flex;flex-direction:column;gap:12px;max-width:800px">
-      ${crGroups.map(({cr,terms:ts,online:onCnt,offline:offCnt})=>`
-      <div class="card" style="padding:0;overflow:hidden${offCnt?';border-left:3px solid var(--c-warn)':''}">
-        <div style="padding:12px 18px;display:flex;justify-content:space-between;align-items:center;background:var(--c-bg2)">
-          <div>
-            <a class="clickable" data-nav-cr="${cr.id}" style="cursor:pointer;font-weight:600;color:var(--c-brand);text-decoration:none">${esc(cr.name)}</a>
-            <span style="font-size:.82rem;color:var(--c-text3);margin-left:8px">${esc(cr.building)} ${esc(cr.floor)}</span>
-          </div>
-          <div style="font-size:.82rem">
-            <span style="color:var(--c-ok)">${onCnt} 已推送</span>
-            ${offCnt?`<span style="color:var(--c-warn);margin-left:8px">${offCnt} 待手动处理</span>`:''}
-          </div>
-        </div>
-        <div style="padding:8px 18px">
-          <table class="data-table plat-sortable" style="font-size:.8rem;margin:0">
-            <thead><tr><th data-sort>座位</th><th data-sort>状态</th><th data-sort>结果</th></tr></thead>
-            <tbody>${ts.map((t,ti)=>`<tr data-orig-idx="${ti}">
-              <td><a class="clickable" data-nav-term="${t.id}" style="cursor:pointer;color:var(--c-brand)" title="${esc((t.seat||'')+(t.name?' '+t.name:''))}">${esc(t.seat||'--')}</a></td>
-              <td>${t.online?pill('在线','ok'):pill('离线','muted')}</td>
-              <td>${t.online?'<span style="color:var(--c-ok)">已推送</span>':'<span style="color:var(--c-warn)">需手动修改</span>'}</td>
-            </tr>`).join('')}</tbody>
-          </table>
-        </div>
-      </div>`).join('')}
     </div>
-    `:''}
   </div>
   `;
 }
@@ -1658,28 +1802,26 @@ function showPlatExportDesktopDialog(){
   const allDesktops=[...deskMap.values()];
   if(!allDesktops.length){ showPlatAlert('当前校区无可导出桌面'); return; }
 
-  let step=1;
   let exportDir='D:\\CloudDesktop\\Export';
   const selected=new Set(allDesktops.map(d=>d.name));
   const ov=document.createElement('div'); ov.className='plat-modal-overlay';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999';
 
+  function pathSep(raw){ return /^[A-Za-z]:/.test(raw)||raw.includes('\\')?'\\':'/'; }
+
   function renderDialog(){
     const selDts=allDesktops.filter(d=>selected.has(d.name));
     const total=selDts.reduce((t,d)=>t+(d.diskSize||25),0);
     const dateStr=new Date().toISOString().slice(0,10);
+    const sep=pathSep(exportDir);
+    const dirDisplay=sep==='\\'?exportDir.replace(/\//g,'\\'):exportDir;
     ov.innerHTML=`<div style="background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:24px 28px;max-width:580px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.15);max-height:80vh;display:flex;flex-direction:column">
-      <div style="font-weight:700;font-size:1.05rem;margin-bottom:4px">导出桌面</div>
-      <div style="display:flex;gap:6px;margin-bottom:14px;font-size:.82rem">
-        <span style="padding:3px 10px;border-radius:12px;${step>=1?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">① 选择桌面</span>
-        <span style="padding:3px 10px;border-radius:12px;${step>=2?'background:var(--c-brand);color:#fff':'background:var(--c-bg2)'}">② 选择导出位置</span>
-      </div>
-      ${step===1?`
+      <div style="font-weight:700;font-size:1.05rem;margin-bottom:12px">导出桌面</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:.78rem;color:var(--c-text2);cursor:pointer;text-decoration:underline" id="pe-toggle">全选 / 取消</span>
         <span id="pe-count" style="font-size:.78rem;color:var(--c-text3)">${selDts.length} / ${allDesktops.length}</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;flex:1;overflow-y:auto;margin-bottom:10px;min-height:0;max-height:280px">
+      <div style="display:flex;flex-direction:column;gap:6px;flex:1;overflow-y:auto;margin-bottom:10px;min-height:0;max-height:200px">
         ${allDesktops.map(d=>{const sel=selected.has(d.name);
           const crLabel=d.classrooms.length<=2?d.classrooms.map(c2=>esc(c2.name)).join('、'):(esc(d.classrooms[0].name)+' 等共 '+d.classrooms.length+' 教室引用');
           return `<div class="pe-card" data-pe-name="${esc(d.name)}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:2px solid ${sel?'var(--c-brand)':'var(--c-border)'};border-radius:6px;background:${sel?'rgba(59,130,246,.06)':'transparent'};cursor:pointer;transition:all .15s">
@@ -1690,72 +1832,58 @@ function showPlatExportDesktopDialog(){
           </div>
         </div>`;}).join('')}
       </div>
-      <div style="border-top:1px solid var(--c-border);padding-top:8px;font-size:.82rem;display:flex;justify-content:space-between;margin-bottom:8px"><strong>合计</strong><span>${selDts.length} 个桌面 · ${total} GB</span></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="btn btn-ghost" data-pm="cancel">取消</button>
-        <button class="btn btn-primary" data-pm="next"${!selDts.length?' disabled':''}>下一步 →</button>
-      </div>
-      `:`
-      <div style="font-size:.85rem;color:var(--c-text2);margin-bottom:12px">已选择 <strong>${selDts.length}</strong> 个桌面 (共 ${total} GB)，选择导出目标文件夹</div>
-      <div style="margin-bottom:12px">
+      <div style="border-top:1px solid var(--c-border);padding-top:10px;margin-bottom:10px">
         <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">导出文件夹</label>
         <div style="display:flex;gap:6px;align-items:center">
           <input type="text" id="pe-dir" value="${esc(exportDir)}" style="flex:1;padding:6px 10px;border:1px solid var(--c-border);border-radius:4px;font-size:.85rem;font-family:monospace;box-sizing:border-box">
           <button class="btn btn-ghost btn-sm" id="pe-browse" style="white-space:nowrap">浏览…</button>
         </div>
       </div>
-      <div style="margin-bottom:10px">
+      ${selDts.length?`<div style="margin-bottom:10px">
         <div style="font-size:.82rem;font-weight:600;margin-bottom:4px">导出文件预览</div>
-        <div id="pe-path" style="padding:8px 12px;background:var(--c-bg2);border:1px solid var(--c-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--c-brand);word-break:break-all;max-height:120px;overflow-y:auto;line-height:1.6">
-          ${selDts.map(d=>esc(exportDir)+'\\'+esc(d.name.replace(/[\\/:*?"<>|]/g,'-'))+'-'+dateStr+'.cdpkg').join('<br>')}
+        <div id="pe-path" style="padding:8px 12px;background:var(--c-bg2);border:1px solid var(--c-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--c-brand);word-break:break-all;max-height:90px;overflow-y:auto;line-height:1.6">
+          ${selDts.map(d=>esc(dirDisplay)+sep+esc(d.name.replace(/[\\/:*?"<>|]/g,'-'))+'-'+dateStr+'.cdpkg').join('<br>')}
         </div>
-      </div>
+      </div>`:''}
+      <div style="border-top:1px solid var(--c-border);padding-top:8px;font-size:.82rem;display:flex;justify-content:space-between;margin-bottom:8px"><strong>合计</strong><span>${selDts.length} 个桌面 · ${total} GB</span></div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button class="btn btn-ghost" data-pm="back">← 上一步</button>
-        <button class="btn btn-primary" data-pm="export">导出</button>
+        <button class="btn btn-ghost" data-pm="cancel">取消</button>
+        <button class="btn btn-primary" data-pm="export"${!selDts.length?' disabled':''}>导出</button>
       </div>
-      `}
     </div>`;
     bindExportEvents();
   }
 
   function bindExportEvents(){
-    if(step===1){
-      ov.querySelectorAll('.pe-card').forEach(card=>{
-        card.addEventListener('click',()=>{
-          const name=card.dataset.peName;
-          if(selected.has(name)) selected.delete(name); else selected.add(name);
-          renderDialog();
-        });
-      });
-      const toggle=ov.querySelector('#pe-toggle');
-      if(toggle) toggle.addEventListener('click',()=>{
-        if(selected.size===allDesktops.length) selected.clear(); else allDesktops.forEach(d=>selected.add(d.name));
+    ov.querySelectorAll('.pe-card').forEach(card=>{
+      card.addEventListener('click',()=>{
+        const name=card.dataset.peName;
+        if(selected.has(name)) selected.delete(name); else selected.add(name);
         renderDialog();
       });
-      const nextBtn=ov.querySelector('[data-pm="next"]');
-      if(nextBtn) nextBtn.addEventListener('click',()=>{ step=2; renderDialog(); });
-    } else {
-      const dirInput=ov.querySelector('#pe-dir');
-      if(dirInput) dirInput.addEventListener('change',()=>{ exportDir=dirInput.value; renderDialog(); });
-      const browseBtn=ov.querySelector('#pe-browse');
-      if(browseBtn) browseBtn.addEventListener('click',()=>{
-        showPlatAlert('模拟浏览：已选择 '+exportDir);
-      });
-      const backBtn=ov.querySelector('[data-pm="back"]');
-      if(backBtn) backBtn.addEventListener('click',()=>{ step=1; renderDialog(); });
-      const exportBtn=ov.querySelector('[data-pm="export"]');
-      if(exportBtn) exportBtn.addEventListener('click',()=>{
-        const selDts=allDesktops.filter(d=>selected.has(d.name));
-        if(!selDts.length){ showPlatAlert('请至少选择一个桌面'); return; }
-        const total=selDts.reduce((t,d)=>t+(d.diskSize||25),0);
-        const names=selDts.map(d=>d.name).join('、');
-        ov.remove();
-        showPlatAlert('已导出 '+selDts.length+' 个桌面 (共 '+total+' GB) 到 '+exportDir+'\n'+names);
-        view.deleteAssetResult={done:true,message:'已导出 '+selDts.length+' 个桌面 (共 '+total+' GB)：'+names};
-        render(s());
-      });
-    }
+    });
+    const toggle=ov.querySelector('#pe-toggle');
+    if(toggle) toggle.addEventListener('click',()=>{
+      if(selected.size===allDesktops.length) selected.clear(); else allDesktops.forEach(d=>selected.add(d.name));
+      renderDialog();
+    });
+    const dirInput=ov.querySelector('#pe-dir');
+    if(dirInput) dirInput.addEventListener('input',()=>{ exportDir=dirInput.value; renderDialog(); });
+    const browseBtn=ov.querySelector('#pe-browse');
+    if(browseBtn) browseBtn.addEventListener('click',()=>{
+      showPlatAlert('模拟浏览：已选择 '+exportDir);
+    });
+    const exportBtn=ov.querySelector('[data-pm="export"]');
+    if(exportBtn) exportBtn.addEventListener('click',()=>{
+      const selDts=allDesktops.filter(d=>selected.has(d.name));
+      if(!selDts.length){ showPlatAlert('请至少选择一个桌面'); return; }
+      const total=selDts.reduce((t,d)=>t+(d.diskSize||25),0);
+      const names=selDts.map(d=>d.name).join('、');
+      ov.remove();
+      showPlatAlert('已导出 '+selDts.length+' 个桌面 (共 '+total+' GB) 到 '+exportDir+'\n'+names);
+      view.deleteAssetResult={done:true,message:'已导出 '+selDts.length+' 个桌面 (共 '+total+' GB)：'+names};
+      render(s());
+    });
     const cancelBtn=ov.querySelector('[data-pm="cancel"]');
     if(cancelBtn) cancelBtn.addEventListener('click',()=>ov.remove());
     ov.addEventListener('click',(e)=>{if(e.target===ov)ov.remove();});
@@ -2046,8 +2174,76 @@ function bindEvents(){
   root.querySelectorAll('[data-asset-action]').forEach(el=>{
     el.addEventListener('click',()=>{
       const act=el.dataset.assetAction;
-      if(act==='import') showPlatImportDesktopDialog();
-      if(act==='export') showPlatExportDesktopDialog();
+      if(act==='import'){ view.assetFlowMode='import'; view.importDesktopFileReady=false; view.importDesktopResult=null; view.importDesktopDisk=null; }
+      if(act==='export'){ view.assetFlowMode='export'; view.exportSelectedDesktops=null; view.exportDesktopResult=null; view.exportDir='D:\\CloudDesktop\\Export'; }
+      render(s());
+    });
+  });
+  root.querySelectorAll('[data-asset-flow-back]').forEach(el=>{
+    el.addEventListener('click',()=>{view.assetFlowMode=null; render(s());});
+  });
+  /* Import flow events */
+  root.querySelectorAll('[data-import-desktop-file-area]').forEach(el=>{
+    el.addEventListener('click',()=>{view.importDesktopFileReady=true; view.importDesktopDisk='yes'; render(s());});
+  });
+  root.querySelectorAll('[data-pif-name]').forEach(el=>{el.addEventListener('input',()=>{view.importDesktopName=el.value;});});
+  root.querySelectorAll('[data-pif-physical]').forEach(el=>{el.addEventListener('change',()=>{view.importDesktopPhysical=el.value; render(s());});});
+  root.querySelectorAll('[data-pif-disk]').forEach(el=>{el.addEventListener('change',()=>{view.importDesktopDisk=el.value; render(s());});});
+  root.querySelectorAll('[data-pif-disk-size]').forEach(el=>{el.addEventListener('input',()=>{view.importDesktopDiskSize=el.value;});});
+  root.querySelectorAll('[data-pif-disk-drive]').forEach(el=>{el.addEventListener('input',()=>{view.importDesktopDiskDrive=el.value;});});
+  root.querySelectorAll('[data-pif-remark]').forEach(el=>{el.addEventListener('input',()=>{view.importDesktopRemark=el.value;});});
+  root.querySelectorAll('[data-pif-confirm]').forEach(el=>{
+    el.addEventListener('click',async()=>{
+      const name=view.importDesktopName||'导入的桌面';
+      const physical=view.importDesktopPhysical==='true';
+      const hasDisk=view.importDesktopDisk==='yes';
+      const diskSize=hasDisk?(view.importDesktopDiskSize||50)+'GB':'';
+      const rawDrv=(view.importDesktopDiskDrive||'').trim().replace(/[:：\\]+$/,'');
+      const diskDrive=hasDisk?(/^[A-Za-z]$/.test(rawDrv)?rawDrv.toUpperCase()+':':rawDrv||''):'';
+      const remark=view.importDesktopRemark||'';
+      try{
+        await client.send('plat-import-desktop',{name, os:'Windows 11 23H2', importType:'image',
+          dataDiskSize:diskSize, dataDiskDrive:diskDrive, physicalDeploy:physical,
+          restoreMode:'还原系统盘，保留数据盘', remark});
+        view.importDesktopResult={done:true,message:'已导入桌面「'+name+'」，当前无教室引用'};
+      }catch(e){ console.error(e); }
+      render(s());
+    });
+  });
+  /* Export flow events */
+  root.querySelectorAll('[data-pef-toggle]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const state2=s();const crIds2=state2.classrooms.filter(c=>c.campusId===view.campusId).map(c=>c.id);
+      const crs2=state2.classrooms.filter(c=>crIds2.includes(c.id)&&(c.desktopCatalog||[]).length>0);
+      const names=new Set();crs2.forEach(c=>(c.desktopCatalog||[]).forEach(d=>names.add(d.name)));
+      if(!view.exportSelectedDesktops) view.exportSelectedDesktops=new Set(names);
+      if(view.exportSelectedDesktops.size===names.size) view.exportSelectedDesktops=new Set();
+      else view.exportSelectedDesktops=new Set(names);
+      render(s());
+    });
+  });
+  root.querySelectorAll('[data-pef-dt]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const name=el.dataset.pefDt;
+      if(!view.exportSelectedDesktops){
+        const state2=s();const crIds2=state2.classrooms.filter(c=>c.campusId===view.campusId).map(c=>c.id);
+        const crs2=state2.classrooms.filter(c=>crIds2.includes(c.id)&&(c.desktopCatalog||[]).length>0);
+        const names=new Set();crs2.forEach(c=>(c.desktopCatalog||[]).forEach(d=>names.add(d.name)));
+        view.exportSelectedDesktops=new Set(names);
+      }
+      if(view.exportSelectedDesktops.has(name)) view.exportSelectedDesktops.delete(name); else view.exportSelectedDesktops.add(name);
+      render(s());
+    });
+  });
+  root.querySelectorAll('[data-pef-dir]').forEach(el=>{el.addEventListener('input',()=>{view.exportDir=el.value; render(s());});});
+  root.querySelectorAll('[data-pef-browse]').forEach(el=>{el.addEventListener('click',()=>{showPlatAlert('模拟浏览：已选择 '+(view.exportDir||'D:\\CloudDesktop\\Export'));});});
+  root.querySelectorAll('[data-pef-confirm]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const sel=view.exportSelectedDesktops;
+      if(!sel||!sel.size) return;
+      const dir=view.exportDir||'D:\\CloudDesktop\\Export';
+      view.exportDesktopResult={done:true,message:'已导出 '+sel.size+' 个桌面到 '+dir};
+      render(s());
     });
   });
   root.querySelectorAll('[data-delete-asset]').forEach(el=>{
@@ -2078,11 +2274,21 @@ function bindEvents(){
           const addr=view.newServerAddr||root.querySelector('[data-server-new-addr]')?.value||'';
           if(!addr) return;
           const r=await client.send('plat-server-ip-change',{campusId:view.campusId,newAddress:addr});
+          const onCnt=r.count||0;
           view.settingsResult.serverIp=true;
-          view.settingsResult.serverIpCount=r.count;
+          view.settingsResult.serverIpCount=onCnt;
           view.settingsResult.done=true;
+          /* Persist result as history for right-side display */
+          view.serverChangeHistory={at:new Date().toISOString(), onlineCount:onCnt, newAddr:addr};
         }
       }catch(e){console.error(e);}
+      render(s());
+    });
+  });
+  root.querySelectorAll('[data-clear-server-history]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      view.serverChangeHistory=null;
+      view.settingsResult={};
       render(s());
     });
   });
@@ -2093,7 +2299,7 @@ function bindEvents(){
     srvAddrEl.addEventListener('input',()=>{
       view.newServerAddr=srvAddrEl.value;
       const btn=root.querySelector('[data-settings-action="server-ip"]');
-      if(btn) btn.disabled=!srvAddrEl.value||!!(view.settingsResult&&view.settingsResult.done);
+      if(btn) btn.disabled=!srvAddrEl.value;
     });
   }
 
