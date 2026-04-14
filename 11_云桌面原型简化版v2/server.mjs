@@ -536,7 +536,11 @@ function act(action, payload={}){
 
   /* ── NAVIGATION ── */
   case 'go-home':
-    demo.motherScreen='home'; mt.screen='home'; return {ok:true};
+    demo.motherScreen='home'; mt.screen='home';
+    /* Clear unsaved pending values from sub-pages */
+    delete demo.flags.pendingServerAddr;
+    delete demo.flags.serverConnStatus;
+    return {ok:true};
 
   /* ── LOCAL INFO (TERM-01 sub-pages, editable) ── */
   case 'open-local-info': demo.motherScreen='local-info'; mt.screen='local-info'; return {ok:true};
@@ -1881,7 +1885,7 @@ async function main(){
   app.get('/api/state',(_,res)=>res.json(state));
   app.get('/api/stream',(req,res)=>{
     res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache',Connection:'keep-alive','Access-Control-Allow-Origin':'*'});
-    res.write('data: '+JSON.stringify(state)+'\n\n');
+    res.write(_broadcastCache || ('data: '+JSON.stringify(state)+'\n\n'));
     sseClients.add(res); req.on('close',()=>sseClients.delete(res));
   });
 
@@ -1915,22 +1919,29 @@ async function main(){
 
   // tick loop
   let tickCount=0;
+  let _lastSavedJson = '';
   setInterval(()=>{
     const r1=tickRecover();
     tickHeartbeats();
     const r2=tickTasks();
     tickCount++;
     /* broadcast every 5 ticks (~3s) for monitor data, or immediately if tasks/recovery changed */
-    if(r1||r2||tickCount%5===0){ state.meta.updatedAt=now(); broadcast(); save(); }
+    if(r1||r2||tickCount%5===0){
+      state.meta.updatedAt=now();
+      broadcast();
+      /* Save to disk much less frequently: every 50 ticks (~30s) or on action-triggered changes */
+      if(r1||r2||tickCount%50===0) save();
+    }
   }, 600);
 }
 
+let _broadcastCache = '';
 function broadcast(){
-  const data='data: '+JSON.stringify(state)+'\n\n';
-  for(const c of sseClients){ try{c.write(data);}catch(e){sseClients.delete(c);} }
+  _broadcastCache = 'data: '+JSON.stringify(state)+'\n\n';
+  for(const c of sseClients){ try{c.write(_broadcastCache);}catch(e){sseClients.delete(c);} }
 }
 function save(){
-  try{writeFileSync(STATE_FILE,JSON.stringify(state),'utf8');}catch(e){console.error('保存失败:',e.message);}
+  try{writeFileSync(STATE_FILE,_broadcastCache?_broadcastCache.slice(6,_broadcastCache.length-2):JSON.stringify(state),'utf8');}catch(e){console.error('保存失败:',e.message);}
 }
 
 main().catch(e=>{console.error(e);process.exit(1);});

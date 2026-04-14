@@ -338,7 +338,9 @@ function localInfoScreen(){
 
 function localNetworkScreen(){
   const m=mt();
-  const hasAddr = !!(m.serverAddr);
+  /* Display addr: prefer unsaved pending value from flags, fall back to persisted */
+  const displayAddr = demo().flags?.pendingServerAddr ?? m.serverAddr ?? '';
+  const hasAddr = !!displayAddr;
   /* Derive connection status from demo flags or from classroom registration */
   const connFlag = demo().flags?.serverConnStatus;
   const isChecking = connFlag==='checking';
@@ -348,7 +350,7 @@ function localNetworkScreen(){
   <div style="max-width:520px;width:100%">
   <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 设置服务器</div>
   <div class="card" style="width:100%">
-    <div class="prep-field"><label>服务器地址</label><input type="text" id="ln-srv" value="${esc(m.serverAddr||'')}" placeholder="server.edu.cn"></div>
+    <div class="prep-field"><label>服务器地址</label><input type="text" id="ln-srv" value="${esc(displayAddr)}" placeholder="server.edu.cn"></div>
     <div style="margin-top:12px;padding:10px 14px;background:${connStatus==='ok'?'var(--t-ok-bg)':connStatus==='fail'?'var(--t-err-bg)':'var(--t-panel)'};border:1px solid ${connStatus==='ok'?'var(--t-ok)':connStatus==='fail'?'var(--t-err)':'var(--t-border)'};border-radius:var(--radius)">
       <div style="display:flex;align-items:center;gap:8px">
         ${isChecking?'<span class="conn-spinner"></span>':
@@ -1963,6 +1965,8 @@ function bindAll(){
         /* Save address and go home immediately — connection check continues in background */
         const addr = root.querySelector('#ln-srv')?.value || '';
         act('save-local-network',{serverAddr:addr});
+        /* Clear pending flag since we've persisted */
+        act('set-flag',{pendingServerAddr:null});
         setTimeout(()=>act('go-home'),50);
       } else if(type==='fault-network'){
         act('save-fault-network',{serverAddr:root.querySelector('#fr-srv')?.value, ip:root.querySelector('#fr-ip')?.value,
@@ -2204,11 +2208,11 @@ function bindAll(){
       if(_isRendering) return; /* guard: don't fire during innerHTML replacement */
       const addr = srvInput.value.trim();
       if(!addr) return;
-      /* Only trigger connection check if address actually changed */
-      const currentAddr = mt()?.serverAddr || '';
-      if(addr === currentAddr) return;
-      /* Save value to state so re-render uses it */
-      act('save-local-network',{serverAddr:addr});
+      /* Only trigger connection check if address actually changed from last checked */
+      const pendingAddr = demo().flags?.pendingServerAddr ?? mt()?.serverAddr ?? '';
+      if(addr === pendingAddr) return;
+      /* Store as pending (NOT persisted) — only "保存" button persists */
+      act('set-flag',{pendingServerAddr:addr});
       /* Show checking animation, then connected (one-shot, debounced) */
       if(srvInput._checkPending) return;
       srvInput._checkPending = true;
