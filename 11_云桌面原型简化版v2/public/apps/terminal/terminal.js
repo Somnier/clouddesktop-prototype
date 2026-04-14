@@ -54,15 +54,41 @@ function showTermAlert(msg){
 function showExportDoneDialog(){
   const m=mt();
   const dts=(m?.desktops||[]).filter(d=>d.visibility!=='hidden');
-  const dtList=dts.map(d=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:.82rem"><span>${esc(d.name)}</span><span style="color:var(--t-text2)">${d.diskSize||25} GB</span></div>`).join('');
-  const totalSize=dts.reduce((s,d)=>s+(d.diskSize||25),0);
-  const body=`<div style="margin-bottom:10px;font-size:.82rem;color:var(--t-text2)">以下桌面将导出到指定目录：</div>
+  if(!dts.length){ showTermAlert('暂无可导出桌面'); return; }
+  const dtList=dts.map(d=>`<label style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:.82rem;cursor:pointer">
+    <input type="checkbox" class="te-item" data-te-id="${d.id}" checked>
+    <span style="flex:1">${esc(d.name)}</span>
+    <span style="color:var(--t-text2)">${d.diskSize||25} GB</span>
+  </label>`).join('');
+  const body=`<div style="margin-bottom:6px;font-size:.82rem;color:var(--t-text2)">选择要导出的桌面：</div>
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><label style="font-size:.78rem"><input type="checkbox" id="te-all" checked> 全选</label><span id="te-count" style="font-size:.78rem;color:var(--t-text3)">${dts.length} / ${dts.length}</span></div>
 ${dtList}
-<div style="border-top:1px solid var(--t-border);margin-top:8px;padding-top:6px;font-size:.82rem;display:flex;justify-content:space-between"><strong>合计</strong><span>${dts.length} 个桌面 · ${totalSize} GB</span></div>
+<div id="te-summary" style="border-top:1px solid var(--t-border);margin-top:8px;padding-top:6px;font-size:.82rem;display:flex;justify-content:space-between"><strong>合计</strong><span>${dts.length} 个桌面 · ${dts.reduce((s2,d)=>s2+(d.diskSize||25),0)} GB</span></div>
 <div style="margin-top:10px;padding:8px 12px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;color:var(--t-accent)">E:\\desktop-export-${new Date().toISOString().slice(0,10)}.cdpkg</div>`;
   showTermConfirm('导出桌面',body,()=>{
-    showTermAlert(`已导出 ${dts.length} 个桌面 (共 ${totalSize} GB)`);
+    const items=document.querySelectorAll('.te-item');
+    const selected=[...items].filter(i=>i.checked);
+    const selDts=dts.filter(d=>selected.some(i=>i.dataset.teId===d.id));
+    const total=selDts.reduce((s2,d)=>s2+(d.diskSize||25),0);
+    if(!selDts.length){ showTermAlert('请至少选择一个桌面'); return; }
+    showTermAlert('已导出 '+selDts.length+' 个桌面 (共 '+total+' GB)');
   },{danger:false});
+  /* Bind select-all and count update after dialog is shown */
+  setTimeout(()=>{
+    const allCb=document.querySelector('#te-all');
+    const items=document.querySelectorAll('.te-item');
+    const countEl=document.querySelector('#te-count');
+    const summaryEl=document.querySelector('#te-summary');
+    function updateInfo(){
+      const sel=[...items].filter(i=>i.checked);
+      const selDts2=dts.filter(d=>sel.some(i=>i.dataset.teId===d.id));
+      const total2=selDts2.reduce((s2,d)=>s2+(d.diskSize||25),0);
+      if(countEl) countEl.textContent=sel.length+' / '+dts.length;
+      if(summaryEl) summaryEl.innerHTML='<strong>合计</strong><span>'+sel.length+' 个桌面 · '+total2+' GB</span>';
+    }
+    if(allCb) allCb.addEventListener('change',()=>{ items.forEach(i=>i.checked=allCb.checked); updateInfo(); });
+    items.forEach(i=>i.addEventListener('change',()=>{ if(allCb) allCb.checked=[...items].every(i2=>i2.checked); updateInfo(); }));
+  },0);
 }
 
 function showImportDialog(){
@@ -110,7 +136,8 @@ function showCreateDesktopDialog(defaultName){
         <option value="50GB" selected>50 GB</option>
         <option value="100GB">100 GB</option>
       </select></div>
-      <div class="prep-field"><label>数据盘盘符</label><input type="text" id="cd-disk-drive" value="D:" placeholder="D:"></div>
+      <div class="prep-field"><label>数据盘挂载路径</label><input type="text" id="cd-disk-drive" value="D:" placeholder="D: 或 /data"></div>
+      <div id="cd-disk-preview" style="margin-top:4px;padding:8px 10px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;font-family:monospace;line-height:1.6"></div>
     </div>
     <div class="prep-field"><label>备注</label><input type="text" id="cd-remark" value="" placeholder="可选"></div>
     <div class="t-modal-actions">
@@ -123,9 +150,35 @@ function showCreateDesktopDialog(defaultName){
   /* Toggle data disk detail visibility */
   const diskSel=ov.querySelector('#cd-disk-sel');
   const detailRow=ov.querySelector('#cd-disk-detail-row');
-  function toggleDetail(){ detailRow.style.display=diskSel.value?'':'none'; }
+  const diskDriveInput=ov.querySelector('#cd-disk-drive');
+  const diskSizeSelect=ov.querySelector('#cd-disk-size');
+  const diskPreview=ov.querySelector('#cd-disk-preview');
+  function updateDiskPreview(){
+    if(!diskPreview) return;
+    const raw=(diskDriveInput?.value||'').trim();
+    const sz=diskSizeSelect?.value||'50GB';
+    if(!raw){ diskPreview.innerHTML='<span style="color:var(--t-text3)">请输入挂载路径后预览</span>'; return; }
+    const isWinDrive=/^[A-Za-z]:?$/.test(raw);
+    const isUnixPath=raw.startsWith('/');
+    let lines=[];
+    if(isWinDrive){
+      const letter=raw.charAt(0).toUpperCase();
+      lines.push('<span style="color:var(--t-accent)">Windows</span>  '+letter+':\\ ('+sz+' NTFS)');
+      lines.push('<span style="color:var(--t-text3)">Unix</span>     /mnt/'+letter.toLowerCase()+' ('+sz+' ext4)');
+    } else if(isUnixPath){
+      const pathNorm=raw.replace(/\/+$/,'');
+      lines.push('<span style="color:var(--t-text3)">Windows</span>  D:\\ ('+sz+' NTFS)');
+      lines.push('<span style="color:var(--t-accent)">Unix</span>     '+pathNorm+' ('+sz+' ext4)');
+    } else {
+      lines.push('<span style="color:var(--t-warn)">提示：请输入盘符（如 D:）或路径（如 /data）</span>');
+    }
+    diskPreview.innerHTML=lines.join('<br>');
+  }
+  function toggleDetail(){ detailRow.style.display=diskSel.value?'':'none'; if(diskSel.value) updateDiskPreview(); }
   toggleDetail();
   diskSel.addEventListener('change',toggleDetail);
+  if(diskDriveInput) diskDriveInput.addEventListener('input',updateDiskPreview);
+  if(diskSizeSelect) diskSizeSelect.addEventListener('change',updateDiskPreview);
   ov.querySelector('[data-tm="cancel"]').addEventListener('click',()=>ov.remove());
   ov.addEventListener('click',(e)=>{if(e.target===ov)ov.remove();});
   ov.querySelector('[data-tm="create"]').addEventListener('click',()=>{
@@ -388,7 +441,7 @@ function localDesktopScreen(){
   const desktops = (m.desktops||[]).slice().sort((a,b)=>{
     return (a.createdAt||a.editedAt||'').localeCompare(b.createdAt||b.editedAt||'');
   });
-  const returnAct = demo()._desktopReturnScreen ? 'desktop-return-flow' : (m.controlState==='mother'?'return-workbench':'go-home');
+  const returnAct = 'desktop-return-flow';
   const bid = m.bios?.defaultBootId;
 
   /* disk statistics */
@@ -466,10 +519,11 @@ function localDesktopScreen(){
           <div class="dt-card-fill"></div>
           <div style="position:relative;z-index:1;display:flex;flex-direction:column;flex:1">
             <div class="dt-name">${esc(d.name)}</div>
-            <div class="dt-meta" style="display:flex;align-items:baseline;gap:6px;margin-top:6px">
+            <div class="dt-meta" style="display:flex;align-items:baseline;gap:6px;margin-top:6px;flex-wrap:wrap">
               <span>${esc(d.baseImageName||d.os)}</span>
               <span style="display:inline-block;width:1px;height:12px;background:var(--t-border);margin:0 2px"></span>
               <span style="font-weight:600;font-size:.88rem;letter-spacing:.02em">${dtSize} GB</span>
+              ${(d.dataDisks||[]).length?`<span style="display:inline-block;width:1px;height:12px;background:var(--t-border);margin:0 2px"></span><span style="font-size:.78rem;color:var(--t-text2)">${(d.dataDisks||[]).map(dd=>'数据盘 '+(dd.size||'')+(dd.drive?' ('+esc(dd.drive)+')':'')).join(' · ')}</span>`:''}
             </div>
             <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:6px">
               ${isPhysical?'<span class="pill info pill-sm" style="opacity:.65">物理部署</span>':''}
@@ -794,7 +848,7 @@ function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
       </div>
       <div style="border-top:1px solid var(--t-border);padding-top:10px;flex-shrink:0">
         <button class="btn btn-ghost dt-export-btn" ${isRunning?'disabled':''} data-act="open-export">
-          导出教室终端清单
+          导出终端清单
         </button>
       </div>
     </div>
@@ -1734,7 +1788,7 @@ function exportScreen(){
   const exportName = demo().flags?.exportCrName || c.name;
   const exportRemark = demo().flags?.exportCrRemark || '';
   return `<div class="page">
-  <div class="section-title"><button class="btn btn-ghost" data-act="return-workbench">←</button> 导出教室终端清单</div>
+  <div class="section-title"><button class="btn btn-ghost" data-act="return-workbench">←</button> 导出终端清单</div>
   <div class="page-scroll">
   <div class="section-sub">导出 Excel 文件，包含教室内所有终端的座位、机器名、IP 等信息。</div>
   ${incomplete.length?`<div class="card" style="border-color:var(--t-warn);margin-bottom:16px">
@@ -1760,7 +1814,7 @@ function exportScreen(){
   </div>
   </div>
   <div style="padding-top:12px;border-top:1px solid var(--t-border)">
-    <button class="btn btn-ghost dt-export-btn" data-act="export-select-folder">导出教室终端清单</button>
+    <button class="btn btn-ghost dt-export-btn" data-act="export-select-folder">导出终端清单</button>
   </div>
 </div>`;
 }
@@ -1814,14 +1868,15 @@ function bindAll(){
       } else if(a==='open-local-desktop-flow'){
         act('open-local-desktop',{returnScreen:demo().motherScreen});
       } else if(a==='desktop-return-flow'){
-        const rs=demo()._desktopReturnScreen;
-        if(rs) act('navigate',{screen:rs});
-        else act('return-workbench');
+        const rs=demo()._desktopReturnScreen||'home';
+        if(rs==='home') act('go-home');
+        else if(rs==='workbench') act('return-workbench');
+        else act('navigate',{screen:rs});
       } else if(a==='export-select-folder'){
         const crName = root.querySelector('#export-cr-name')?.value||'';
         const crRemark = root.querySelector('#export-cr-remark')?.value||'';
         act('set-flag',{exportCrName:crName, exportCrRemark:crRemark});
-        const fileName = (crName||'教室终端清单').replace(/[\/\/:*?"<>|]/g,'-')+'.xlsx';
+        const fileName = (crName||'终端清单').replace(/[\/\/:*?"<>|]/g,'-')+'.xlsx';
         if(window.electronAPI?.isElectron){
           window.electronAPI.showSaveDialog({
             title:'选择导出目录',
@@ -1834,7 +1889,7 @@ function bindAll(){
           });
         } else {
           const defaultPath='E:\\'+fileName;
-          showTermConfirm('导出教室终端清单',
+          showTermConfirm('导出终端清单',
             '将导出 Excel 清单到 U 盘。<br>默认路径：<span style="font-family:monospace;font-size:.85rem;color:var(--t-accent)">'+esc(defaultPath)+'</span><br><br>点击确认模拟导出。',
             ()=>{ showTermAlert('终端清单已导出到：\n'+defaultPath); },
             {danger:false});

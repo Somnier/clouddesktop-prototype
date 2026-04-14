@@ -546,8 +546,7 @@ function act(action, payload={}){
   case 'open-local-info': demo.motherScreen='local-info'; mt.screen='local-info'; return {ok:true};
   case 'open-local-network': demo.motherScreen='local-network'; mt.screen='local-network'; return {ok:true};
   case 'open-local-desktop':{
-    if(payload.returnScreen) demo._desktopReturnScreen=payload.returnScreen;
-    else demo._desktopReturnScreen=null;
+    demo._desktopReturnScreen=payload.returnScreen||'home';
     demo.motherScreen='local-desktop'; mt.screen='local-desktop'; return {ok:true};
   }
   case 'open-fault': demo.motherScreen='fault-replace'; mt.screen='fault-replace'; return {ok:true}; // 10_: no fault menu
@@ -1663,6 +1662,32 @@ function act(action, payload={}){
       cr.registeredOnServer=true;cr.lastSyncTime=now();
       addLog('info','平台','终端清单导入',`${cr.name} 已完成服务器注册`);
     }
+    return {ok:true};
+  }
+  case 'plat-import-desktop':{
+    const crId=payload.classroomId;
+    const cr=crById(crId); if(!cr) return {ok:false,reason:'教室不存在'};
+    const dtId='dt-'+cr.id+'-'+uid();
+    const imgId='img-'+cr.id+'-'+uid();
+    if(!cr.imageStore) cr.imageStore=[];
+    cr.imageStore.push({id:imgId, name:payload.os||'Windows 11 23H2', os:payload.os||'Windows 11 23H2', importedAt:now()});
+    const snapId='snap-'+cr.id+'-'+uid();
+    if(!cr.snapshotTree) cr.snapshotTree=[];
+    cr.snapshotTree.push({id:snapId, name:(payload.name||'导入桌面')+' 初始快照', imageId:imgId, parentId:null, createdAt:now()});
+    const dataDisks=[];
+    if(payload.dataDiskSize){
+      dataDisks.push({id:'dd-'+dtId, name:'数据盘', drive:payload.dataDiskDrive||'D:', size:payload.dataDiskSize, sharedWith:[]});
+    }
+    const dataDiskTotalGb=dataDisks.reduce((s2,dd)=>s2+parseInt((dd.size||'0').replace(/\D/g,''),10),0);
+    const diskSize=dataDiskTotalGb>0?dataDiskTotalGb+25:25;
+    const dt={id:dtId, name:payload.name||'导入桌面', os:payload.os||'Windows 11 23H2',
+      visibility:'default', restoreMode:payload.restoreMode||'还原系统盘，保留数据盘',
+      physicalDeploy:payload.physicalDeploy||false, uploaded:false,
+      baseImageName:payload.os||'Windows 11 23H2', diskSize, remark:payload.remark||'',
+      syncStatus:'local', snapshotId:snapId, dataDisks, createdAt:now(), editedAt:now()};
+    if(!cr.desktopCatalog) cr.desktopCatalog=[];
+    cr.desktopCatalog.push({...dt});
+    addLog('info','平台','桌面导入',`${cr.name}: 已导入桌面 ${dt.name}`);
     return {ok:true};
   }
   case 'plat-delete-desktop-asset':{
