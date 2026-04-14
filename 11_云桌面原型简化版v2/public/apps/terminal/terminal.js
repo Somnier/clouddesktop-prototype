@@ -2093,7 +2093,10 @@ function bindAll(){
     });
   });
 
-  /* ── deploy rules auto-save ── */
+  /* ── deploy rules — apply on blur/change only, NOT on every keystroke.
+     This prevents the seat-grid preview from refreshing mid-typing,
+     which disrupts focus and scroll. 'change' fires on stepper click for
+     number inputs; 'blur' fires when user clicks away from text inputs. ── */
   let _ruleDebounce=null;
   function saveGridRulesIfPresent(){
     const rules={};
@@ -2103,17 +2106,18 @@ function bindAll(){
     if(Object.keys(rules).length) act('deploy-set-rules',rules);
   }
   root.querySelectorAll('[data-rule]').forEach(r=>{
-    r.addEventListener('input',()=>{
-      clearTimeout(_ruleDebounce);
-      _ruleDebounce=setTimeout(()=>saveGridRulesIfPresent(),400);
-    });
     r.addEventListener('change',()=>{
       clearTimeout(_ruleDebounce);
       _ruleDebounce=setTimeout(()=>saveGridRulesIfPresent(),200);
     });
+    r.addEventListener('blur',()=>{
+      if(_isRendering) return;
+      clearTimeout(_ruleDebounce);
+      _ruleDebounce=setTimeout(()=>saveGridRulesIfPresent(),100);
+    });
   });
 
-  /* ── maint IP auto-apply ── */
+  /* ── maint IP — apply on blur/change only (same rationale as deploy rules) ── */
   let _maintDebounce=null;
   function autoApplyMaintRules(){
     clearTimeout(_maintDebounce);
@@ -2123,13 +2127,13 @@ function bindAll(){
       ipStart:Number(root.querySelector('#mip-start')?.value||20),
       subnetMask:root.querySelector('#mip-mask')?.value,
       gateway:root.querySelector('#mip-gw')?.value,
-      dns:root.querySelector('#mip-dns')?.value}),400);
+      dns:root.querySelector('#mip-dns')?.value}),200);
   }
   ['#mip-srv','#mip-base','#mip-start','#mip-mask','#mip-gw','#mip-dns'].forEach(sel=>{
     const el=root.querySelector(sel);
     if(el){
-      el.addEventListener('input',autoApplyMaintRules);
       el.addEventListener('change',autoApplyMaintRules);
+      el.addEventListener('blur',()=>{ if(!_isRendering) autoApplyMaintRules(); });
     }
   });
 
@@ -2231,13 +2235,17 @@ function bindAll(){
       act('set-flag',{pendingServerAddr:addr});
       _triggerServerCheck();
     });
-    /* Auto-check on page entry: only once per screen entry.
-       _serverCheckTimer is null after screen transition (cleared in render()).
-       serverConnStatus is null after go-home clears it.
-       Guard: if _serverCheckTimer is active, a check is already running — skip. */
-    if(!_serverCheckTimer && demo().flags?.serverConnStatus == null){
+    /* Auto-check on page entry or when stale state detected.
+       Triggers when:
+       - No timer is currently running (_serverCheckTimer is null)
+       - Status is NOT 'ok' (covers: null/undefined after go-home, stale 'checking'
+         from server restart, 'fail' from previous attempt)
+       - There is an address to check
+       This is idempotent: _triggerServerCheck() clears any old timer before starting. */
+    if(!_serverCheckTimer){
+      const connFlag = demo().flags?.serverConnStatus;
       const existingAddr = (demo().flags?.pendingServerAddr ?? mt()?.serverAddr ?? '').trim();
-      if(existingAddr){
+      if(existingAddr && connFlag !== 'ok'){
         _triggerServerCheck();
       }
     }

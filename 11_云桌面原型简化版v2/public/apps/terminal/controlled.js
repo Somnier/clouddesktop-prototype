@@ -96,7 +96,7 @@ function renderBody(t){
       <div class="ctrl-sub">${esc(t.taskNote||'')}</div>
       <div class="ctrl-progress">
         <div class="progress-bar"><div class="fill" style="width:${pctVal}%"></div></div>
-        <div style="text-align:center;font-size:.78rem;color:var(--t-text3);margin-top:4px">${pctVal}%</div>
+        <div style="text-align:center;font-size:1.6rem;font-weight:700;color:var(--t-text2);margin-top:8px">${pctVal}%</div>
       </div>
       <div class="ctrl-detail">请勿关机或操作本终端</div>
     </div>`;
@@ -163,7 +163,7 @@ function bindingScreen(t, state){
     const seatStr = block ? seatLabel(block.row, block.col, rules) : '#'+(Number(idx)+1);
     return `<div class="ctrl-center">
       <div class="ctrl-title" style="color:var(--t-ok)">已绑定</div>
-      <div class="ctrl-sub">本终端已绑定到座位 <strong style="font-size:1.2em">${esc(seatStr)}</strong></div>
+      <div class="ctrl-sub">本终端已绑定到座位 <strong style="font-size:1.8em">${esc(seatStr)}</strong></div>
       <div class="ctrl-detail-box">
         ${defRow('座位号', seatStr)}
         ${defRow('机器名', t.name||'--')}
@@ -177,8 +177,8 @@ function bindingScreen(t, state){
   return `<div class="ctrl-center">
     <div class="ctrl-title">等待绑定</div>
     <div class="ctrl-sub">母机正在分配终端座位</div>
-    <div style="margin:20px 0;padding:16px 24px;background:var(--t-accent-bg);border:1px solid var(--t-accent);border-radius:var(--radius)">
-      <div style="font-size:.95rem;color:var(--t-accent);font-weight:600;text-align:center">等待母机分配座位到本终端</div>
+    <div style="margin:28px 0;padding:24px 40px;background:var(--t-accent-bg);border:1px solid var(--t-accent);border-radius:var(--radius)">
+      <div style="font-size:1.3rem;color:var(--t-accent);font-weight:600;text-align:center">等待母机分配座位到本终端</div>
     </div>
     <div class="ctrl-detail-box">
       ${defRow('机器名', t.name||'--')}

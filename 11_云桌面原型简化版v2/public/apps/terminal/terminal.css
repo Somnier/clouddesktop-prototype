@@ -170,10 +170,12 @@
 .term-app input[type="text"], .term-app input[type="number"], .term-app select, .term-app textarea {
   background: #0d1117; color: var(--t-text); border-color: var(--t-border); font-family: var(--font); color-scheme: dark; }
 .term-app input:focus, .term-app select:focus { border-color: var(--t-accent); box-shadow: 0 0 0 2px rgba(88,166,255,.15); }
-/* Force dark styling on number input steppers (Chrome/Edge) */
+/* Force dark styling on number input steppers (Chrome/Edge).
+   color-scheme:dark on parent input already renders dark-native spinners;
+   no filter:invert needed — it would double-invert back to white. */
 .term-app input[type="number"]::-webkit-inner-spin-button,
 .term-app input[type="number"]::-webkit-outer-spin-button {
-  opacity: 0; transition: opacity .2s; filter: invert(1); }
+  opacity: 0; transition: opacity .2s; }
 .term-app input[type="number"]:hover::-webkit-inner-spin-button,
 .term-app input[type="number"]:hover::-webkit-outer-spin-button,
 .term-app input[type="number"]:focus::-webkit-inner-spin-button,
@@ -303,15 +305,18 @@
 .review-table .mono { font-family: var(--mono); font-size: .75rem; }
 .review-table tr:hover td { background: rgba(88,166,255,.04); }
 
-/* ── controlled terminal (full-screen status) ── */
+/* ── controlled terminal (full-screen status — designed for physical viewing at 1-2m distance) ── */
 .ctrl-center { display: flex; flex-direction: column; align-items: center; justify-content: center;
-  min-height: calc(100vh - 96px); text-align: center; padding: 40px; }
-.ctrl-icon { font-size: 4rem; margin-bottom: 16px; }
-.ctrl-title { font-size: 1.4rem; font-weight: 600; margin-bottom: 8px; }
-.ctrl-sub { color: var(--t-text2); font-size: .95rem; margin-bottom: 24px; }
-.ctrl-progress { width: 300px; margin-bottom: 12px; }
-.ctrl-detail { font-size: .8rem; color: var(--t-text3); max-width: 320px; }
-.ctrl-detail-box { text-align: left; width: 240px; margin-bottom: 12px; }
+  min-height: calc(100vh - 96px); text-align: center; padding: 40px 60px; }
+.ctrl-icon { font-size: 6rem; margin-bottom: 24px; }
+.ctrl-title { font-size: 3rem; font-weight: 700; margin-bottom: 16px; }
+.ctrl-sub { color: var(--t-text2); font-size: 1.5rem; margin-bottom: 32px; line-height: 1.4; }
+.ctrl-progress { width: min(600px, 80vw); margin-bottom: 20px; }
+.ctrl-progress .progress-bar { height: 18px; border-radius: 9px; }
+.ctrl-progress .progress-bar .fill { border-radius: 9px; }
+.ctrl-detail { font-size: 1.1rem; color: var(--t-text3); max-width: 600px; line-height: 1.5; }
+.ctrl-detail-box { text-align: left; width: min(480px, 80vw); margin-bottom: 20px; font-size: 1.2rem; }
+.ctrl-detail-box .def-row { padding: 8px 0; }
 
 /* ── export list ── */
 .export-table { width: 100%; border-collapse: collapse; font-size: .8rem; margin-top: 12px; }

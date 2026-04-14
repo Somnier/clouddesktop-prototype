@@ -28,13 +28,13 @@ function _saveFocus(){
   const ae = document.activeElement;
   if(!ae || ae===document.body || ae===root) return null;
   if(ae.tagName !== 'INPUT' && ae.tagName !== 'TEXTAREA' && ae.tagName !== 'SELECT') return null;
-  /* Try data-* attributes first (stable, unique selectors) */
-  const dataAttrs = ['data-import-target','data-import-cr-name','data-import-cr-building',
-    'data-import-cr-remark','data-server-new-addr','data-ip-base','data-ip-start',
-    'data-ip-gw','data-ip-mask','data-ip-dns','data-dist-src',
-    'data-dist-dt-chk','data-hw-chk','data-bcast-cr','data-term-chk'];
-  for(const attr of dataAttrs){
-    if(ae.getAttribute(attr) !== null) return { selector: '['+attr+']', value: ae.value, selStart: ae.selectionStart, selEnd: ae.selectionEnd, tag: ae.tagName };
+  /* Try any data-* attribute as selector (stable, unique across re-renders) */
+  for(const attr of ae.getAttributeNames()){
+    if(attr.startsWith('data-') && attr !== 'data-orig-idx'){
+      const val = ae.getAttribute(attr);
+      const selector = val ? '['+attr+'="'+val+'"]' : '['+attr+']';
+      return { selector, value: ae.value, selStart: ae.selectionStart, selEnd: ae.selectionEnd, tag: ae.tagName };
+    }
   }
   /* Fallback: id */
   if(ae.id) return { selector: '#'+ae.id, value: ae.value, selStart: ae.selectionStart, selEnd: ae.selectionEnd, tag: ae.tagName };
@@ -1661,15 +1661,16 @@ function bindEvents(){
     });
   });
 
-  /* ── IP base input ── */
+  /* ── IP parameter inputs: update view on input (no re-render), render on blur/change only
+     to avoid focus/scroll disruption while typing ── */
   const ipBaseEl=root.querySelector('[data-ip-base]');
-  if(ipBaseEl){ ipBaseEl.addEventListener('input',()=>{view.newIpBase=ipBaseEl.value; render(s());}); }
+  if(ipBaseEl){ ipBaseEl.addEventListener('input',()=>{view.newIpBase=ipBaseEl.value;}); ipBaseEl.addEventListener('blur',()=>{if(!_isRendering) render(s());}); ipBaseEl.addEventListener('change',()=>{render(s());}); }
   const ipStartEl=root.querySelector('[data-ip-start]');
-  if(ipStartEl){ ipStartEl.addEventListener('input',()=>{view.newIpStart=Number(ipStartEl.value); render(s());}); }
+  if(ipStartEl){ ipStartEl.addEventListener('input',()=>{view.newIpStart=Number(ipStartEl.value);}); ipStartEl.addEventListener('blur',()=>{if(!_isRendering) render(s());}); ipStartEl.addEventListener('change',()=>{render(s());}); }
   const ipGwEl=root.querySelector('[data-ip-gw]');
   if(ipGwEl){ ipGwEl.addEventListener('input',()=>{view.newIpGw=ipGwEl.value;}); }
   const ipMaskEl=root.querySelector('[data-ip-mask]');
-  if(ipMaskEl){ ipMaskEl.addEventListener('input',()=>{view.newIpMask=ipMaskEl.value; render(s());}); }
+  if(ipMaskEl){ ipMaskEl.addEventListener('input',()=>{view.newIpMask=ipMaskEl.value;}); ipMaskEl.addEventListener('blur',()=>{if(!_isRendering) render(s());}); ipMaskEl.addEventListener('change',()=>{render(s());}); }
   const ipDnsEl=root.querySelector('[data-ip-dns]');
   if(ipDnsEl){ ipDnsEl.addEventListener('input',()=>{view.newIpDns=ipDnsEl.value;}); }
 

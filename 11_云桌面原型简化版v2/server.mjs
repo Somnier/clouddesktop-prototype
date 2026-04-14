@@ -1875,6 +1875,15 @@ async function main(){
   if(existsSync(STATE_FILE)){
     try{ state=JSON.parse(readFileSync(STATE_FILE,'utf8')); }catch(e){ state=buildState(seed); }
   } else { state=buildState(seed); }
+  /* Sanitize transient demo state: server restart should always start at home screen
+     with clean connection check flags — prevents stale 'checking' spinner and wrong screen */
+  if(state.demo){
+    state.demo.motherScreen = 'home';
+    if(state.demo.flags){
+      delete state.demo.flags.serverConnStatus;
+      delete state.demo.flags.pendingServerAddr;
+    }
+  }
   /* Migrate old classroom name format: "未命名教室-date time" → "未命名教室_date_time" */
   (function migrateNames(){
     const raw=JSON.stringify(state);
