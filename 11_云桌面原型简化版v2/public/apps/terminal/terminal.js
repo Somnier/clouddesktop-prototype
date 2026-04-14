@@ -148,7 +148,16 @@ function showCreateDesktopDialog(defaultName){
 const _inputCache = {};
 let _lastScreen = null;
 let _isRendering = false; /* guard: prevents blur handlers firing during innerHTML replacement */
-let _serverAutoCheckedAddr = null; /* tracks last auto-checked server address to avoid repeat */
+let _serverCheckTimer = null; /* single timer for server connection check — prevents stacking */
+
+function _triggerServerCheck(){
+  if(_serverCheckTimer){ clearTimeout(_serverCheckTimer); _serverCheckTimer = null; }
+  act('set-flag',{serverConnStatus:'checking'});
+  _serverCheckTimer = setTimeout(()=>{
+    _serverCheckTimer = null;
+    act('set-flag',{serverConnStatus:'ok'});
+  }, 1800);
+}
 
 function _cacheAllInputs(){
   root.querySelectorAll('input, textarea, select').forEach(el=>{
@@ -182,7 +191,11 @@ function render(state){
   if(!state) return;
   /* Clear input cache on screen change */
   const curScreen = state.demo?.motherScreen;
-  if(_lastScreen !== curScreen){ Object.keys(_inputCache).forEach(k=>delete _inputCache[k]); _lastScreen = curScreen; }
+  if(_lastScreen !== curScreen){
+    Object.keys(_inputCache).forEach(k=>delete _inputCache[k]);
+    if(_serverCheckTimer){ clearTimeout(_serverCheckTimer); _serverCheckTimer = null; }
+    _lastScreen = curScreen;
+  }
   /* Save ALL dirty input values before re-render */
   _cacheAllInputs();
   /* Preserve focused element */
@@ -2152,11 +2165,14 @@ function bindAll(){
       if(!wasOpen) menu.classList.add('open');
     });
   });
-  /* close overflow menus on outside click */
-  root.addEventListener('click',(e)=>{
-    if(!e.target.closest('[data-dt-overflow]') && !e.target.closest('.dt-overflow-menu'))
-      root.querySelectorAll('.dt-overflow-menu').forEach(m=>m.classList.remove('open'));
-  });
+  /* close overflow menus on outside click (single handler, avoids stacking) */
+  if(!root._dtOverflowBound){
+    root._dtOverflowBound = true;
+    root.addEventListener('click',(e)=>{
+      if(!e.target.closest('[data-dt-overflow]') && !e.target.closest('.dt-overflow-menu'))
+        root.querySelectorAll('.dt-overflow-menu').forEach(m=>m.classList.remove('open'));
+    });
+  }
   root.querySelectorAll('[data-desktop-action]').forEach(el=>{
     el.addEventListener('click',()=>{
       if(el.dataset.desktopAction==='import') showImportDialog();
@@ -2203,36 +2219,27 @@ function bindAll(){
   /* ── drag reorder (maint IP only) ── */
   bindDragReorder();
 
-  /* ── server address auto-detect on blur ── */
+  /* ── server address auto-detect on blur + page entry ── */
   const srvInput = root.querySelector('#ln-srv');
   if(srvInput){
     srvInput.addEventListener('blur',()=>{
-      if(_isRendering) return; /* guard: don't fire during innerHTML replacement */
+      if(_isRendering) return;
       const addr = srvInput.value.trim();
       if(!addr) return;
-      /* Only trigger connection check if address actually changed from last checked */
-      const pendingAddr = demo().flags?.pendingServerAddr ?? mt()?.serverAddr ?? '';
-      if(addr === pendingAddr) return;
-      /* Store as pending (NOT persisted) — only "保存" button persists */
+      const currentAddr = demo().flags?.pendingServerAddr ?? mt()?.serverAddr ?? '';
+      if(addr === currentAddr) return;
       act('set-flag',{pendingServerAddr:addr});
-      /* Show checking animation, then connected (one-shot, debounced) */
-      if(srvInput._checkPending) return;
-      srvInput._checkPending = true;
-      _serverAutoCheckedAddr = addr; /* mark as checked */
-      setTimeout(()=>{
-        act('set-flag',{serverConnStatus:'checking'});
-        setTimeout(()=>{ act('set-flag',{serverConnStatus:'ok'}); srvInput._checkPending=false; }, 1800);
-      }, 100);
+      _triggerServerCheck();
     });
-    /* Auto-check on page entry: always trigger if address exists.
-       go-home clears serverConnStatus, so we must re-check each time. */
-    const existingAddr = (demo().flags?.pendingServerAddr ?? mt()?.serverAddr ?? '').trim();
-    if(existingAddr){
-      _serverAutoCheckedAddr = existingAddr;
-      setTimeout(()=>{
-        act('set-flag',{serverConnStatus:'checking'});
-        setTimeout(()=>{ act('set-flag',{serverConnStatus:'ok'}); }, 1800);
-      }, 300);
+    /* Auto-check on page entry: only once per screen entry.
+       _serverCheckTimer is null after screen transition (cleared in render()).
+       serverConnStatus is null after go-home clears it.
+       Guard: if _serverCheckTimer is active, a check is already running — skip. */
+    if(!_serverCheckTimer && demo().flags?.serverConnStatus == null){
+      const existingAddr = (demo().flags?.pendingServerAddr ?? mt()?.serverAddr ?? '').trim();
+      if(existingAddr){
+        _triggerServerCheck();
+      }
     }
   }
 

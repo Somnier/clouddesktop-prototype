@@ -786,7 +786,9 @@ function act(action, payload={}){
     if(mt.controlState!=='mother') return {ok:false,reason:'未接管教室'};
     demo.motherScreen='workbench'; mt.screen='workbench'; return {ok:true};
   case 'end-management':{
-    termsInCr(cr.id).forEach(t=>{if(t.controlState==='controlled'&&!t.taskState){t.controlState='unmanaged';}});
+    termsInCr(cr.id).forEach(t=>{
+      if(t.id!==mt.id){ t.controlState='unmanaged'; t.taskState=null; t.taskNote=''; }
+    });
     mt.controlState='unmanaged'; cr.motherId=null;
     cr.status=cr.stage==='deployed'?'idle':cr.stage;
     demo.motherScreen='home'; mt.screen='home';
@@ -1338,7 +1340,14 @@ function act(action, payload={}){
     return {ok:true};
   }
   case 'clear-completed-task':{
-    /* Remove completed tasks for the current classroom */
+    /* Remove completed tasks for the current classroom and reset terminal task states */
+    const completedTasks = state.tasks.filter(t=>t.classroomId===cr.id && t.phase==='completed');
+    completedTasks.forEach(tk=>{
+      (tk.items||[]).forEach(it=>{
+        const t=state.terminals.find(x=>x.id===it.terminalId);
+        if(t){ t.taskState=null; t.taskNote=''; }
+      });
+    });
     state.tasks = state.tasks.filter(t=>!(t.classroomId===cr.id && t.phase==='completed'));
     return {ok:true};
   }

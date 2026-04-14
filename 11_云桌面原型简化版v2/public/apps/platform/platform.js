@@ -9,7 +9,12 @@ client.connect();
 /* Force periodic re-render for live sparkline/metric views (dashboard + terminal detail) */
 setInterval(()=>{
   const st = s();
-  if(st && (view.page==='dashboard' || view.terminalId)) render(st);
+  if(!st) return;
+  if(view.page!=='dashboard' && !view.terminalId) return;
+  /* Skip periodic re-render if user has focus on an input to avoid scroll/focus disruption */
+  const ae = document.activeElement;
+  if(ae && ae !== document.body && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
+  render(st);
 }, 3000);
 
 let view = { page: 'dashboard', campusId: null, classroomId: null, terminalId: null, tab: 'overview' };
@@ -22,18 +27,20 @@ function nav(page, opts={}){ Object.assign(view, {page,...opts}); render(s()); }
 function _saveFocus(){
   const ae = document.activeElement;
   if(!ae || ae===document.body || ae===root) return null;
-  const sel = ae.getAttribute('data-import-target') !== null ? '[data-import-target]'
-    : ae.getAttribute('data-import-cr-name') !== null ? '[data-import-cr-name]'
-    : ae.getAttribute('data-import-cr-building') !== null ? '[data-import-cr-building]'
-    : ae.getAttribute('data-import-cr-remark') !== null ? '[data-import-cr-remark]'
-    : ae.getAttribute('data-server-new-addr') !== null ? '[data-server-new-addr]'
-    : ae.getAttribute('data-ip-base') !== null ? '[data-ip-base]'
-    : ae.getAttribute('data-ip-start') !== null ? '[data-ip-start]'
-    : ae.getAttribute('data-ip-gw') !== null ? '[data-ip-gw]'
-    : ae.getAttribute('data-dist-src') !== null ? '[data-dist-src]'
-    : null;
-  if(!sel) return null;
-  return { selector: sel, value: ae.value, selStart: ae.selectionStart, selEnd: ae.selectionEnd, tag: ae.tagName };
+  if(ae.tagName !== 'INPUT' && ae.tagName !== 'TEXTAREA' && ae.tagName !== 'SELECT') return null;
+  /* Try data-* attributes first (stable, unique selectors) */
+  const dataAttrs = ['data-import-target','data-import-cr-name','data-import-cr-building',
+    'data-import-cr-remark','data-server-new-addr','data-ip-base','data-ip-start',
+    'data-ip-gw','data-ip-mask','data-ip-dns','data-dist-src',
+    'data-dist-dt-chk','data-hw-chk','data-bcast-cr','data-term-chk'];
+  for(const attr of dataAttrs){
+    if(ae.getAttribute(attr) !== null) return { selector: '['+attr+']', value: ae.value, selStart: ae.selectionStart, selEnd: ae.selectionEnd, tag: ae.tagName };
+  }
+  /* Fallback: id */
+  if(ae.id) return { selector: '#'+ae.id, value: ae.value, selStart: ae.selectionStart, selEnd: ae.selectionEnd, tag: ae.tagName };
+  /* Fallback: name */
+  if(ae.name) return { selector: '[name="'+ae.name+'"]', value: ae.value, selStart: ae.selectionStart, selEnd: ae.selectionEnd, tag: ae.tagName };
+  return null;
 }
 function _restoreFocus(saved){
   if(!saved) return;
