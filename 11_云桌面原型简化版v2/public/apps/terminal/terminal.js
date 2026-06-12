@@ -61,9 +61,11 @@ function showTermAlert(msg){
 }
 
 function showExportDoneDialog(){
-  const m=mt();
+  const m=mt(); const c=cr();
   const dts=(m?.desktops||[]).filter(d=>d.visibility!=='hidden');
   if(!dts.length){ showTermAlert('暂无可导出桌面'); return; }
+  const crName = m?.classroomName || c?.name || '未命名教室';
+  const termInfo = { seat:m?.seat||'--', name:m?.name||'未命名', ip:m?.ip||'未配置' };
   let exportDir='E:\\CloudDesktop';
   const selected=new Set(dts.map(d=>d.id));
   const ov=document.createElement('div'); ov.className='t-modal-overlay';
@@ -103,6 +105,11 @@ function showExportDoneDialog(){
           <input type="text" id="te-dir" value="${esc(exportDir)}" style="flex:1;padding:6px 10px;border:1px solid var(--t-border);border-radius:4px;font-size:.85rem;font-family:monospace;background:var(--t-panel);color:var(--t-text);box-sizing:border-box">
           <button class="btn btn-ghost btn-sm" id="te-browse" style="white-space:nowrap">浏览…</button>
         </div>
+      </div>
+      <div style="margin-bottom:10px;padding:8px 12px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px">
+        <div style="font-size:.78rem;font-weight:600;color:var(--t-text2);margin-bottom:4px">随附终端信息</div>
+        <div style="font-size:.75rem;color:var(--t-text3);line-height:1.6">教室: <strong style="color:var(--t-text2)">${esc(crName)}</strong>　·　座位: <strong style="color:var(--t-text2)">${esc(termInfo.seat)}</strong>　·　机器名: <strong style="color:var(--t-text2)">${esc(termInfo.name)}</strong>　·　IP: <strong style="color:var(--t-text2);font-family:monospace">${esc(termInfo.ip)}</strong></div>
+        <div style="font-size:.7rem;color:var(--t-text3);margin-top:3px">导出包将附带本教室及本终端信息，便于线下单机导入时还原终端清单。</div>
       </div>
       ${selDts.length?`<div style="margin-bottom:10px">
         <div style="font-size:.82rem;font-weight:600;margin-bottom:4px">导出文件预览</div>
@@ -151,7 +158,7 @@ function showExportDoneDialog(){
       const total=selDts.reduce((s2,d)=>s2+(d.diskSize||25),0);
       const names=selDts.map(d=>d.name).join('、');
       ov.remove();
-      showTermAlert('已导出 '+selDts.length+' 个桌面 (共 '+total+' GB) 到 '+exportDir+'\n'+names);
+      showTermAlert('已导出 '+selDts.length+' 个桌面 (共 '+total+' GB) 到 '+exportDir+'\n附带：教室 '+crName+' · 座位 '+termInfo.seat+' · 机器名 '+termInfo.name+'\n'+names);
     });
     const cancelBtn=ov.querySelector('[data-tm="cancel"]');
     if(cancelBtn) cancelBtn.addEventListener('click',()=>ov.remove());
@@ -525,70 +532,29 @@ function localDesktopScreen(){
   const returnAct = 'desktop-return-flow';
   const bid = m.bios?.defaultBootId;
 
-  /* disk statistics */
+  /* disk statistics — 仅保留剩余空间，用于标题栏导入区展示 (饼图已移除) */
   const diskTotal = m.metrics?.diskTotal || 512;
   const systemUsed = 35;
   const desktopUsed = desktops.reduce((s,d)=>s+(d.diskSize||25),0);
   const diskUsed = desktopUsed + systemUsed;
   const diskFree = Math.max(0, diskTotal - diskUsed);
   const diskPct = Math.round(diskUsed/diskTotal*100);
-  const diskColor = diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-accent)';
-
-  /* pie segments: system → desktop total → free (3 categories only) */
-  const dtSegments = [];
-  dtSegments.push({ name:'系统占用', size:systemUsed, color:'#64748b' });
-  dtSegments.push({ name:'桌面占用', size:desktopUsed, color:'#3b82f6' });
-  if(diskFree>0) dtSegments.push({ name:'剩余空间', size:diskFree, color:'#1e293b' });
-
-  /* SVG pie chart */
-  const total = dtSegments.reduce((s,seg)=>s+seg.size,0);
-  let cumAngle = -90;
-  const pieR = 60, pieCx = 70, pieCy = 70;
-  const pieSlices = dtSegments.map(seg=>{
-    const angle = (seg.size/total)*360;
-    const startAngle = cumAngle;
-    cumAngle += angle;
-    const endAngle = cumAngle;
-    const startRad = startAngle*Math.PI/180;
-    const endRad = endAngle*Math.PI/180;
-    const x1 = pieCx + pieR*Math.cos(startRad);
-    const y1 = pieCy + pieR*Math.sin(startRad);
-    const x2 = pieCx + pieR*Math.cos(endRad);
-    const y2 = pieCy + pieR*Math.sin(endRad);
-    const largeArc = angle>180?1:0;
-    if(angle>=359.9) return `<circle cx="${pieCx}" cy="${pieCy}" r="${pieR}" fill="${seg.color}"/>`;
-    return `<path d="M${pieCx},${pieCy} L${x1},${y1} A${pieR},${pieR} 0 ${largeArc},1 ${x2},${y2} Z" fill="${seg.color}"/>`;
-  }).join('');
-  /* legend removed — color dots merged into stats panel below */
-
-  /* has any unsync */
-  const hasUnsync = desktops.some(d=>!(d.uploaded||d.syncStatus==='synced'));
+  const freeColor = diskPct>85?'var(--t-err)':diskPct>70?'var(--t-warn)':'var(--t-ok)';
 
   return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
-  <div style="width:100%;max-width:920px;display:flex;flex-direction:column;flex:1;min-height:0">
-  <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+  <div style="width:100%;max-width:1100px;display:flex;flex-direction:column;flex:1;min-height:0">
+  <!-- 标题行：左=功能名(返回+桌面管理)，右=剩余空间 + 导入/导出 按钮区 (UI原则 P3) -->
+  <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
     <div><button class="btn btn-ghost" data-act="${returnAct}">←</button> 桌面管理</div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <span style="font-size:.8rem;color:var(--t-text3);font-weight:400">剩余空间 <strong style="color:${freeColor};font-family:var(--mono)">${diskFree} GB</strong> / ${diskTotal} GB</span>
+      <button class="btn btn-secondary btn-sm" data-desktop-action="import">导入桌面</button>
+      <button class="btn btn-secondary btn-sm" data-desktop-action="export-pkg">导出桌面</button>
+    </div>
   </div>
 
   <div class="page-scroll" style="padding-bottom:12px">
-
-  ${hasUnsync?`<div class="dt-unsync-banner">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-    <span>有 ${desktops.filter(d=>!(d.uploaded||d.syncStatus==='synced')).length} 个桌面尚未同步到服务器，请尽快上传以避免数据丢失</span>
-  </div>`:''}
-
-  <!-- Two-column: card grid + import (left) + pie chart (right) -->
-  <div style="display:flex;gap:20px;align-items:flex-start">
-    <!-- Desktop cards (left, two-column waterfall) -->
-    <div style="flex:1;min-width:0">
-      <!-- Import bar (spans 2 columns) -->
-      <div class="dt-card dt-add-card" data-desktop-action="import" style="margin-bottom:12px;cursor:pointer">
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 0">
-          <span style="font-size:1.5rem;color:var(--t-text3)">+</span>
-          <span style="font-size:.88rem;color:var(--t-text3)">导入桌面</span>
-        </div>
-      </div>
-      <div class="dt-grid">
+    <div class="dt-grid">
         ${desktops.map(d=>{
         const isDefault = d.id===bid;
         const isHidden = d.visibility==='hidden';
@@ -596,7 +562,7 @@ function localDesktopScreen(){
         const isPhysical = d.physicalDeploy;
         const dtSize = d.diskSize || 25;
         return `
-        <div class="dt-card ${isDefault?'selected':''} ${!uploaded?'dt-unsync':''}" data-dt-id="${d.id}" style="position:relative">
+        <div class="dt-card ${!uploaded?'dt-unsync':''}" data-dt-id="${d.id}" style="position:relative">
           <div class="dt-card-fill"></div>
           <div style="position:relative;z-index:1;display:flex;flex-direction:column;flex:1">
             <div class="dt-name">${esc(d.name)}</div>
@@ -607,9 +573,9 @@ function localDesktopScreen(){
             </div>
             <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:6px">
               ${isPhysical?'<span class="pill info pill-sm" style="opacity:.65">物理部署</span>':''}
-              ${!uploaded?'<span class="pill err pill-sm" style="opacity:.65">未同步</span>':''}
+              ${!uploaded?'<span class="pill warn pill-sm" style="opacity:.85">未同步</span>':''}
               ${isHidden?'<span class="pill muted pill-sm" style="opacity:.65">已隐藏</span>':''}
-              ${isDefault?'<span class="pill info pill-sm" style="opacity:.55;font-size:.7rem">默认启动</span>':''}
+              ${isDefault?'<span class="pill muted pill-sm" style="opacity:.7;font-size:.7rem">默认启动</span>':''}
             </div>
             <div style="display:flex;gap:6px;margin-top:auto;padding-top:10px;flex-wrap:wrap;align-items:center">
               <button class="btn btn-sm btn-primary" data-dt-edit="${d.id}">编辑桌面</button>
@@ -629,28 +595,8 @@ function localDesktopScreen(){
           </div>
         </div>`;
         }).join('')}
-      </div>
-      ${!desktops.length ? empty('暂无本机桌面','请点击上方 + 导入桌面') : ''}
     </div>
-
-    <!-- Pie chart + stats (right sidebar) -->
-    <div class="card" style="flex-shrink:0;width:220px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px">
-      <svg width="140" height="140" viewBox="0 0 140 140">${pieSlices}
-        <circle cx="${pieCx}" cy="${pieCy}" r="32" fill="var(--t-bg)"/>
-        <text x="${pieCx}" y="${pieCy+4}" text-anchor="middle" fill="${diskColor}" font-size="16" font-weight="700">${diskPct}%</text>
-      </svg>
-      <div style="width:100%;display:flex;flex-direction:column;gap:5px;font-size:.78rem;color:var(--t-text2)">
-        <div style="display:flex;justify-content:space-between;align-items:center"><span>总容量</span><strong style="color:var(--t-text)">${diskTotal} GB</strong></div>
-        <div style="display:flex;justify-content:space-between;align-items:center"><span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#64748b;flex-shrink:0"></span>系统占用</span><span>${systemUsed} GB</span></div>
-        <div style="display:flex;justify-content:space-between;align-items:center"><span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#3b82f6;flex-shrink:0"></span>桌面占用</span><span>${desktopUsed} GB</span></div>
-        <div style="display:flex;justify-content:space-between;align-items:center"><span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#1e293b;flex-shrink:0"></span>剩余空间</span><span style="color:${diskColor}">${diskFree} GB</span></div>
-      </div>
-    </div>
-  </div>
-  </div>
-
-  <div class="dt-export-bar">
-    <button class="btn btn-ghost dt-export-btn" data-desktop-action="export-pkg">导出桌面</button>
+    ${!desktops.length ? empty('暂无本机桌面','请点击右上角「导入桌面」') : ''}
   </div>
   </div>
   </div>`;
