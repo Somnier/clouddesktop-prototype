@@ -626,14 +626,14 @@ function crTerminalsTab(c,terms){
   </div>` : ''}
   ${viewMode==='layout' ? crLayoutInline(c,terms) : `
   <table class="data-table">
-    <thead><tr><th style="width:32px"><input type="checkbox" data-sel-toggle-all${sel.length===terms.length&&terms.length?' checked':''}></th><th>#</th><th>机器名</th><th>座位号</th><th>IP</th><th>用途</th><th>在线</th></tr></thead>
+    <thead><tr><th style="width:32px"><input type="checkbox" data-sel-toggle-all${sel.length===terms.length&&terms.length?' checked':''}></th><th>#</th><th>座位号</th><th>机器名</th><th>IP</th><th>用途</th><th>在线</th></tr></thead>
     <tbody>${terms.map((t,i)=>{
       const checked = sel.includes(t.id);
       return `<tr style="${checked?'background:rgba(59,130,246,.06)':''}">
       <td><input type="checkbox" data-term-chk="${t.id}"${checked?' checked':''}></td>
       <td style="font-size:.75rem;color:var(--c-text3)">${i+1}</td>
-      <td class="clickable" data-nav-term="${t.id}">${esc(t.name||'未命名')}</td>
       <td>${esc(t.seat||'--')}</td>
+      <td class="clickable" data-nav-term="${t.id}">${esc(t.name||'未命名')}</td>
       <td class="mono">${esc(t.ip||'未分配')}</td>
       <td>${pill(termUse(t), t.use==='教师终端'?'warn':'muted')}</td>
       <td>${pill(t.online?'在线':'离线',tone(t.online?'on':'offline'))}</td>
@@ -1105,8 +1105,8 @@ function terminalDetailPage(){
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
     <div class="card">
       <div class="card-header">配置</div>
-      ${defRow('机器名', t.name || '未命名')}
       ${defRow('座位号', t.seat || '未分配')}
+      ${defRow('机器名', t.name || '未命名')}
       ${defRow('终端用途', termUse(t))}
       ${defRow('IP 地址', t.ip || '未配置', {mono:true})}
       ${defRow('子网掩码', t.subnetMask || '255.255.255.0', {mono:true})}

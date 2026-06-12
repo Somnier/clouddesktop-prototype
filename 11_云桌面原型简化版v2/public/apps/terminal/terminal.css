@@ -9,13 +9,13 @@
   --t-warn: #d29922; --t-warn-bg: rgba(210,153,34,.12);
   --t-err: #f85149; --t-err-bg: rgba(248,81,73,.12);
   background: var(--t-bg); color: var(--t-text); min-height: 100vh;
-  font-size: 15px;
+  font-size: 18px;
 }
 
 /* ── layout ── */
 .term-shell { display: flex; flex-direction: column; height: 100vh; }
 .term-topbar { display: flex; align-items: center; justify-content: space-between;
-  padding: 0 24px; height: 48px; background: var(--t-panel); border-bottom: 1px solid var(--t-border); flex-shrink: 0; }
+  padding: 0 30px; height: 56px; background: var(--t-panel); border-bottom: 1px solid var(--t-border); flex-shrink: 0; }
 .term-topbar .brand { font-weight: 600; font-size: .95rem; }
 .term-topbar .status { font-size: .8rem; color: var(--t-text2); display: flex; align-items: center; gap: 8px; }
 .term-topbar .status .sep { color: var(--t-text3); font-size: .85rem; user-select: none; margin: 0 2px; }

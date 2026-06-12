@@ -1215,8 +1215,8 @@ function deployPrepScreen(){
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
     <div class="card">
       <div class="card-header">终端信息</div>
-      ${defRow('机器名', m.name||'未命名')}
       ${defRow('座位号', m.seat||'未分配')}
+      ${defRow('机器名', m.name||'未命名')}
     </div>
     <div class="card">
       <div class="card-header">网络配置</div>

@@ -15,7 +15,13 @@
   --font-ui: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 14px; }
+/* ──────────────────────────────────────────────────────────
+   UI 呈现原则 · 基准尺度 (Design Scale)
+   1rem = 18px 为全局基准字号。所有排版尺寸一律使用 rem，
+   随此根字号统一缩放；结构性间距（布局宽高/内边距）按同一
+   比例在各 .css 中给定。新旧页面均遵循此基准，无需再做"放大"。
+   ────────────────────────────────────────────────────────── */
+html { font-size: 18px; }
 body { font-family: var(--font); color: var(--c-text); background: var(--c-bg); line-height: 1.5; -webkit-font-smoothing: antialiased; }
 
 /* ── pills / chips ── */
