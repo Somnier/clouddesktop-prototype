@@ -559,7 +559,7 @@ function act(action, payload={}){
 
   /* ── LOCAL INFO (TERM-01 sub-pages, editable) ── */
   case 'open-local-info': demo.motherScreen='local-info'; mt.screen='local-info'; return {ok:true};
-  case 'open-local-network': demo.motherScreen='local-network'; mt.screen='local-network'; return {ok:true};
+  case 'open-local-network': demo.motherScreen='local-info'; mt.screen='local-info'; return {ok:true}; // merged into 设置本机
   case 'open-local-desktop':{
     demo._desktopReturnScreen=payload.returnScreen||'home';
     demo.motherScreen='local-desktop'; mt.screen='local-desktop'; return {ok:true};
@@ -568,9 +568,12 @@ function act(action, payload={}){
   case 'open-selftest': demo.motherScreen='selftest'; mt.screen='selftest'; return {ok:true};
 
   case 'save-local-info':
+    if(payload.classroomName!==undefined) mt.classroomName=payload.classroomName;
     if(payload.name!==undefined) mt.name=payload.name;
+    if(payload.namePrefix!==undefined) mt.namePrefix=payload.namePrefix;
     if(payload.seat!==undefined) mt.seat=payload.seat;
     if(payload.use!==undefined) mt.use=payload.use;
+    if(payload.serverAddr!==undefined) mt.serverAddr=payload.serverAddr;
     if(payload.ip!==undefined) mt.ip=payload.ip;
     if(payload.subnetMask!==undefined) mt.subnetMask=payload.subnetMask;
     if(payload.gateway!==undefined) mt.gateway=payload.gateway;

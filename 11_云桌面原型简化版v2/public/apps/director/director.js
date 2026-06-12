@@ -134,11 +134,10 @@ function page(){
     <!-- ═══ 测试流程：单机功能 ═══ -->
     <div class="dir-card">
       <h3>测试流程 A：单机功能</h3>
-      <p>终端首页 → 本机配置 → 服务器连接 → 桌面管理 → 一键替换 → 一键重置</p>
+      <p>终端首页 → 设置本机 → 桌面管理 → 一键替换 → 一键重置</p>
       <div class="dir-btn-group">
         <button class="dir-btn" data-act="go-home">首页</button>
-        <button class="dir-btn" data-act="open-local-info">本机配置</button>
-        <button class="dir-btn" data-act="open-local-network">服务器连接</button>
+        <button class="dir-btn" data-act="open-local-info">设置本机</button>
         <button class="dir-btn" data-act="open-local-desktop">桌面管理</button>
         <button class="dir-btn" data-act="open-fault-replace">一键替换</button>
         <button class="dir-btn" data-act="open-fault-reset">一键重置</button>
