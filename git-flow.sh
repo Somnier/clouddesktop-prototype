@@ -23,8 +23,17 @@ set -euo pipefail
 
 # ── 中文路径支持 ──────────────────────────────────────────────────────────
 # Git 默认将非 ASCII 路径显示为八进制转义（\346\226\271…），此处强制关闭。
-export LANG="${LANG:-C.UTF-8}"
-export LC_ALL="${LC_ALL:-C.UTF-8}"
+# 跨平台：C.UTF-8 在 Linux/git-bash 可用，但 macOS 不提供该 locale，
+# 强制设置会触发 "setlocale: cannot change locale" 告警。此处探测可用 locale。
+if [ -z "${LC_ALL:-}" ]; then
+  _avail_locales="$(locale -a 2>/dev/null || true)"
+  if printf '%s\n' "$_avail_locales" | grep -qiE '^C\.UTF-?8$'; then
+    export LANG="${LANG:-C.UTF-8}" LC_ALL="C.UTF-8"
+  elif printf '%s\n' "$_avail_locales" | grep -qiE '^en_US\.UTF-?8$'; then
+    export LANG="${LANG:-en_US.UTF-8}" LC_ALL="en_US.UTF-8"
+  fi
+  unset _avail_locales
+fi
 GIT="git -c core.quotePath=false"
 
 # ── 可配置项 ──────────────────────────────────────────────────────────────
