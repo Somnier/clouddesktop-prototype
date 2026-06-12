@@ -22,7 +22,5 @@ Desktop.ini
 *.log
 
 # Agent 状态与协议文件（不入库）
-**/.agent_state.md
 Agent-Execution-StateMachine-Harness.md
 Agent_Stateless_Harness_Protocol*.md
-CURRENT_STATE_DUMP.md
