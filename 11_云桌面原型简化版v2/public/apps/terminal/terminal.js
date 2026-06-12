@@ -196,7 +196,7 @@ function showImportDialog(){
 
 function showCreateDesktopDialog(defaultName){
   const ov=document.createElement('div'); ov.className='t-modal-overlay';
-  ov.innerHTML=`<div class="t-modal" style="max-width:480px">
+  ov.innerHTML=`<div class="t-modal" style="max-width:540px;--prep-label-w:128px">
     <div class="t-modal-title" style="color:var(--t-text)">导入桌面</div>
     <div class="t-modal-msg">请配置桌面信息：</div>
     <div class="prep-field"><label>桌面名称</label><input type="text" id="cd-name" value="${esc(defaultName)}" placeholder="桌面名称"></div>
@@ -480,36 +480,36 @@ function localInfoScreen(){
   const isChecking = connFlag==='checking' || (connFlag==null && hasAddr);
   const connOk = connFlag==='ok';
   const connStatus = isChecking ? 'checking' : !hasAddr ? 'none' : connOk ? 'ok' : 'fail';
-  const indent = 'margin:-2px 0 12px 96px';
   return `<div class="page" style="display:flex;flex-direction:column;align-items:center">
   <div style="max-width:560px;width:100%">
   <div class="section-title"><button class="btn btn-ghost" data-act="go-home">←</button> 设置本机</div>
   <div class="card" style="width:100%">
+    <div class="prep-section">教室与服务器</div>
     <!-- 1. 教室名称 -->
     <div class="prep-field"><label>教室名称</label><input type="text" id="li-cr" value="${esc(m.classroomName||c?.name||'')}" placeholder="如 D301 计算机教室"></div>
-    <div style="font-size:.7rem;color:var(--t-text3);${indent}">同一教室内的所有终端请填写相同的教室名称</div>
+    <div class="prep-hint" style="font-size:.7rem;color:var(--t-text3)">同一教室内的所有终端请填写相同的教室名称</div>
     <!-- 2. 服务器地址 + 连接状态 -->
     <div class="prep-field"><label>服务器地址</label><input type="text" id="ln-srv" value="${esc(displayAddr)}" placeholder="server.edu.cn"></div>
-    <div style="${indent};padding:8px 12px;background:${connStatus==='ok'?'var(--t-ok-bg)':connStatus==='fail'?'var(--t-err-bg)':'var(--t-panel)'};border:1px solid ${connStatus==='ok'?'var(--t-ok)':connStatus==='fail'?'var(--t-err)':'var(--t-border)'};border-radius:var(--radius)">
+    <div class="prep-hint" style="padding:8px 12px;background:${connStatus==='ok'?'var(--t-ok-bg)':connStatus==='fail'?'var(--t-err-bg)':'var(--t-panel)'};border:1px solid ${connStatus==='ok'?'var(--t-ok)':connStatus==='fail'?'var(--t-err)':'var(--t-border)'};border-radius:var(--radius)">
       <div style="display:flex;align-items:center;gap:8px">
         ${isChecking?'<span class="conn-spinner"></span>':`<span class="dot ${connStatus==='ok'?'dot-ok':connStatus==='fail'?'dot-err':''}"></span>`}
         <span style="font-size:.82rem;color:${connStatus==='ok'?'var(--t-ok)':connStatus==='fail'?'var(--t-err)':isChecking?'var(--t-accent)':'var(--t-text3)'}">${connStatus==='ok'?'已连接服务器':connStatus==='fail'?'无法连接服务器':isChecking?'正在检测连接…':'未配置服务器地址'}</span>
       </div>
     </div>
-    <div style="border-top:1px solid var(--t-border);margin:4px 0 12px;padding-top:12px"><div style="font-size:.82rem;color:var(--t-text3)">座位与机器名</div></div>
+    <div class="prep-section">座位与机器名</div>
     <!-- 3. 座位号 = 起始字母 + 座位号码 -->
     <div class="prep-field"><label>座位号</label>
-      <div style="display:flex;gap:8px;align-items:center;flex:1">
-        <input type="text" id="li-seat-letter" value="${esc(seatLetter)}" maxlength="2" placeholder="A" style="width:64px;text-transform:uppercase">
+      <div style="display:flex;gap:8px;align-items:center;flex:1;min-width:0">
+        <input type="text" id="li-seat-letter" value="${esc(seatLetter)}" maxlength="2" placeholder="A" style="width:64px;flex:none;text-transform:uppercase">
         <span style="color:var(--t-text3)">+</span>
-        <input type="text" id="li-seat-num" value="${esc(seatNumber)}" placeholder="01" style="width:96px">
+        <input type="text" id="li-seat-num" value="${esc(seatNumber)}" placeholder="01" style="width:96px;flex:none">
       </div>
     </div>
-    <div id="li-seat-preview" style="font-size:.72rem;color:var(--t-text3);${indent}">座位号: <strong>${esc(composedSeat)}</strong></div>
+    <div id="li-seat-preview" class="prep-hint" style="font-size:.72rem;color:var(--t-text3)">座位号: <strong>${esc(composedSeat)}</strong></div>
     <!-- 4. 机器名前缀 -->
     <div class="prep-field"><label>机器名前缀</label><input type="text" id="li-name-prefix" value="${esc(namePrefix)}" placeholder="D301"></div>
-    <div id="li-name-preview" style="font-size:.72rem;color:var(--t-text3);${indent}">机器名: <strong>${esc(composedName)}</strong>　·　机器名 = 前缀 + "-" + 座位号，座位号 = 起始字母 + 序号</div>
-    <div style="border-top:1px solid var(--t-border);margin:4px 0 12px;padding-top:12px"><div style="font-size:.82rem;color:var(--t-text3)">网络配置</div></div>
+    <div id="li-name-preview" class="prep-hint" style="font-size:.72rem;color:var(--t-text3)">机器名: <strong>${esc(composedName)}</strong>　·　机器名 = 前缀 + "-" + 座位号，座位号 = 起始字母 + 序号</div>
+    <div class="prep-section">网络配置</div>
     <!-- 5~9. IP 相关 -->
     <div class="prep-field"><label>IP 地址</label><input type="text" id="li-ip" value="${esc(m.ip||'')}" placeholder="10.21.31.20"></div>
     <div class="prep-field"><label>子网掩码</label><input type="text" id="li-mask" value="${esc(m.subnetMask||'')}" placeholder="255.255.255.0"></div>
@@ -2363,7 +2363,22 @@ function bindAll(){
       if(!menu) return;
       const wasOpen = menu.classList.contains('open');
       root.querySelectorAll('.dt-overflow-menu').forEach(m=>m.classList.remove('open'));
-      if(!wasOpen) menu.classList.add('open');
+      if(!wasOpen){
+        menu.classList.add('open');
+        /* position:fixed menu anchored to the ··· button — escapes page-scroll clipping.
+           Opens downward by default, flips upward when no room below. */
+        const r = el.getBoundingClientRect();
+        menu.style.visibility='hidden'; menu.style.top='0px'; menu.style.left='0px';
+        const mh = menu.offsetHeight, mw = menu.offsetWidth;
+        let top = r.bottom + 4;
+        if(top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+        let left = r.right - mw;
+        if(left < 8) left = 8;
+        if(left + mw > window.innerWidth - 8) left = window.innerWidth - 8 - mw;
+        menu.style.top = top+'px';
+        menu.style.left = left+'px';
+        menu.style.visibility='';
+      }
     });
   });
   /* close overflow menus on outside click (single handler, avoids stacking) */

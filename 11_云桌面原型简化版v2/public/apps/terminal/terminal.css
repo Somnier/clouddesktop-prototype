@@ -155,9 +155,9 @@
 .dt-card .dt-name { font-weight: 600; font-size: .95rem; }
 .dt-card .dt-meta { font-size: .78rem; color: var(--t-text2); margin-top: 6px; line-height: 1.5; }
 .dt-card .dt-sw { font-size: .75rem; color: var(--t-text3); margin-top: 6px; }
-.dt-overflow-menu { display: none; position: absolute; right: 8px; bottom: 40px; z-index: 20;
+.dt-overflow-menu { display: none; position: fixed; z-index: 1000;
   background: var(--t-panel); border: 1px solid var(--t-border); border-radius: var(--radius);
-  box-shadow: 0 4px 12px rgba(0,0,0,.4); min-width: 150px; padding: 4px 0; }
+  box-shadow: 0 4px 16px rgba(0,0,0,.5); min-width: 150px; padding: 4px 0; }
 .dt-overflow-menu.open { display: block; }
 .dt-overflow-menu button { display: block; width: 100%; text-align: left; padding: 6px 14px;
   font-size: .78rem; background: none; border: none; color: var(--t-text); cursor: pointer; font-family: inherit; }
@@ -275,8 +275,13 @@
 .prep-group { padding: 14px; border-radius: var(--radius); background: var(--t-panel); border: 1px solid var(--t-border); }
 .prep-group h4 { font-size: .85rem; color: var(--t-text2); margin-bottom: 6px; font-weight: 600; }
 .prep-field { display: flex; align-items: center; gap: 12px; padding: 5px 0; font-size: .85rem; }
-.prep-field label { color: var(--t-text2); flex-shrink: 0; width: 96px; }
-.prep-field input, .prep-field select { flex: 1; max-width: 320px; }
+.prep-field label { color: var(--t-text2); flex-shrink: 0; width: var(--prep-label-w, 96px); white-space: nowrap; }
+.prep-field input, .prep-field select { flex: 1; max-width: 320px; min-width: 0; }
+/* hint / status box aligned under input (label width + gap) — keeps left edges flush */
+.prep-hint { margin: -2px 0 12px calc(var(--prep-label-w, 96px) + 12px); }
+/* section sub-header inside a form card */
+.prep-section { border-top: 1px solid var(--t-border); margin: 4px 0 12px; padding-top: 12px; font-size: .82rem; color: var(--t-text3); font-weight: 600; }
+.prep-section:first-child { border-top: none; margin-top: 0; padding-top: 0; }
 
 /* ── empty state (dark) ── */
 .term-app .empty-block { color: var(--t-text3); }
