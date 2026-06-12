@@ -26,7 +26,6 @@
 ### 使用方法
 
 ```bash
-cd 02_方法指南
 node md2pdf.mjs <输入文件.md> [输出文件.pdf]
 ```
 
