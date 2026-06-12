@@ -39,15 +39,34 @@ function page(){
 
   const stageLabel = {blank:'未部署',bound:'已设置布局',deployed:'已部署',registered:'已注册'};
 
-  /* aggregate data stats */
+  /* aggregate data stats — 与平台口径保持一致：桌面按名称去重 */
   const allCrs = state.classrooms;
-  const deployedCrs = allCrs.filter(cc=>cc.stage==='deployed');
   const totalTerminals = state.terminals.length;
-  const totalDesktops = deployedCrs.reduce((n,cc)=>(cc.desktopCatalog||[]).length+n,0);
-  const totalSnaps = deployedCrs.reduce((n,cc)=>(cc.snapshotTree||[]).length+n,0);
-  const totalImages = deployedCrs.reduce((n,cc)=>(cc.imageStore||[]).length+n,0);
+  /* 桌面总数 = 全部教室 desktopCatalog 按名称去重的并集（等于平台「桌面资产」统计口径）。
+     空白教室 desktopCatalog 为空，其母机本地桌面尚未上传，不计入平台口径。 */
+  const dtNameSet = new Set();
+  allCrs.forEach(cc => (cc.desktopCatalog || []).forEach(d => dtNameSet.add(d.name)));
+  const totalDesktops = dtNameSet.size;
+  /* 镜像 / 快照为各教室实例计数之和（资产明细） */
+  const totalSnaps = allCrs.reduce((n,cc)=>(cc.snapshotTree||[]).length+n,0);
+  const totalImages = allCrs.reduce((n,cc)=>(cc.imageStore||[]).length+n,0);
   const totalAlerts = state.alerts.filter(a=>a.status==='open').length;
   const onlineCount = state.terminals.filter(t=>t.online).length;
+  /* 一致性自检：已部署教室里，母机持有桌面（终端侧上传源）按名称去重，应等于平台口径。
+     空白/在建教室的母机本地桌面属"未上传"状态，单列展示，不计入一致性比较。 */
+  const syncedMotherNames = new Set();
+  let localOnlyCount = 0;
+  allCrs.forEach(cc => {
+    const seedMother = state.terminals.find(t => t.classroomId===cc.id && t.index===(cc.motherIndex||0));
+    const names = (seedMother?.desktops || []).map(d => d.name);
+    if(cc.stage === 'blank'){
+      localOnlyCount += new Set(names).size;
+    } else {
+      names.forEach(n => syncedMotherNames.add(n));
+    }
+  });
+  const termSideDesktops = syncedMotherNames.size;
+  const desktopConsistent = termSideDesktops === totalDesktops;
 
   return `
   <div class="dir-header">
@@ -69,16 +88,18 @@ function page(){
         <div class="dir-stat"><span class="dir-stat-val">${onlineCount}/${totalTerminals}</span><span class="dir-stat-lbl">在线</span></div>
         <div class="dir-stat"><span class="dir-stat-val">${totalImages}</span><span class="dir-stat-lbl">基础镜像</span></div>
         <div class="dir-stat"><span class="dir-stat-val">${totalSnaps}</span><span class="dir-stat-lbl">快照</span></div>
-        <div class="dir-stat"><span class="dir-stat-val">${totalDesktops}</span><span class="dir-stat-lbl">桌面</span></div>
+        <div class="dir-stat"><span class="dir-stat-val">${totalDesktops}</span><span class="dir-stat-lbl">桌面(去重)</span></div>
         <div class="dir-stat"><span class="dir-stat-val${totalAlerts?' text-err':''}">${totalAlerts}</span><span class="dir-stat-lbl">活跃告警</span></div>
         <div class="dir-stat"><span class="dir-stat-val">${state.logs?.length||0}</span><span class="dir-stat-lbl">日志</span></div>
       </div>
-      <div class="dir-btn-group" style="margin-top:12px">
+      <p style="margin-top:8px;font-size:.78rem;color:${desktopConsistent?'var(--dir-ok,#3fb950)':'#f85149'}">
+        ${desktopConsistent?'✓':'✗'} 数据一致性：已部署教室母机持有桌面(去重 ${termSideDesktops}) 与 平台桌面资产口径(${totalDesktops}) ${desktopConsistent?'一致':'不一致 — 请检查终端/平台代码'}${localOnlyCount?` · 另有 ${localOnlyCount} 个本地桌面未上传平台(在建教室)`:''}
+      </p>
+      <div class="dir-btn-group" style="margin-top:8px">
         <button class="dir-btn danger" data-act="reset" title="重置所有数据到 seed.json 初始状态">重置到初始种子数据</button>
         <button class="dir-btn" data-act="clear-logs" title="清空日志">清空日志</button>
         <button class="dir-btn" data-act="clear-alerts" title="关闭所有告警">关闭所有告警</button>
         <button class="dir-btn" data-act="all-online" title="所有终端上线">全员上线</button>
-        <button class="dir-btn" data-act="randomize-metrics" title="随机化终端指标">随机化指标</button>
       </div>
       <p style="margin-top:8px">⚠ 重置将丢弃全部会话修改，恢复 seed.json 原始状态。四端 (导演台、母机、受控、平台)共享同一 JSON 状态源，实时同步。</p>
     </div>
@@ -131,80 +152,50 @@ function page(){
       <p>受控: <strong>${esc(termLabel(ct)||'--')}</strong> · ${ct?.online?'在线':'离线'} · screen: ${esc(ct?.screen||'--')}</p>
     </div>
 
-    <!-- ═══ 测试流程：单机功能 ═══ -->
+    <!-- ═══ 导航：单机功能 ═══ -->
     <div class="dir-card">
-      <h3>测试流程 A：单机功能</h3>
-      <p>终端首页 → 设置本机 → 桌面管理 → 一键替换 → 一键重置</p>
+      <h3>导航 A：单机功能</h3>
+      <p>终端首页 → 设置本机 → 桌面管理 → 替换故障终端 → 重置终端</p>
       <div class="dir-btn-group">
         <button class="dir-btn" data-act="go-home">首页</button>
         <button class="dir-btn" data-act="open-local-info">设置本机</button>
         <button class="dir-btn" data-act="open-local-desktop">桌面管理</button>
-        <button class="dir-btn" data-act="open-fault-replace">一键替换</button>
-        <button class="dir-btn" data-act="open-fault-reset">一键重置</button>
+        <button class="dir-btn" data-act="open-fault-replace">替换故障终端</button>
+        <button class="dir-btn" data-act="open-fault-reset">重置终端</button>
       </div>
     </div>
 
-    <!-- ═══ 测试流程：教室接管与部署 ═══ -->
+    <!-- ═══ 导航 + 演示：网络同传三步主流程 ═══ -->
     <div class="dir-card">
-      <h3>测试流程 B：网络同传 (教室接管 → 布局 → 维护)</h3>
-      <p>首页 → 网络同传 → 设置布局(接管+网格) → 教室维护(部署/IP修改) → 释放管理</p>
+      <h3>导航 B：网络同传（三步主流程）</h3>
+      <p>首页 → 网络同传。三步可自由切换：① 布局设置 → ② IP 设置（受控终端绑定座位）→ ③ 传输桌面。</p>
       <div class="dir-btn-group">
         <button class="dir-btn" data-act="go-home">首页</button>
         <button class="dir-btn" data-act="open-takeover">进入网络同传</button>
-        <button class="dir-btn" data-act="confirm-takeover">确认接管</button>
-        <button class="dir-btn" data-act="return-workbench">回到工作台</button>
       </div>
-      <h4>工作台功能切换</h4>
+      <h4>步骤切换</h4>
       <div class="dir-btn-group">
-        <button class="dir-btn" data-set-flag="wbTab:layout">设置布局</button>
-        <button class="dir-btn" data-set-flag="wbTab:maint">教室维护</button>
-        <button class="dir-btn" data-set-flag="opsMode:deploy">部署传输</button>
-        <button class="dir-btn" data-set-flag="opsMode:maint-ip">修改IP</button>
+        <button class="dir-btn" data-set-flag="wbStep:1">① 布局设置</button>
+        <button class="dir-btn" data-set-flag="wbStep:2">② IP 设置</button>
+        <button class="dir-btn" data-set-flag="wbStep:3">③ 传输桌面</button>
       </div>
-      <h4>部署操作</h4>
+      <h4>演示：模拟受控终端按回车绑定座位</h4>
+      <p>产品界面不提供模拟按钮；演示时由导演台代替受控终端"按回车/空格确认绑定"。</p>
       <div class="dir-btn-group">
-        <button class="dir-btn" data-dir-bind-next>模拟绑定下一台</button>
-        <button class="dir-btn" data-act="deploy-bind-all-terminals">一键全绑定</button>
-        <button class="dir-btn" data-act="start-deployment">启动部署</button>
+        <button class="dir-btn" data-dir-bind-next>模拟下一台按回车绑定</button>
+        <button class="dir-btn" data-act="deploy-bind-all-terminals">模拟全部绑定</button>
       </div>
+      <h4>演示：执行与释放</h4>
       <div class="dir-btn-group">
-        <button class="dir-btn" data-act="end-management">释放教室管理</button>
+        <button class="dir-btn" data-act="start-deployment">启动桌面传输</button>
+        <button class="dir-btn" data-act="end-management">结束管理</button>
       </div>
     </div>
 
-    <!-- ═══ 测试流程：独立部署向导 ═══ -->
+    <!-- ═══ 导航：桌面编辑 ═══ -->
     <div class="dir-card">
-      <h3>测试流程 C：独立部署向导 (4步)</h3>
-      <p>需已接管教室。工作台 → 进入部署 → 4步完成</p>
-      <div class="dir-btn-group">
-        <button class="dir-btn" data-act="open-deployment">进入部署向导</button>
-        <button class="dir-btn" data-deploy-step="0">步骤0:母机准备</button>
-        <button class="dir-btn" data-deploy-step="1">步骤1:占位规则</button>
-        <button class="dir-btn" data-deploy-step="2">步骤2:终端绑定</button>
-        <button class="dir-btn" data-deploy-step="3">步骤3:部署传输</button>
-        <button class="dir-btn" data-act="start-deployment">启动分发</button>
-      </div>
-      <h4>教室维护 (独立页面)</h4>
-      <div class="dir-btn-group">
-        <button class="dir-btn" data-act="open-maint-ip">IP/服务器修改</button>
-      </div>
-    </div>
-
-    <!-- ═══ 测试流程：考试场景 ═══ -->
-    <div class="dir-card">
-      <h3>测试流程 D：考试场景</h3>
-      <p>工作台 → 考试页面 → 启动考试 → 考试模式 → 考后恢复</p>
-      <div class="dir-btn-group">
-        <button class="dir-btn" data-act="open-exam">考试页面</button>
-        <button class="dir-btn" data-act="start-exam-apply">启动考试</button>
-        <button class="dir-btn" data-act="start-exam-restore">考后恢复</button>
-      </div>
-    </div>
-
-    <!-- ═══ 测试流程：桌面编辑 ═══ -->
-    <div class="dir-card">
-      <h3>测试流程 E：桌面编辑</h3>
-      <p>桌面管理 → 进入编辑 → 编辑完毕 → 合并返回</p>
+      <h3>导航 C：桌面编辑</h3>
+      <p>桌面管理 → 进入编辑 → 编辑完毕合并返回 → 导出清单</p>
       <div class="dir-btn-group">
         <button class="dir-btn" data-act="open-local-desktop">桌面管理</button>
         <button class="dir-btn" data-act="finish-desktop-edit">桌面编辑完毕</button>

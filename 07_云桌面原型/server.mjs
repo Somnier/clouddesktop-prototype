@@ -43,6 +43,7 @@ function buildState(s){
       const isBlank = c.stage === 'blank';
       const seatLabel = isBlank ? null : genSeat(sc, i);
       const useLbl = isBlank ? '未设定' : (i===0 ? '教师终端' : '学生终端');
+      const isMother = i===sc.motherIndex;
       const ipAddr = isBlank ? null : sc.networkBase+'.'+(20+i);
       const nameStr = isBlank ? null : c.id.split('-')[1].toUpperCase()+'-'+genSeat(sc, i);
 
@@ -54,11 +55,13 @@ function buildState(s){
         ip: ipAddr, subnetMask: isBlank?null:'255.255.255.0',
         gateway: isBlank?null:sc.gateway, dns: isBlank?[]:sc.dns,
         serverAddr: isBlank?null:sc.serverAddress,
-        // desktops — teacher terminal gets all visible, students exclude 教师 desktop
+        // desktops — mother terminal (源/上传方) holds the full classroom catalog so
+        // terminal-side desktops stay consistent with the platform aggregation;
+        // 教师终端 also gets all; 普通学生终端 excludes 教师 desktop.
         ...(() => {
           const allDts = isBlank ? [] : (sc.desktopCatalog||[]);
           const visibleDts = allDts.filter(d=>{
-            if(useLbl!=='教师终端' && /教师/.test(d.name)) return false;
+            if(useLbl!=='教师终端' && !isMother && /教师/.test(d.name)) return false;
             return true;
           });
           const validDefault = visibleDts.find(d=>d.id===sc.defaultDesktopId);
@@ -318,9 +321,9 @@ function buildState(s){
   const logBase = new Date('2026-04-14T08:00:00').getTime();
   const seedLogs = [
     { level:'info', source:'服务器', terminalId:null, classroomId:null, title:'服务器启动完成', detail:'平台服务 v3.2.1 已启动，监听端口 443', at:new Date(logBase).toISOString() },
-    { level:'info', source:focusSeedCr?.name||'A301', terminalId:focusMother, classroomId:focusSeedCr?.id||null, title:'母机上线', detail:'终端 '+((terminals.find(t=>t.id===focusMother)||{}).name||'D301-T01')+' 已连接服务器', at:new Date(logBase+300000).toISOString() },
-    { level:'info', source:focusSeedCr?.name||'A301', terminalId:focusMother, classroomId:focusSeedCr?.id||null, title:'桌面上传完成', detail:'公共教学桌面 (65 GB) 已同步到服务器', at:new Date(logBase+600000).toISOString() },
-    { level:'info', source:focusSeedCr?.name||'A301', terminalId:focusMother, classroomId:focusSeedCr?.id||null, title:'桌面上传完成', detail:'Win11 纯净桌面 (18 GB) 已同步到服务器', at:new Date(logBase+660000).toISOString() },
+    { level:'info', source:focusSeedCr?.name||'A301', terminalId:motherId, classroomId:focusSeedCr?.id||null, title:'母机上线', detail:'终端 '+((terminals.find(t=>t.id===motherId)||{}).name||'D301-T01')+' 已连接服务器', at:new Date(logBase+300000).toISOString() },
+    { level:'info', source:focusSeedCr?.name||'A301', terminalId:motherId, classroomId:focusSeedCr?.id||null, title:'桌面上传完成', detail:'公共教学桌面 (65 GB) 已同步到服务器', at:new Date(logBase+600000).toISOString() },
+    { level:'info', source:focusSeedCr?.name||'A301', terminalId:motherId, classroomId:focusSeedCr?.id||null, title:'桌面上传完成', detail:'Win11 纯净桌面 (18 GB) 已同步到服务器', at:new Date(logBase+660000).toISOString() },
     { level:'info', source:'服务器', terminalId:null, classroomId:null, title:'存储空间检查', detail:'已用 342 GB / 总计 2 TB，剩余 82.9%', at:new Date(logBase+900000).toISOString() },
     { level:'info', source:'C402 计算机教室', terminalId:null, classroomId:classrooms.find(c=>c.name?.includes('C402'))?.id||null, title:'部署任务完成', detail:'增量部署 57 台终端，公共教学桌面 v1', at:new Date(logBase+3600000).toISOString() },
     { level:'info', source:'服务器', terminalId:null, classroomId:null, title:'自动备份完成', detail:'快照 snap-20260414-1200，数据库 + 配置', at:new Date(logBase+7200000).toISOString() },

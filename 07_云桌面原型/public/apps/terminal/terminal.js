@@ -802,12 +802,8 @@ function wbStep2Ip(terms, rt, tk, c, m, d, isRunning){
         <div style="font-size:.7rem;color:var(--t-text3);margin-top:4px">IP 按布局座位顺序自动分配；终端绑定座位后同步对应地址</div>
       </div>
       <div class="card">
-        <div class="card-header">终端绑定</div>
-        <div style="font-size:.78rem;color:var(--t-text2);margin-bottom:8px">受控终端按物理位置依次按回车确认；也可在此模拟绑定。</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" data-act="wb-bind-next">模拟下一台绑定</button>
-          <button class="btn btn-secondary btn-sm" data-act="wb-bind-all">一键全部绑定</button>
-        </div>
+        <div class="card-header">座位绑定</div>
+        <div style="font-size:.78rem;color:var(--t-text2)">受控终端在各自屏幕上按 <strong>回车</strong> 或 <strong>空格</strong> 键，按物理位置依次确认绑定到对应座位；绑定后自动同步该座位的 IP 与机器名。母机在此实时查看左侧座位绑定进度。</div>
       </div>
       </div>
       <div style="padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0;display:flex;gap:8px">
@@ -2021,19 +2017,6 @@ function bindAll(){
             setTimeout(()=>act('set-flag',{wbStep:3, opsMode:'deploy'}), 60);
           }, 60);
         }, 60);
-      } else if(a==='wb-bind-next'){
-        const terms = termsInCr(s(), cr().id).filter(t=>t.id!==mt().id&&t.online);
-        const bindings = demo().deployDraft?.bindings||{};
-        const boundIds = new Set(Object.values(bindings).map(b=>b.terminalId));
-        const nextTerm = terms.find(t=>!boundIds.has(t.id));
-        if(nextTerm) act('deploy-bind-terminal',{terminalId:nextTerm.id});
-        else showTermAlert('所有在线终端已绑定完毕');
-      } else if(a==='wb-bind-all'){
-        if(mt()?.controlState!=='mother'){
-          const nm=root.querySelector('#tk-name');
-          act('confirm-takeover',nm?{classroomName:nm.value}:{});
-        }
-        setTimeout(()=>act('deploy-bind-all-terminals'), 60);
       } else if(a==='wb-redeploy'){
         /* Clear completed task, then start a fresh deployment with current scope */
         act('clear-completed-task');
