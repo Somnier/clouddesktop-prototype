@@ -641,7 +641,8 @@ function workbenchScreen(){
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <div class="section-title" style="margin:0">
       <button class="btn btn-ghost" data-act="go-home">←</button>
-      ${esc(displayName)}
+      网络同传
+      <span style="font-size:.78rem;color:var(--t-text2);margin-left:10px;font-weight:400">${esc(displayName)}</span>
       ${c.stage!=='blank'?'<span class="pill ok pill-sm" style="margin-left:6px">已设置布局</span>':'<span class="pill muted pill-sm" style="margin-left:6px">未设置布局</span>'}
       <span style="font-size:.78rem;color:var(--t-text2);margin-left:8px">${rt.online}/${rt.total} 在线</span>
     </div>
