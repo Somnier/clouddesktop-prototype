@@ -59,11 +59,23 @@ function renderBody(t){
     return bindingScreen(t, state);
   }
 
+  /* ── 网络同传 步2 (IP设置): mother is binding seats — controlled shows bind status ── */
+  if(motherScreen === 'workbench' && demo?.flags?.wbStep === 2){
+    return bindingScreen(t, state);
+  }
+
   /* ── Layout phase: mother is setting layout ── */
   if(motherScreen === 'deploy-prep' || motherScreen === 'deploy-grid'){
     return centerScreen('等待布局设置',
       '母机正在设置教室布局',
       '布局完成后将进入终端绑定阶段');
+  }
+
+  /* ── 网络同传 步1 (布局设置): mother setting layout — controlled waits ── */
+  if(motherScreen === 'workbench' && demo?.flags?.wbStep === 1){
+    return centerScreen('等待布局设置',
+      '母机正在设置教室布局',
+      '布局完成后将进入座位绑定阶段');
   }
 
   /* ── Task screens ── */

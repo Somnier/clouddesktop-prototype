@@ -41,6 +41,22 @@
 .step-item.active { color: var(--t-accent); border-color: var(--t-accent); font-weight: 600; }
 .step-item.done { color: var(--t-ok); border-color: var(--t-ok); }
 
+/* ── workbench 三步主流程长条 (可点击切换) ── */
+.wb-step-bar { flex: 1; display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+  background: var(--t-panel); border: 1px solid var(--t-border); border-radius: var(--radius);
+  cursor: pointer; transition: all .15s; text-align: left; font-family: inherit; }
+.wb-step-bar:hover { border-color: var(--t-accent); }
+.wb-step-bar.active { border-color: var(--t-accent); background: var(--t-accent-bg); }
+.wb-step-bar:disabled { opacity: .5; cursor: not-allowed; }
+.wb-step-bar .wb-step-num { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: .85rem; font-weight: 700;
+  background: var(--t-border); color: var(--t-text2); transition: all .15s; }
+.wb-step-bar.active .wb-step-num { background: var(--t-accent); color: #0e1117; }
+.wb-step-bar .wb-step-text { display: flex; flex-direction: column; min-width: 0; }
+.wb-step-bar .wb-step-label { font-size: .9rem; font-weight: 600; color: var(--t-text); }
+.wb-step-bar.active .wb-step-label { color: var(--t-accent); }
+.wb-step-bar .wb-step-sub { font-size: .7rem; color: var(--t-text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* ── cards (dark) ── */
 .term-app .card { background: var(--t-panel); border: 1px solid var(--t-border); box-shadow: none; }
 .term-app .card-header { color: var(--t-text); margin-bottom: 4px; }

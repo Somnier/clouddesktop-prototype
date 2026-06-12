@@ -748,11 +748,16 @@ function act(action, payload={}){
 
   /* ── TAKEOVER ── */
   case 'open-takeover':{
-    /* Always go to workbench — takeover is integrated into layout tab */
-    if(mt.controlState==='mother'){
-      if(!demo.deployDraft.grid.blocks.length) demo.deployDraft.grid=initGridBlocks(cr.id,cr);
-    }
+    /* Always go to workbench — takeover is integrated into layout tab.
+       Init grid blocks on entry so step 1 (布局设置) can render seats even before takeover. */
+    if(!demo.deployDraft.grid.blocks.length) demo.deployDraft.grid=initGridBlocks(cr.id,cr);
+    /* Init layout rules from classroom defaults if empty */
+    if(!demo.deployDraft.rules.ipBase) demo.deployDraft.rules.ipBase=cr.networkBase||'';
+    if(!demo.deployDraft.rules.namePrefix) demo.deployDraft.rules.namePrefix=cr.id.split('-')[1].toUpperCase();
+    if(!demo.deployDraft.rules.ipStart) demo.deployDraft.rules.ipStart=20;
     demo.motherScreen='workbench'; mt.screen='workbench';
+    /* Reset to step 1 (布局设置) on entry */
+    demo.flags.wbStep=1;
     const allTerms=termsInCr(cr.id).filter(t=>t.id!==mt.id&&t.online);
     const main=[],unbound=[],other=[];
     /* Build per-terminal scan info including bound classroom name */
@@ -813,6 +818,7 @@ function act(action, payload={}){
     demo.flags.wbTab=null; demo.flags.layoutSnapshot=null;
     demo.flags.gridBackup=null; demo.flags.layoutRescan=null;
     demo.flags.viewLastResult=false; demo.flags.deployScope={};
+    demo.flags.wbStep=1;
     addLog('info','终端',cr.name+' 已结束管理','母机释放教室控制');
     return {ok:true};
   }

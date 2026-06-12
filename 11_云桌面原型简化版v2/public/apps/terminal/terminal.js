@@ -613,61 +613,64 @@ function takeoverScreen(){
 
 
 /* ═══════════════════════════════════════════════════
-   UNIFIED WORKBENCH — Two-tab layout
-   Tab 1: 设置布局 (takeover + grid layout)
-   Tab 2: 教室维护 (deploy, IP mod, desktop, export)
+   UNIFIED WORKBENCH — 三步主流程 (网络同传)
+   步1 布局设置 / 步2 IP设置及进度 / 步3 传输桌面及进度
+   座位卡片居左，输入区居右；步骤长条可自由切换
    ═══════════════════════════════════════════════════ */
 function workbenchScreen(){
   const m=mt(); const c=cr(); const st=s();
   const terms=termsInCr(st, c.id); const rt=crRuntime(st, c.id); const tk=taskForCr(st, c.id);
-  const isBlank = c.stage==='blank'||c.stage==='bound';
   const d=demo().deployDraft||{};
-  /* Default tab: if not takeover yet → layout, else → maint */
-  const defaultTab = m.controlState!=='mother' ? 'layout' : 'maint';
-  const wbTab = demo().flags?.wbTab || defaultTab;
-  const opsMode = demo().flags?.opsMode || 'deploy';
   const isRunning = tk && tk.phase!=='completed';
 
-  /* Display name: use takeover name if blank, otherwise classroom name */
-  const displayName = isBlank ? (demo().takeover?.classroomName || c.name || '未命名教室') : c.name;
+  /* Display name: takeover name if set, otherwise classroom name */
+  const displayName = demo().takeover?.classroomName || c.name || '未命名教室';
   const isTakenOver = m.controlState==='mother';
+  const step = demo().flags?.wbStep || 1;
 
-  /* If a task is actively running (not completed), force maint tab;
-     Otherwise use wbTab, but guard: if maint tab would be disabled, fall back to layout */
-  const maintDisabled = (isBlank && !isTakenOver) || isRunning;
-  const activeTab = (tk && tk.phase!=='completed') ? 'maint' : (wbTab==='maint' && maintDisabled ? 'layout' : wbTab);
+  const stepDefs = [
+    {n:1, label:'布局设置', sub:'行列 · 起点 · 命名规则'},
+    {n:2, label:'IP 设置', sub:'绑定座位 · 分配地址'},
+    {n:3, label:'传输桌面', sub:'部署 · 进度 · 结果'}
+  ];
 
   return `<div class="page">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px">
     <div class="section-title" style="margin:0">
       <button class="btn btn-ghost" data-act="go-home">←</button>
       网络同传
       <span style="font-size:.78rem;color:var(--t-text2);margin-left:10px;font-weight:400">${esc(displayName)}</span>
-      ${c.stage!=='blank'?'<span class="pill ok pill-sm" style="margin-left:6px">已设置布局</span>':'<span class="pill muted pill-sm" style="margin-left:6px">未设置布局</span>'}
       <span style="font-size:.78rem;color:var(--t-text2);margin-left:8px">${rt.online}/${rt.total} 在线</span>
     </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+      <button class="btn btn-secondary btn-sm" ${isTakenOver?'':'disabled'} data-act="open-export">导出终端清单</button>
+      <button class="btn btn-danger btn-sm" ${isRunning?'disabled':''} data-act="end-management">结束管理</button>
+    </div>
   </div>
-  <div style="display:flex;gap:6px;margin-bottom:14px;align-items:center">
-    <button class="btn btn-secondary" style="${activeTab==='layout'?'border-color:var(--t-accent);color:var(--t-accent);font-weight:600':''}" ${isRunning?'disabled':''} data-act="wb-tab-layout">设置布局</button>
-    <button class="btn btn-secondary" style="${activeTab==='maint'?'border-color:var(--t-accent);color:var(--t-accent);font-weight:600':''}" ${(isBlank&&!isTakenOver)||isRunning?'disabled':''} data-act="wb-tab-maint">教室维护</button>
-    <span style="width:1px;height:20px;background:var(--t-border);margin:0 8px"></span>
-    <button class="btn btn-danger" ${isRunning?'disabled':''} data-act="end-management">结束管理</button>
+  <!-- 三步主流程长条 (可自由切换) -->
+  <div style="display:flex;gap:8px;margin-bottom:14px">
+    ${stepDefs.map(sd=>`
+      <button class="wb-step-bar ${step===sd.n?'active':''}" data-act="wb-step-${sd.n}">
+        <span class="wb-step-num">${sd.n}</span>
+        <span class="wb-step-text"><span class="wb-step-label">${sd.label}</span><span class="wb-step-sub">${sd.sub}</span></span>
+      </button>
+    `).join('')}
   </div>
-  <div style="min-height:24px;margin-bottom:8px;font-size:.72rem;color:var(--t-text3)">${isBlank&&!isTakenOver?'请先完成布局后使用教室维护':''}</div>
-  ${activeTab==='maint' ? wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning) : wbLayoutContent(terms, rt, c, m, d)}
+  ${step===2 ? wbStep2Ip(terms, rt, tk, c, m, d, isRunning) :
+    step===3 ? wbStep3Deploy(terms, rt, tk, c, m, d, isRunning) :
+    wbStep1Layout(terms, rt, c, m, d)}
 </div>`;
 }
 
-/* ── Tab 1: 设置布局 ── */
-function wbLayoutContent(terms, rt, c, m, d){
-  const isBlank = c.stage==='blank'||c.stage==='bound';
-  const isTakenOver = m.controlState==='mother';
+/* ── 步1: 布局设置 (座位网格居左，输入居右) ── */
+function wbStep1Layout(terms, rt, c, m, d){
   const r=d.rules||{};
   const grid=d.grid||{rows:c.rows||7,cols:c.cols||6,blocks:[]};
   const activeCount = grid.blocks.filter(b=>b.state==='active').length;
   const dir = r.gridDirection || 'tl';
+  const isTakenOver = m.controlState==='mother';
 
-  /* Compute grid preview — only when rules are set */
+  /* Grid preview — only when rules set */
   const hasRules = !!(r.ipBase && r.namePrefix);
   const prefix = r.namePrefix || '';
   const assignable = grid.blocks.filter(b=>b.state!=='deleted');
@@ -684,202 +687,339 @@ function wbLayoutContent(terms, rt, c, m, d){
       ipNum++;
     });
   }
-
-  /* Terminal discovery: map online terminals to grid blocks sequentially */
+  /* termBlockMap: discovered terminals mapped to active blocks (background scan, not surfaced) */
   const onlineTerms = terms.filter(t=>t.id!==m.id&&t.online);
-  const discoveredCount = onlineTerms.length;
-  const totalTermCount = discoveredCount + 1; /* +1 for mother (self) */
-  const scanning = !isTakenOver || (demo().flags?.layoutRescan);
-  const hasNewTermsBeyondGrid = totalTermCount > activeCount && scanning;
-
-  /* Map discovered terminals to active blocks for MAC display */
   const activeBlocksSorted = grid.blocks.filter(b=>b.state==='active').sort((a,b)=>{
     const sa=seatLabel(a.row,a.col,r), sb=seatLabel(b.row,b.col,r);
     return sa.localeCompare(sb);
   });
   const termBlockMap = {};
-  /* Pin mother terminal to first active block */
   const motherBlockIdx = activeBlocksSorted.length > 0 ? activeBlocksSorted[0].idx : -1;
   if(motherBlockIdx >= 0) termBlockMap[motherBlockIdx] = { ...m, _isSelf: true };
-  /* Map discovered terminals to remaining active blocks */
-  let mapIdx = 1; /* skip first block (mother) */
+  let mapIdx = 1;
   onlineTerms.forEach((t)=>{
     if(mapIdx < activeBlocksSorted.length) termBlockMap[activeBlocksSorted[mapIdx].idx] = t;
     mapIdx++;
   });
 
-  /* Example seat and machine name for preview */
   const exSeat = seatLabel(0, 0, r);
   const exName = prefix ? prefix + '-' + exSeat : '(前缀)-(座位号)';
 
-  /* Dirty detection: compare current layout state with snapshot taken on tab entry */
-  const layoutSnap = demo().flags?.layoutSnapshot;
-  const layoutDirty = !layoutSnap || layoutSnap !== JSON.stringify({
-    rows:grid.rows,cols:grid.cols,blocks:activeCount,
-    ipBase:r.ipBase||'',namePrefix:r.namePrefix||'',
-    ipStart:r.ipStart||20,startLetter:r.startLetter||'A',
-    gridDirection:r.gridDirection||'tl',termCount:discoveredCount});
-
-  return `<div style="display:grid;grid-template-columns:304px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden">
+  return `<div style="display:grid;grid-template-columns:1fr 320px;gap:16px;flex:1;min-height:0;overflow:hidden">
+    <!-- 左：座位网格 -->
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
-      <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">
-      <div class="card">
-        <div class="card-header">❶ 教室信息</div>
-        ${scanning?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 10px;background:var(--t-accent-bg);border:1px solid rgba(88,166,255,.3);border-radius:4px">
-          <span class="conn-spinner"></span>
-          <span style="font-size:.82rem;color:var(--t-accent)">正在扫描… 已发现 ${discoveredCount} 台终端</span>
-        </div>`:''}
-        <div class="prep-field"><label>教室名称</label><input type="text" id="tk-name" value="${esc(demo().takeover?.classroomName||c.name||'')}" placeholder="输入教室名称"></div>
-        ${isTakenOver?`<div style="font-size:.75rem;color:var(--t-ok);margin-top:4px">已完成布局 · ${rt.online}/${rt.total} 在线</div>`:''}
-      </div>
-      <div class="card">
-        <div class="card-header">❷ 网络配置</div>
-        <div class="prep-field"><label>服务器地址</label><input type="text" id="layout-srv" value="${esc(m.serverAddr||'')}" placeholder="server.edu.cn"></div>
-        <div class="prep-field"><label>IP 前缀</label><input type="text" data-rule="ipBase" value="${esc(r.ipBase||'')}" placeholder="10.21.31"></div>
-        <div class="prep-field"><label>IP 起始编号</label><input type="number" data-rule="ipStart" value="${r.ipStart||20}" min="1" max="254"></div>
-        <div class="prep-field"><label>子网掩码</label><input type="text" id="layout-mask" value="${esc(m.subnetMask||'')}" placeholder="255.255.255.0"></div>
-        <div class="prep-field"><label>网关</label><input type="text" id="layout-gw" value="${esc(m.gateway||'')}" placeholder="10.x.x.1"></div>
-        <div class="prep-field"><label>DNS</label><input type="text" id="layout-dns" value="${esc((m.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
-      </div>
-      <div class="card">
-        <div class="card-header">❸ 机器名 / 座位号</div>
-        <div class="prep-field"><label>机器名前缀</label><input type="text" data-rule="namePrefix" value="${esc(r.namePrefix||'')}" placeholder="D301"></div>
-        <div class="prep-field"><label>座位号起始字母</label><input type="text" data-rule="startLetter" value="${esc(r.startLetter||'A')}" maxlength="1" style="width:50px;text-transform:uppercase"></div>
-        <div style="padding:6px 10px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;color:var(--t-text);margin-top:4px;font-family:monospace">
-          机器名预览: <strong>${esc(exName)}</strong> · 座位号预览: <strong>${esc(exSeat)}</strong>
-        </div>
-        <div style="font-size:.7rem;color:var(--t-text3);margin-top:2px">机器名 = 前缀 + "-" + 座位号，座位号 = 起始字母 + 序号</div>
-      </div>
-      </div>
-      <div style="padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0;display:flex;align-items:center;gap:10px">
-        <button class="btn btn-primary" ${layoutDirty&&activeCount>0&&totalTermCount>0&&hasRules&&!hasNewTermsBeyondGrid?'':'disabled'} data-act="complete-layout">完成布局</button>
-        <span style="font-size:.75rem;color:var(--t-text3)">${hasNewTermsBeyondGrid?'终端数超出容量，请调整布局':!hasRules?'请先设置IP前缀和机器名前缀':activeCount<=0?'请先设置网格布局':totalTermCount<=0?'等待终端上线…':!layoutDirty?'布局未变更':''}</span>
-      </div>
-    </div>
-    <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
-      <div style="padding:10px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:8px;font-size:.82rem;flex-shrink:0">
-        <div style="font-size:.78rem;color:var(--t-text2);font-weight:600;margin-bottom:6px">布局设置</div>
-        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-          <div class="prep-field" style="padding:0;font-size:.78rem;gap:6px"><label style="width:auto;flex-shrink:0;color:var(--t-text2)">每列</label><input type="number" data-grid="rows" value="${grid.rows}" min="1" max="20" style="width:56px"></div>
-          <div class="prep-field" style="padding:0;font-size:.78rem;gap:6px"><label style="width:auto;flex-shrink:0;color:var(--t-text2)">列数</label><input type="number" data-grid="cols" value="${grid.cols}" min="1" max="15" style="width:56px"></div>
-          <span style="font-size:.75rem;color:var(--t-text2)">${pill('可用 '+activeCount,'ok')}${hasNewTermsBeyondGrid?` <span style="color:var(--t-err);font-weight:600">终端 ${totalTermCount} 超出容量 ${activeCount}</span>`:''}</span>
-        </div>
-        <div style="display:flex;gap:4px;margin-bottom:6px;align-items:center">
-          <span style="font-size:.78rem;color:var(--t-text2);margin-right:4px">布局起点</span>
-          ${[['tl','↘ 左上'],['tr','↙ 右上'],['bl','↗ 左下'],['br','↖ 右下']].map(([v,l])=>
-            `<button class="btn ${dir===v?'btn-primary':'btn-secondary'}" style="padding:3px 8px;font-size:.72rem;justify-content:center" data-rule-dir="${v}">${l}</button>`
-          ).join('')}
-        </div>
-        <div style="color:var(--t-text3);font-size:.72rem">局域网内终端上线后自动出现在网格中</div>
+      <div style="padding:8px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:8px;flex-shrink:0;font-size:.78rem;color:var(--t-text2);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-weight:600;color:var(--t-text)">教室座位网格</span>
+        ${pill('可用 '+activeCount,'ok')}
+        <span style="color:var(--t-text3)">点击网格块切换 可用 ↔ 禁用 ↔ 删除</span>
       </div>
       <div class="page-scroll" style="flex:1;min-height:0">
         ${renderSeatGridLayout(grid, r, dir, previewMap, termBlockMap, isTakenOver, hasRules)}
       </div>
     </div>
+    <!-- 右：布局输入 -->
+    <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+      <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">
+      <div class="card">
+        <div class="card-header">教室名称</div>
+        <div class="prep-field"><label>教室名称</label><input type="text" id="tk-name" value="${esc(demo().takeover?.classroomName||c.name||'')}" placeholder="输入教室名称"></div>
+        <div style="font-size:.7rem;color:var(--t-text3);margin-top:2px">同一教室内的所有终端应使用相同的教室名称</div>
+      </div>
+      <div class="card">
+        <div class="card-header">网格布局</div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <div class="prep-field" style="padding:0;gap:6px"><label style="width:auto;flex-shrink:0;color:var(--t-text2)">每列</label><input type="number" data-grid="rows" value="${grid.rows}" min="1" max="20" style="width:64px"></div>
+          <div class="prep-field" style="padding:0;gap:6px"><label style="width:auto;flex-shrink:0;color:var(--t-text2)">列数</label><input type="number" data-grid="cols" value="${grid.cols}" min="1" max="15" style="width:64px"></div>
+        </div>
+        <div style="font-size:.78rem;color:var(--t-text2);margin-bottom:4px">布局起点</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          ${[['tl','↘ 左上'],['tr','↙ 右上'],['bl','↗ 左下'],['br','↖ 右下']].map(([v,l])=>
+            `<button class="btn ${dir===v?'btn-primary':'btn-secondary'}" style="padding:3px 8px;font-size:.72rem;justify-content:center" data-rule-dir="${v}">${l}</button>`
+          ).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">命名规则</div>
+        <div class="prep-field"><label>座位起始字母</label><input type="text" data-rule="startLetter" value="${esc(r.startLetter||'A')}" maxlength="1" style="width:50px;text-transform:uppercase"></div>
+        <div class="prep-field"><label>机器名前缀</label><input type="text" data-rule="namePrefix" value="${esc(r.namePrefix||'')}" placeholder="D301"></div>
+        <div style="padding:6px 10px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:4px;font-size:.78rem;color:var(--t-text);margin-top:4px;font-family:monospace">
+          座位号: <strong>${esc(exSeat)}</strong> · 机器名: <strong>${esc(exName)}</strong>
+        </div>
+        <div style="font-size:.7rem;color:var(--t-text3);margin-top:2px">机器名 = 前缀 + "-" + 座位号，座位号 = 起始字母 + 序号</div>
+      </div>
+      </div>
+      <div style="padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0">
+        <button class="btn btn-primary" style="width:100%;justify-content:center" data-act="wb-step-2">下一步：IP 设置 →</button>
+      </div>
+    </div>
   </div>`;
 }
 
-/* ── Tab 2: 教室维护 (integrated ops) ── */
-function wbMaintContent(terms, rt, tk, c, m, d, opsMode, isRunning){
+/* ── 步2: IP 设置及进度 (座位网格居左，输入居右) ── */
+function wbStep2Ip(terms, rt, tk, c, m, d, isRunning){
   const r=d.rules||{};
   const grid=d.grid||{rows:c.rows||7,cols:c.cols||6,blocks:[]};
   const dir = r.gridDirection || 'tl';
   const bindings = d.bindings||{};
-  /* Deploy uses deployScope (set of block indices); maint-ip uses maintDraft.scope (terminal IDs) */
-  const deployScope = demo().flags?.deployScope||{};
-  const deploySelectedCount = Object.keys(deployScope).filter(idx=>deployScope[idx]&&bindings[idx]&&bindings[idx].terminalId!==m.id).length;
-  const maintIpSelectedCount = (demo().maintDraft?.scope||[]).length;
-  const done = tk?.phase==='completed';
-
-  /* State labels for deploy transfer */
-  const stateLabels={queued:'排队',transferring:'传输',applying:'写入',rebooting:'重启',completed:'完成',failed:'失败'};
-
-  /* Maint IP draft */
+  const isTakenOver = m.controlState==='mother';
   const md = demo().maintDraft||{};
 
-  /* Per-mode last results */
-  const lastDeployResult = demo().flags?.lastDeployResult;
-  const lastMaintIpResult = demo().flags?.lastMaintIpResult;
-  const lastResult = opsMode==='deploy' ? lastDeployResult : opsMode==='maint-ip' ? lastMaintIpResult : null;
-  const viewingLastResult = demo().flags?.viewLastResult;
+  /* Bound terminals (excluding mother) */
+  const onlineMembers = terms.filter(t=>t.id!==m.id&&t.online);
+  const boundCount = Object.values(bindings).filter(b=>b.terminalId!==m.id).length;
+  const totalMembers = onlineMembers.length;
+  const allBound = totalMembers>0 && boundCount>=totalMembers;
 
-  /* Build IP change map for maint-ip mode (terminalId → {oldIp, newIp}) */
-  const ipChangeMap = {};
-  if(opsMode==='maint-ip' || (lastResult && lastMaintIpResult)){
-    const ipPreview = md.ipPreview || lastMaintIpResult?._ipPreview || [];
-    ipPreview.forEach(pv=>{
-      const t = terms.find(tt=>tt.id===pv.terminalId);
-      ipChangeMap[pv.terminalId] = { oldIp: t?.ip||'--', newIp: pv.newIp||'--' };
-    });
-  }
+  /* DNS split into primary / backup */
+  const dnsArr = (m.dns&&m.dns.length)?m.dns:(c.dns||[]);
+  const dns1 = md.newDns!==undefined ? (String(md.newDns).split(',')[0]||'').trim() : (dnsArr[0]||'');
+  const dns2 = md.newDns!==undefined ? (String(md.newDns).split(',')[1]||'').trim() : (dnsArr[1]||'');
 
-  return `<div style="display:grid;grid-template-columns:304px 1fr;gap:16px;flex:1;min-height:0;overflow:hidden;align-items:stretch">
+  return `<div style="display:grid;grid-template-columns:1fr 320px;gap:16px;flex:1;min-height:0;overflow:hidden">
+    <!-- 左：座位网格 (绑定状态 + IP) -->
+    <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+      <div style="padding:8px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:8px;flex-shrink:0;font-size:.78rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-weight:600;color:var(--t-text)">座位绑定与地址</span>
+        ${isTakenOver?pill('已绑定 '+boundCount+' / '+totalMembers, allBound?'ok':'warn'):pill('未接管','muted')}
+        <span style="color:var(--t-text3)">受控终端按回车/空格键确认绑定到对应座位</span>
+      </div>
+      <div class="page-scroll" style="flex:1;min-height:0">
+        ${renderSeatGridBind(grid, r, dir, bindings, terms, m)}
+      </div>
+    </div>
+    <!-- 右：IP 设置输入 -->
     <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
       <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">
       <div class="card">
-        <div class="card-header">功能</div>
-        <div style="display:flex;gap:0;border:1px solid var(--t-border);border-radius:var(--radius);overflow:hidden">
-          <button class="maint-tab-btn ${opsMode==='deploy'?'active':''}" ${isRunning?'disabled':''} data-act="ops-mode-deploy" style="flex:1">部署桌面</button>
-          <button class="maint-tab-btn ${opsMode==='maint-ip'?'active':''}" ${isRunning?'disabled':''} data-act="ops-mode-maint-ip" style="flex:1">修改 IP / 服务器地址</button>
+        <div class="card-header">地址规则</div>
+        <div class="prep-field"><label>服务器地址</label><input type="text" id="wb2-srv" value="${esc(md.newServerAddr||m.serverAddr||c.serverAddress||'')}" placeholder="server.edu.cn"></div>
+        <div class="prep-field"><label>IP 前缀</label><input type="text" id="wb2-base" value="${esc(md.newIpBase||r.ipBase||c.networkBase||'')}" placeholder="10.21.31"></div>
+        <div class="prep-field"><label>IP 起始编号</label><input type="number" id="wb2-start" value="${md.newIpStart||r.ipStart||20}" min="1" max="254"></div>
+        <div class="prep-field"><label>子网掩码</label><input type="text" id="wb2-mask" value="${esc(md.newSubnetMask||m.subnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
+        <div class="prep-field"><label>网关</label><input type="text" id="wb2-gw" value="${esc(md.newGateway||m.gateway||c.gateway||'')}" placeholder="10.x.x.1"></div>
+        <div class="prep-field"><label>主 DNS</label><input type="text" id="wb2-dns1" value="${esc(dns1)}" placeholder="114.114.114.114"></div>
+        <div class="prep-field"><label>备用 DNS</label><input type="text" id="wb2-dns2" value="${esc(dns2)}" placeholder="8.8.8.8"></div>
+        <div style="font-size:.7rem;color:var(--t-text3);margin-top:4px">IP 按布局座位顺序自动分配；终端绑定座位后同步对应地址</div>
+      </div>
+      <div class="card">
+        <div class="card-header">终端绑定</div>
+        <div style="font-size:.78rem;color:var(--t-text2);margin-bottom:8px">受控终端按物理位置依次按回车确认；也可在此模拟绑定。</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" data-act="wb-bind-next">模拟下一台绑定</button>
+          <button class="btn btn-secondary btn-sm" data-act="wb-bind-all">一键全部绑定</button>
         </div>
       </div>
-      ${opsMode==='deploy'?`<div class="card"${isRunning?' style="opacity:.6;pointer-events:none"':''}>
-        <div class="card-header">设置部署参数</div>
-        <div class="prep-field"><label>部署模式</label><select id="deploy-mode-sel" ${isRunning?'disabled':''}>
-          <option value="incremental" ${(d.deployMode||'incremental')==='incremental'?'selected':''}>增量更新</option>
-          <option value="full" ${d.deployMode==='full'?'selected':''}>全量部署</option>
-        </select></div>
       </div>
-      <div class="card"${isRunning?' style="opacity:.6;pointer-events:none"':''}>
-        <div class="card-header">上次部署结果</div>
-        ${lastDeployResult?`<div style="font-size:.82rem;color:var(--t-ok)">成功 ${lastDeployResult.completed||0} · 失败 ${lastDeployResult.failed||0} / ${lastDeployResult.total||0}</div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:6px" ${isRunning?'disabled':''} data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看详情'}</button>`
-        :`<div style="font-size:.82rem;color:var(--t-text3)">暂无执行结果</div>`}
-      </div>`:''}
-      ${opsMode==='maint-ip'?`<div class="card">
-        <div class="card-header">本次修改内容</div>
-        <div class="prep-field"><label>服务器地址</label><input type="text" id="mip-srv" value="${esc(md.newServerAddr||c.serverAddress||m.serverAddr||'')}" placeholder="server.edu.cn"></div>
-        <div class="prep-field"><label>新 IP 前缀</label><input type="text" id="mip-base" value="${esc(md.newIpBase||r.ipBase||c.networkBase||'')}" placeholder="10.21.31"></div>
-        <div class="prep-field"><label>新 IP 起始编号</label><input type="number" id="mip-start" value="${md.newIpStart||r.ipStart||20}" min="1" max="254"></div>
-        <div class="prep-field"><label>子网掩码</label><input type="text" id="mip-mask" value="${esc(md.newSubnetMask||m.subnetMask||'255.255.255.0')}" placeholder="255.255.255.0"></div>
-        <div class="prep-field"><label>网关</label><input type="text" id="mip-gw" value="${esc(md.newGateway||m.gateway||c.gateway||'')}" placeholder="10.x.x.1"></div>
-        <div class="prep-field"><label>DNS</label><input type="text" id="mip-dns" value="${esc(md.newDns||(m.dns||c.dns||[]).join(','))}" placeholder="8.8.8.8, 114.114.114.114"></div>
-        <div style="font-size:.7rem;color:var(--t-text3);margin-top:4px">点击右侧座位卡片选择/取消选择终端，然后执行修改</div>
-      </div>
-      <div class="card"${isRunning?' style="opacity:.6;pointer-events:none"':''}>
-        <div class="card-header">上次执行结果</div>
-        ${lastMaintIpResult?`<div style="font-size:.82rem;color:var(--t-ok)">成功 ${lastMaintIpResult.completed||0} · 失败 ${lastMaintIpResult.failed||0} / ${lastMaintIpResult.total||0}</div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:6px" ${isRunning?'disabled':''} data-act="toggle-view-last-result">${viewingLastResult?'收起结果':'查看详情'}</button>`
-        :`<div style="font-size:.82rem;color:var(--t-text3)">暂无执行结果</div>`}
-      </div>`:''}
-      </div>
-      <div style="padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0">
-        ${opsMode==='deploy'?`<button class="btn btn-primary" ${!isRunning&&deploySelectedCount>=1?'':'disabled'} data-act="start-deployment">开始部署 (${deploySelectedCount} 台)</button>`:''}
-        ${opsMode==='maint-ip'?`<button class="btn btn-primary" ${isRunning||maintIpSelectedCount<1?'disabled':''} data-act="start-maint-ip">开始执行 (${maintIpSelectedCount} 台)</button>`:''}
-      </div>
-    </div>
-    <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
-      ${isRunning?`<div style="padding:10px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.82rem">
-        <div style="font-weight:600;color:${done?'var(--t-ok)':'var(--t-accent)'}">${done?'✓ 任务完成':'任务执行中，功能切换已锁定…'}</div>
-        <div style="margin-top:4px">成功 ${tk.counts.completed||0} · 失败 ${tk.counts.failed||0} · 排队 ${tk.counts.queued||0} / 共 ${tk.counts.total||0}</div>
-      </div>`:`<div style="padding:8px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:10px;flex-shrink:0;font-size:.78rem;color:var(--t-text2)">
-        ${opsMode==='deploy'?'点击下方座位卡片选择/取消选择终端':
-          opsMode==='maint-ip'?'点击下方座位卡片选择/取消选择终端':
-          '请从左侧选择功能'}
-      </div>`}
-      <div class="page-scroll" style="flex:1;min-height:0">
-        ${isRunning ? renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, m, opsMode==='maint-ip'?ipChangeMap:null) :
-          viewingLastResult&&lastResult ? renderSeatGridProgress(grid, r, dir, bindings, lastResult._task, stateLabels, terms, m, opsMode==='maint-ip'||lastResult._ipPreview?ipChangeMap:null) :
-          opsMode==='maint-ip' ? renderSeatGridMaint(terms, m, c, d, md) :
-          renderSeatGridOps(grid, r, dir, bindings, deployScope, terms, m)}
-      </div>
-      <div style="border-top:1px solid var(--t-border);padding-top:10px;flex-shrink:0">
-        <button class="btn btn-ghost dt-export-btn" ${isRunning?'disabled':''} data-act="open-export">
-          导出终端清单
-        </button>
+      <div style="padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0;display:flex;gap:8px">
+        <button class="btn btn-secondary" data-act="wb-step-1">← 上一步</button>
+        <button class="btn btn-primary" style="flex:1;justify-content:center" data-act="wb-step-3">下一步：传输桌面 →</button>
       </div>
     </div>
   </div>`;
+}
+
+/* ── 步3: 传输桌面及进度 (座位网格居左，输入居右) ── */
+function wbStep3Deploy(terms, rt, tk, c, m, d, isRunning){
+  const r=d.rules||{};
+  const grid=d.grid||{rows:c.rows||7,cols:c.cols||6,blocks:[]};
+  const dir = r.gridDirection || 'tl';
+  const bindings = d.bindings||{};
+  const deployScope = demo().flags?.deployScope||{};
+  const deploySelectedCount = Object.keys(deployScope).filter(idx=>deployScope[idx]&&bindings[idx]&&bindings[idx].terminalId!==m.id).length;
+  const done = tk?.phase==='completed';
+  /* 完成 → 对钩符号 */
+  const stateLabels={queued:'排队',transferring:'传输',applying:'写入',rebooting:'重启',completed:'✓',failed:'失败'};
+
+  /* Determine sub-state: result (completed task) / progress (running) / param (idle) */
+  const subState = done ? 'result' : isRunning ? 'progress' : 'param';
+
+  /* LEFT seat grid */
+  let leftGrid;
+  if(subState==='progress'){
+    leftGrid = renderSeatGridProgress(grid, r, dir, bindings, tk, stateLabels, terms, m, null);
+  } else if(subState==='result'){
+    leftGrid = renderSeatGridResult(grid, r, dir, bindings, tk, stateLabels, terms, m, deployScope);
+  } else {
+    leftGrid = renderSeatGridOps(grid, r, dir, bindings, deployScope, terms, m);
+  }
+
+  /* LEFT header hint */
+  const leftHint = subState==='progress'
+    ? `<span style="font-weight:600;color:var(--t-accent)">传输进行中…</span><span style="color:var(--t-text2)">成功 ${tk.counts.completed||0} · 失败 ${tk.counts.failed||0} · 排队 ${tk.counts.queued||0} / 共 ${tk.counts.total||0}</span>`
+    : subState==='result'
+    ? `<span style="font-weight:600;color:var(--t-ok)">✓ 传输完成</span><span style="color:var(--t-text2)">成功 ${tk.counts.completed||0} · 失败 ${tk.counts.failed||0} / 共 ${tk.counts.total||0}</span><span style="color:var(--t-text3)">点击座位可取消选择，下次传输将跳过</span>`
+    : `<span style="font-weight:600;color:var(--t-text)">选择传输范围</span><span style="color:var(--t-text3)">点击座位选择 / 取消选择终端</span>`;
+
+  /* RIGHT panel */
+  let rightPanel;
+  if(subState==='param'){
+    rightPanel = `<div class="card">
+        <div class="card-header">部署参数</div>
+        <div class="prep-field"><label>部署模式</label><select id="deploy-mode-sel">
+          <option value="incremental" ${(d.deployMode||'incremental')==='incremental'?'selected':''}>增量更新 (仅差异，更快)</option>
+          <option value="full" ${d.deployMode==='full'?'selected':''}>全量部署 (完整覆盖，更可靠)</option>
+        </select></div>
+        <div style="font-size:.7rem;color:var(--t-text3);margin-top:6px">将把母机桌面与默认启动项推送到所选终端</div>
+      </div>`;
+  } else if(subState==='progress'){
+    rightPanel = `<div class="card">
+        <div class="card-header">传输进度</div>
+        <div style="font-size:.85rem;color:var(--t-accent);font-weight:600;margin-bottom:6px">任务执行中…</div>
+        <div style="font-size:.82rem;color:var(--t-text2);line-height:1.8">
+          成功 <strong style="color:var(--t-ok)">${tk.counts.completed||0}</strong><br>
+          失败 <strong style="color:var(--t-err)">${tk.counts.failed||0}</strong><br>
+          排队 <strong>${tk.counts.queued||0}</strong> / 共 ${tk.counts.total||0}
+        </div>
+      </div>`;
+  } else {
+    rightPanel = `<div class="card">
+        <div class="card-header">传输结果</div>
+        <div style="font-size:.85rem;color:var(--t-ok);font-weight:600;margin-bottom:6px">✓ 传输完成</div>
+        <div style="font-size:.82rem;color:var(--t-text2);line-height:1.8">
+          成功 <strong style="color:var(--t-ok)">${tk.counts.completed||0}</strong><br>
+          失败 <strong style="color:var(--t-err)">${tk.counts.failed||0}</strong> / 共 ${tk.counts.total||0}
+        </div>
+        <div style="font-size:.7rem;color:var(--t-text3);margin-top:8px">如需再次传输，可在左侧座位图调整范围后重新部署</div>
+      </div>`;
+  }
+
+  /* Bottom action */
+  let bottomBtn;
+  if(subState==='param'){
+    bottomBtn = `<button class="btn btn-primary" style="flex:1;justify-content:center" ${deploySelectedCount>=1?'':'disabled'} data-act="start-deployment">开始部署 (${deploySelectedCount} 台)</button>`;
+  } else if(subState==='progress'){
+    bottomBtn = `<button class="btn btn-primary" style="flex:1;justify-content:center" disabled>传输中…</button>`;
+  } else {
+    bottomBtn = `<button class="btn btn-primary" style="flex:1;justify-content:center" ${deploySelectedCount>=1?'':'disabled'} data-act="wb-redeploy">再次部署 (${deploySelectedCount} 台)</button>`;
+  }
+
+  return `<div style="display:grid;grid-template-columns:1fr 320px;gap:16px;flex:1;min-height:0;overflow:hidden">
+    <!-- 左：座位网格 -->
+    <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+      <div style="padding:8px 14px;background:var(--t-panel);border:1px solid var(--t-border);border-radius:6px;margin-bottom:8px;flex-shrink:0;font-size:.78rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        ${leftHint}
+      </div>
+      <div class="page-scroll" style="flex:1;min-height:0">
+        ${leftGrid}
+      </div>
+    </div>
+    <!-- 右：参数 / 进度 / 结果 -->
+    <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+      <div class="page-scroll" style="display:flex;flex-direction:column;gap:10px;flex:1;min-height:0">
+        ${rightPanel}
+      </div>
+      <div style="padding-top:10px;border-top:1px solid var(--t-border);flex-shrink:0;display:flex;gap:8px">
+        <button class="btn btn-secondary" data-act="wb-step-2">← 上一步</button>
+        ${bottomBtn}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* 步2 座位网格：显示绑定状态与已分配 IP */
+function renderSeatGridBind(grid, r, dir, bindings, terms, m){
+  const hasRules = !!(r.ipBase && r.namePrefix);
+  /* preview IPs by seat order for unbound seats */
+  const assignable = grid.blocks.filter(b=>b.state!=='deleted').sort((a,b)=>{
+    const sa=seatLabel(a.row,a.col,r), sb=seatLabel(b.row,b.col,r);
+    return sa.localeCompare(sb);
+  });
+  let ipNum = r.ipStart || 20;
+  const ipByIdx = {};
+  assignable.forEach(b=>{ ipByIdx[b.idx] = (r.ipBase||'')+'.'+ipNum; ipNum++; });
+  let html='';
+  for(let ri=0;ri<grid.rows;ri++){
+    for(let ci=0;ci<grid.cols;ci++){
+      const row = (dir==='bl'||dir==='br') ? (grid.rows-1-ri) : ri;
+      const col = (dir==='tr'||dir==='br') ? (grid.cols-1-ci) : ci;
+      const b=grid.blocks.find(b2=>b2.row===row&&b2.col===col);
+      if(!b){ html+='<div class="gb gb-empty"></div>'; continue; }
+      const seat = seatLabel(row, col, r);
+      if(b.state==='deleted'){ html+='<div class="gb gb-empty"></div>'; continue; }
+      if(b.state==='disabled'){
+        html+=`<div class="gb gb-disabled"><div class="gb-seat">${esc(seat)}</div><div class="gb-tag">禁用</div></div>`;
+        continue;
+      }
+      const binding=bindings[b.idx];
+      if(binding && m && binding.terminalId===m.id){
+        html+=`<div class="gb" style="opacity:.6;border-color:var(--t-warn)">
+          <div class="gb-seat">${esc(seat)}</div>
+          <div class="gb-tag" style="color:var(--t-warn)">本机</div>
+        </div>`;
+        continue;
+      }
+      if(binding){
+        const t = terms.find(tt=>tt.id===binding.terminalId);
+        const ip = (t&&t.ip) ? t.ip : (hasRules?ipByIdx[b.idx]:'');
+        html+=`<div class="gb gb-bound">
+          <div class="gb-seat">${esc(seat)}</div>
+          ${ip?`<div class="gb-ip">${esc(ip)}</div>`:''}
+          <div class="gb-tag" style="color:var(--t-ok)">已绑定</div>
+        </div>`;
+      } else {
+        const ip = hasRules?ipByIdx[b.idx]:'';
+        html+=`<div class="gb gb-waiting">
+          <div class="gb-seat" style="color:var(--t-text3)">${esc(seat)}</div>
+          ${ip?`<div class="gb-ip" style="opacity:.4">${esc(ip)}</div>`:''}
+          <div class="gb-tag" style="color:var(--t-text3)">待绑定</div>
+        </div>`;
+      }
+    }
+  }
+  return `<div class="deploy-grid" style="display:grid;grid-template-columns:repeat(${grid.cols},1fr);gap:6px">${html}</div>`;
+}
+
+/* 步3 结果座位网格：完成显示对钩，可点击座位取消选择 (下次跳过) */
+function renderSeatGridResult(grid, r, dir, bindings, tk, stateLabels, terms, m, deployScope){
+  const taskTermIds = new Set((tk?.items||[]).map(i=>i.terminalId));
+  let html='';
+  for(let ri=0;ri<grid.rows;ri++){
+    for(let ci=0;ci<grid.cols;ci++){
+      const row = (dir==='bl'||dir==='br') ? (grid.rows-1-ri) : ri;
+      const col = (dir==='tr'||dir==='br') ? (grid.cols-1-ci) : ci;
+      const b=grid.blocks.find(b2=>b2.row===row&&b2.col===col);
+      if(!b){ html+='<div class="gb gb-empty"></div>'; continue; }
+      const seat = seatLabel(row, col, r);
+      if(b.state==='deleted'){ html+='<div class="gb gb-empty"></div>'; continue; }
+      if(b.state==='disabled'){
+        html+=`<div class="gb gb-disabled"><div class="gb-seat">${esc(seat)}</div><div class="gb-tag">禁用</div></div>`;
+        continue;
+      }
+      const binding=bindings[b.idx];
+      if(binding && m && binding.terminalId===m.id){
+        html+=`<div class="gb" style="opacity:.6;border-color:var(--t-warn)">
+          <div class="gb-seat">${esc(seat)}</div>
+          <div class="gb-tag" style="color:var(--t-warn)">本机</div>
+        </div>`;
+        continue;
+      }
+      if(!binding){
+        html+=`<div class="gb gb-waiting"><div class="gb-seat" style="opacity:.3">${esc(seat)}</div></div>`;
+        continue;
+      }
+      /* Not part of task scope */
+      if(!taskTermIds.has(binding.terminalId)){
+        const selected = !!deployScope[b.idx];
+        html+=`<div class="gb ${selected?'gb-active':'gb-waiting'}" data-deploy-toggle-bind="${b.idx}" style="cursor:pointer;${selected?'':'opacity:.5'}">
+          <div class="gb-seat">${esc(seat)}</div>
+          <div class="gb-tag" style="color:${selected?'var(--t-ok)':'var(--t-text3)'}">${selected?'待传输':'跳过'}</div>
+        </div>`;
+        continue;
+      }
+      const item = tk?.items?.find(i=>i.terminalId===binding.terminalId);
+      const itemState = item?.state||'queued';
+      const selected = !!deployScope[b.idx];
+      const isDone = itemState==='completed';
+      const isFail = itemState==='failed';
+      const tagColor = isDone?'var(--t-ok)':isFail?'var(--t-err)':'var(--t-text2)';
+      html+=`<div class="gb ${isDone?'gb-bound':isFail?'gb-disabled':'gb-waiting'}" data-deploy-toggle-bind="${b.idx}" style="cursor:pointer;${selected?'':'opacity:.5'}">
+        <div class="gb-seat">${esc(seat)}</div>
+        <div class="gb-status" style="color:${tagColor};font-weight:600">${stateLabels[itemState]||itemState}</div>
+        ${!selected?'<div class="gb-tag" style="color:var(--t-text3)">下次跳过</div>':''}
+      </div>`;
+    }
+  }
+  return `<div class="deploy-grid" style="display:grid;grid-template-columns:repeat(${grid.cols},1fr);gap:6px">${html}</div>`;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1855,36 +1995,49 @@ function bindAll(){
   root.querySelectorAll('[data-act]').forEach(el=>{
     el.addEventListener('click',()=>{
       const a=el.dataset.act;
-      if(a==='complete-layout'){
+      /* ── 网络同传三步主流程 ── */
+      if(a==='wb-step-1'){
+        saveWbInputs();
+        setTimeout(()=>act('set-flag',{wbStep:1}), 60);
+      } else if(a==='wb-step-2'){
+        saveWbInputs();
+        /* Entering IP step: take over so terminals become controlled */
         const nm=root.querySelector('#tk-name');
-        /* Save layout network fields (server addr, subnet, gateway, DNS) to mother terminal */
-        const layoutSrv = root.querySelector('#layout-srv')?.value || '';
-        const layoutMask = root.querySelector('#layout-mask')?.value || '';
-        const layoutGw = root.querySelector('#layout-gw')?.value || '';
-        const layoutDns = root.querySelector('#layout-dns')?.value || '';
-        if(layoutSrv || layoutMask || layoutGw || layoutDns){
-          act('save-layout-network',{serverAddr:layoutSrv, subnetMask:layoutMask, gateway:layoutGw, dns:layoutDns});
-        }
-        /* Save current rules */
-        saveGridRulesIfPresent();
-        /* Takeover + auto-bind all + switch to maint tab */
         setTimeout(()=>{
-          act('confirm-takeover',nm?{classroomName:nm.value}:{});
+          if(mt()?.controlState!=='mother') act('confirm-takeover',nm?{classroomName:nm.value}:{});
+          setTimeout(()=>act('set-flag',{wbStep:2}), 60);
+        }, 60);
+      } else if(a==='wb-step-3'){
+        saveWbInputs();
+        setTimeout(()=>{
+          /* Ensure takeover + bindings exist before transfer */
+          if(mt()?.controlState!=='mother'){
+            const nm=root.querySelector('#tk-name');
+            act('confirm-takeover',nm?{classroomName:nm.value}:{});
+          }
           setTimeout(()=>{
-            act('deploy-bind-all-terminals');
-            setTimeout(()=>act('set-flag',{wbTab:'maint', layoutRescan:false, layoutSnapshot:null, gridBackup:null, opsMode:'deploy'}), 50);
-          }, 100);
-        }, 80);
-      } else if(a==='confirm-takeover'){
-        const nm=root.querySelector('#tk-name');
-        const layoutSrv = root.querySelector('#layout-srv')?.value || '';
-        const layoutMask = root.querySelector('#layout-mask')?.value || '';
-        const layoutGw = root.querySelector('#layout-gw')?.value || '';
-        const layoutDns = root.querySelector('#layout-dns')?.value || '';
-        if(layoutSrv || layoutMask || layoutGw || layoutDns){
-          act('save-layout-network',{serverAddr:layoutSrv, subnetMask:layoutMask, gateway:layoutGw, dns:layoutDns});
+            const bnd=demo().deployDraft?.bindings||{};
+            if(Object.keys(bnd).length===0) act('deploy-bind-all-terminals');
+            setTimeout(()=>act('set-flag',{wbStep:3, opsMode:'deploy'}), 60);
+          }, 60);
+        }, 60);
+      } else if(a==='wb-bind-next'){
+        const terms = termsInCr(s(), cr().id).filter(t=>t.id!==mt().id&&t.online);
+        const bindings = demo().deployDraft?.bindings||{};
+        const boundIds = new Set(Object.values(bindings).map(b=>b.terminalId));
+        const nextTerm = terms.find(t=>!boundIds.has(t.id));
+        if(nextTerm) act('deploy-bind-terminal',{terminalId:nextTerm.id});
+        else showTermAlert('所有在线终端已绑定完毕');
+      } else if(a==='wb-bind-all'){
+        if(mt()?.controlState!=='mother'){
+          const nm=root.querySelector('#tk-name');
+          act('confirm-takeover',nm?{classroomName:nm.value}:{});
         }
-        setTimeout(()=>act(a,nm?{classroomName:nm.value}:{}), 80);
+        setTimeout(()=>act('deploy-bind-all-terminals'), 60);
+      } else if(a==='wb-redeploy'){
+        /* Clear completed task, then start a fresh deployment with current scope */
+        act('clear-completed-task');
+        setTimeout(()=>act('start-deployment'), 80);
       } else if(a==='start-maint-ip'){
         act(a,{serverAddr:root.querySelector('#mip-srv')?.value,
           ipBase:root.querySelector('#mip-base')?.value,
@@ -1958,93 +2111,9 @@ function bindAll(){
         const modeSel = root.querySelector('#deploy-mode-sel');
         if(modeSel) act('deploy-set-deploy-mode',{mode:modeSel.value});
         setTimeout(()=>act('start-deployment'),50);
-      } else if(a==='wb-tab-layout'){
-        saveGridRulesIfPresent();
-        /* Full grid backup for data isolation: maint should not see unsaved layout edits */
-        const dd=demo().deployDraft||{};
-        const gr=dd.grid||{rows:7,cols:6,blocks:[]};
-        const ru=dd.rules||{};
-        const onCnt=termsInCr(s(),cr().id).filter(t=>t.id!==mt().id&&t.online).length;
-        act('set-flag',{wbTab:'layout', layoutRescan:true,
-          gridBackup:JSON.stringify(gr),
-          layoutSnapshot:JSON.stringify({rows:gr.rows,cols:gr.cols,
-            blocks:gr.blocks.filter(b=>b.state==='active').length,
-            ipBase:ru.ipBase||'',namePrefix:ru.namePrefix||'',
-            ipStart:ru.ipStart||20,startLetter:ru.startLetter||'A',
-            gridDirection:ru.gridDirection||'tl',termCount:onCnt})
-        });
-      } else if(a==='wb-tab-maint'){
-        /* Only allow switching to maint if takeover is confirmed */
-        const isMother = mt()?.controlState==='mother';
-        if(!isMother) return;
-        /* Dirty detection: compare current state with snapshot taken when entering layout */
-        const dd=demo().deployDraft||{};
-        const gr=dd.grid||{rows:7,cols:6,blocks:[]};
-        const ru=dd.rules||{};
-        const onlineCount = termsInCr(s(), cr().id).filter(t=>t.id!==mt().id&&t.online).length;
-        const activeCount = gr.blocks.filter(b=>b.state==='active').length;
-        const curState=JSON.stringify({rows:gr.rows,cols:gr.cols,
-          blocks:activeCount,
-          ipBase:ru.ipBase||'',namePrefix:ru.namePrefix||'',
-          ipStart:ru.ipStart||20,startLetter:ru.startLetter||'A',
-          gridDirection:ru.gridDirection||'tl',termCount:onlineCount});
-        const snap=demo().flags?.layoutSnapshot;
-        /* Robust dirty check: if snapshot exists, compare; if missing (first visit), not dirty */
-        const isDirty = snap ? snap !== curState : false;
-        if(isDirty){
-          /* If terminals exceed grid, block entirely */
-          if(onlineCount > activeCount){
-            showTermAlert('发现 '+onlineCount+' 台终端但网格仅有 '+activeCount+' 个可用位。请先调整网格布局。');
-            return;
-          }
-          /* Prompt user to save or discard layout changes */
-          showTermConfirm('布局已修改','您对布局做了修改但尚未保存，是否保存变更？',()=>{
-            /* Save: trigger complete-layout flow and switch to maint */
-            const nm=root.querySelector('#tk-name');
-            const layoutSrv=root.querySelector('#layout-srv')?.value||'';
-            const layoutMask=root.querySelector('#layout-mask')?.value||'';
-            const layoutGw=root.querySelector('#layout-gw')?.value||'';
-            const layoutDns=root.querySelector('#layout-dns')?.value||'';
-            if(layoutSrv||layoutMask||layoutGw||layoutDns) act('save-layout-network',{serverAddr:layoutSrv,subnetMask:layoutMask,gateway:layoutGw,dns:layoutDns});
-            saveGridRulesIfPresent();
-            setTimeout(()=>{
-              act('confirm-takeover',nm?{classroomName:nm.value}:{});
-              setTimeout(()=>{ act('deploy-bind-all-terminals'); setTimeout(()=>act('set-flag',{wbTab:'maint',layoutRescan:false,layoutSnapshot:null,gridBackup:null,opsMode:'deploy'}),50); },100);
-            },80);
-          },{danger:false});
-          /* Add a discard option by modifying the modal */
-          setTimeout(()=>{
-            const modal=document.querySelector('.t-modal-actions');
-            if(modal){
-              const discardBtn=document.createElement('button');
-              discardBtn.className='btn btn-ghost';
-              discardBtn.textContent='放弃修改';
-              discardBtn.addEventListener('click',()=>{
-                document.querySelector('.t-modal-overlay')?.remove();
-                act('restore-grid-backup');
-                setTimeout(()=>act('set-flag',{wbTab:'maint',layoutRescan:false,layoutSnapshot:null,gridBackup:null}),50);
-              });
-              modal.insertBefore(discardBtn, modal.firstChild);
-            }
-          },0);
-          return;
-        }
-        /* Save current rules before switching (no dirty — just persist DOM state) */
-        saveGridRulesIfPresent();
-        act('set-flag',{wbTab:'maint', layoutRescan:false, layoutSnapshot:null, gridBackup:null, opsMode:'deploy'});
-      } else if(a==='ops-mode-deploy'){
-        act('set-flag',{opsMode:'deploy'});
-      } else if(a==='ops-mode-maint-ip'){
-        act('set-flag',{opsMode:'maint-ip'});
-        act('open-maint-ip');
-      } else if(a==='ops-mode-idle'){
-        act('set-flag',{opsMode:'idle'});
       } else if(a==='ops-clear-task'){
-        /* Clear completed task and reset opsMode */
+        /* Clear completed task */
         act('clear-completed-task');
-        act('set-flag',{opsMode:'idle'});
-      } else if(a==='toggle-view-last-result'){
-        act('set-flag',{viewLastResult:!(demo().flags?.viewLastResult)});
       } else { act(a); }
     });
   });
@@ -2215,6 +2284,23 @@ function bindAll(){
       rules[r.dataset.rule]=r.type==='number'?Number(r.value):r.value;
     });
     if(Object.keys(rules).length) act('deploy-set-rules',rules);
+  }
+  /* Persist all 网络同传 inputs (step1 rules + step2 IP config) before step switching */
+  function saveWbInputs(){
+    saveGridRulesIfPresent();
+    /* Step 2 IP inputs */
+    const srv=root.querySelector('#wb2-srv');
+    if(srv){
+      const base=root.querySelector('#wb2-base')?.value||'';
+      const start=Number(root.querySelector('#wb2-start')?.value||20);
+      const mask=root.querySelector('#wb2-mask')?.value||'';
+      const gw=root.querySelector('#wb2-gw')?.value||'';
+      const dns1=(root.querySelector('#wb2-dns1')?.value||'').trim();
+      const dns2=(root.querySelector('#wb2-dns2')?.value||'').trim();
+      const dns=[dns1,dns2].filter(Boolean).join(',');
+      act('save-layout-network',{serverAddr:srv.value||'',subnetMask:mask,gateway:gw,dns});
+      act('deploy-set-rules',{ipBase:base,ipStart:start});
+    }
   }
   root.querySelectorAll('[data-rule]').forEach(r=>{
     r.addEventListener('change',()=>{
