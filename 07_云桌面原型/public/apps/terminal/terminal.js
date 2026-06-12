@@ -1961,7 +1961,7 @@ function exportScreen(){
     <div class="card-header">导出选项</div>
     <div class="prep-field"><label>教室名称</label><input type="text" id="export-cr-name" value="${esc(exportName)}" placeholder="导出时使用的教室名称"></div>
     <div class="prep-field"><label>教室备注 <span style="font-size:.68rem;color:var(--t-text3);font-weight:normal">可选</span></label><input type="text" id="export-cr-remark" value="${esc(exportRemark)}" placeholder="填写备注信息"></div>
-    <div style="font-size:.72rem;color:var(--t-text3);margin-top:6px">教室名称将作为平台导入时生成的教室名称，修改仅影响导出文件，不影响系统内信息。</div>
+    <div style="font-size:.72rem;color:var(--t-text3);margin-top:6px">教室名称将作为服务器导入时归并的教室名称，修改仅影响导出文件，不影响系统内信息。</div>
   </div>
   <div class="card" style="margin-bottom:16px;padding:0">
     <div class="card-header" style="padding:12px 14px 8px">终端列表 (共 ${enriched.length} 台)</div>

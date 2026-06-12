@@ -39,34 +39,16 @@ function page(){
 
   const stageLabel = {blank:'未部署',bound:'已设置布局',deployed:'已部署',registered:'已注册'};
 
-  /* aggregate data stats — 与平台口径保持一致：桌面按名称去重 */
+  /* aggregate data stats — 桌面按名称去重，与平台「桌面资产」口径一致（共享同一份数据） */
   const allCrs = state.classrooms;
   const totalTerminals = state.terminals.length;
-  /* 桌面总数 = 全部教室 desktopCatalog 按名称去重的并集（等于平台「桌面资产」统计口径）。
-     空白教室 desktopCatalog 为空，其母机本地桌面尚未上传，不计入平台口径。 */
   const dtNameSet = new Set();
   allCrs.forEach(cc => (cc.desktopCatalog || []).forEach(d => dtNameSet.add(d.name)));
   const totalDesktops = dtNameSet.size;
-  /* 镜像 / 快照为各教室实例计数之和（资产明细） */
   const totalSnaps = allCrs.reduce((n,cc)=>(cc.snapshotTree||[]).length+n,0);
   const totalImages = allCrs.reduce((n,cc)=>(cc.imageStore||[]).length+n,0);
   const totalAlerts = state.alerts.filter(a=>a.status==='open').length;
   const onlineCount = state.terminals.filter(t=>t.online).length;
-  /* 一致性自检：已部署教室里，母机持有桌面（终端侧上传源）按名称去重，应等于平台口径。
-     空白/在建教室的母机本地桌面属"未上传"状态，单列展示，不计入一致性比较。 */
-  const syncedMotherNames = new Set();
-  let localOnlyCount = 0;
-  allCrs.forEach(cc => {
-    const seedMother = state.terminals.find(t => t.classroomId===cc.id && t.index===(cc.motherIndex||0));
-    const names = (seedMother?.desktops || []).map(d => d.name);
-    if(cc.stage === 'blank'){
-      localOnlyCount += new Set(names).size;
-    } else {
-      names.forEach(n => syncedMotherNames.add(n));
-    }
-  });
-  const termSideDesktops = syncedMotherNames.size;
-  const desktopConsistent = termSideDesktops === totalDesktops;
 
   return `
   <div class="dir-header">
@@ -92,9 +74,6 @@ function page(){
         <div class="dir-stat"><span class="dir-stat-val${totalAlerts?' text-err':''}">${totalAlerts}</span><span class="dir-stat-lbl">活跃告警</span></div>
         <div class="dir-stat"><span class="dir-stat-val">${state.logs?.length||0}</span><span class="dir-stat-lbl">日志</span></div>
       </div>
-      <p style="margin-top:8px;font-size:.78rem;color:${desktopConsistent?'var(--dir-ok,#3fb950)':'#f85149'}">
-        ${desktopConsistent?'✓':'✗'} 数据一致性：已部署教室母机持有桌面(去重 ${termSideDesktops}) 与 平台桌面资产口径(${totalDesktops}) ${desktopConsistent?'一致':'不一致 — 请检查终端/平台代码'}${localOnlyCount?` · 另有 ${localOnlyCount} 个本地桌面未上传平台(在建教室)`:''}
-      </p>
       <div class="dir-btn-group" style="margin-top:8px">
         <button class="dir-btn danger" data-act="reset" title="重置所有数据到 seed.json 初始状态">重置到初始种子数据</button>
         <button class="dir-btn" data-act="clear-logs" title="清空日志">清空日志</button>
@@ -179,8 +158,7 @@ function page(){
         <button class="dir-btn" data-set-flag="wbStep:2">② IP 设置</button>
         <button class="dir-btn" data-set-flag="wbStep:3">③ 传输桌面</button>
       </div>
-      <h4>演示：模拟受控终端按回车绑定座位</h4>
-      <p>产品界面不提供模拟按钮；演示时由导演台代替受控终端"按回车/空格确认绑定"。</p>
+      <h4>模拟受控终端按回车绑定座位</h4>
       <div class="dir-btn-group">
         <button class="dir-btn" data-dir-bind-next>模拟下一台按回车绑定</button>
         <button class="dir-btn" data-act="deploy-bind-all-terminals">模拟全部绑定</button>
