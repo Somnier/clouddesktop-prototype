@@ -1,6 +1,6 @@
 # 方法指南
 
-本目录存放项目推进过程中积累的经验性文档，以及将 Markdown 转为 PDF 的导出工具。当前归档于 07_可行性与工程筹备 过渡层。
+本目录存放项目推进过程中积累的经验性文档，以及将 Markdown 转为 PDF 的导出工具。
 
 ## 目录内容
 
@@ -11,7 +11,6 @@
 | 深度人机协同工程实践指南.md | 与 AI Agent 进行多轮多文件协作的工程经验：事实分层、锚点机制、偏移控制、边界定义 |
 | md2pdf.mjs | Markdown → PDF 导出脚本 |
 | package.json | Node.js 依赖声明（marked、puppeteer-core） |
-| _archived_*.md | 已归档的早期版本 |
 
 ## PDF 导出工具
 
